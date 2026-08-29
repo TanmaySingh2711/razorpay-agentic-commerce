@@ -1,0 +1,107 @@
+/* Foundation styling only. Objective 1 ships no product UI, so this stays
+   deliberately small: readable type, sane spacing, light and dark support. */
+:root {
+  --background: #ffffff;
+  --foreground: #14161a;
+  --muted: #5b6472;
+  --border: #e3e6ea;
+  --accent: #0b6bcb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d0f12;
+    --foreground: #e9ecf1;
+    --muted: #98a2b3;
+    --border: #242830;
+    --accent: #6aa9ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 2.5rem 0 0.75rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+li {
+  margin-bottom: 0.35rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.tagline {
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.rule {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.rule strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.875rem;
+}

@@ -1,0 +1,106 @@
+# 06 — Security and trust boundaries
+
+## The trust model
+
+```mermaid
+graph LR
+  B["Browser / client<br/>UNTRUSTED"] --> S["Next.js server<br/>TRUSTED"]
+  L["LLM provider<br/>UNTRUSTED OUTPUT"] --> S
+  S --> L
+  M["Merchant / catalog data<br/>UNTRUSTED AS AGENT INPUT<br/>AUTHORITATIVE AS SERVER DATA"] --> S
+  S --> P["Policy engine<br/>TRUSTED, DETERMINISTIC"]
+  S --> DB["Database<br/>SOURCE OF TRUTH"]
+  S --> R["Razorpay API<br/>SEMI-TRUSTED, VERIFY RESPONSES"]
+  W["Razorpay webhook<br/>UNTRUSTED UNTIL SIGNATURE VERIFIED"] --> S
+```
+
+## Zone by zone
+
+| Zone                        | Trust                                   | Convention                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Browser / client**        | Untrusted (invariant 1)                 | Every request body is schema-validated server-side. The identity of the user is resolved from the session, never from the payload. No amount, price, or state is ever accepted from the client.                                 |
+| **Next.js server**          | Trusted                                 | The only place secrets exist. All authoritative decisions happen here.                                                                                                                                                          |
+| **LLM provider**            | Output untrusted (invariant 2)          | Responses are parsed by a schema before being read. Text fields are length-capped. A malformed response is an audited rejection, not a retry-until-it-parses loop.                                                              |
+| **Merchant / catalog data** | Dual (invariant 3)                      | As _server data_ it is the price and stock source of truth. As _agent input_ — titles, descriptions, attributes — it is untrusted text that may carry prompt injection, so it never carries instructions and never sets policy. |
+| **Policy engine**           | Trusted, deterministic (invariant 6)    | Pure functions over verified facts and stored policy. Not reachable from any agent tool surface. Unrecognised input defaults to `blocked`.                                                                                      |
+| **Database**                | Source of truth                         | Prices, inventory, policies, transaction state and audit all resolve here. Written only by the service that owns each entity.                                                                                                   |
+| **Razorpay API**            | Semi-trusted                            | Credentials are ours, but responses are still parsed and validated before use. Provider objects never flow into the domain.                                                                                                     |
+| **Razorpay webhook input**  | Untrusted until verified (invariant 10) | Verify the HMAC against the raw request bytes _before_ parsing, then deduplicate on the provider event id, then act.                                                                                                            |
+
+## Conventions
+
+### Secrets
+
+Server-only, always. `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
+`ANTHROPIC_API_KEY` and `DATABASE_URL` are read only through
+[`src/config/env.ts`](../src/config/env.ts), only inside the adapter that needs
+them. No secret is ever prefixed `NEXT_PUBLIC_`. Configuration errors report
+variable **names**, never values — enforced by a test. Redaction (below) is the
+second line of defence if one is ever passed into metadata by accident.
+
+### Input validation
+
+Two layers, both required:
+
+1. **Structural** — a Zod schema at every boundary: request bodies, LLM
+   responses, webhook payloads, provider responses.
+2. **Semantic** — after structure, the domain re-derives facts rather than
+   trusting asserted ones. A valid-looking `productId` still gets resolved
+   server-side.
+
+### Untrusted LLM output
+
+Treated as a _proposal_, always. It may name a product; it may not name a price,
+a policy, an authorization, or a state. Its explanation text is capped at 400
+characters, which structurally prevents reasoning being dumped into an audited
+field.
+
+### Untrusted client input
+
+The browser may start a flow, approve an amount it was shown, and read its own
+transactions. It may never supply an amount, a price, a product's authoritative
+data, a policy, a state, or another user's identifier.
+
+### Authoritative price
+
+Read from the datastore at verification time and carried as `Money` (integer
+minor units + currency) through to the Razorpay order without a conversion step.
+Invariants 4, 7, 8.
+
+### Authoritative authorization
+
+Produced only by the policy engine, and only for one specific verified amount.
+An authorization does not survive a change in that amount: if verification is
+re-run and the price moved, the previous authorization is void.
+
+### Webhook verification
+
+Fixed order: raw bytes → HMAC verification → parse → dedupe on provider event id
+→ act. Duplicates return a success status so the provider stops retrying.
+_The exact header name and signature algorithm are to be verified during the
+Razorpay integration objective._
+
+### Idempotency
+
+Two independent layers: the provider event id (webhook table, unique index) and
+the transition idempotency key (transaction store). Either alone would leave a
+gap; together, a replayed event cannot produce a second state change.
+
+### Preventing agent bypass of financial controls
+
+Four independent barriers, so no single mistake is sufficient:
+
+1. The agent's tool surface exposes **search and propose only** — no payment
+   tool, no policy tool, no state-mutation tool exists for it to call.
+2. Amounts are never parameters the agent can supply; they are re-derived from
+   the datastore.
+3. The transition table gives AI actors exactly one edge, checked on every
+   write.
+4. Route handlers hold no business logic, so there is no endpoint an agent could
+   reach that shortcuts a service.
+
+## Not implemented in Objective 1
+
+Authentication and session management, rate limiting, CSRF handling, database
+access control, and the signature verification itself. This document fixes the
+conventions those implementations must satisfy.
