@@ -54,7 +54,7 @@ describe("audit event contract", () => {
       eventId: "evt_1",
       transactionId: "txn_1",
       eventType: "payment_captured",
-      actor: "razorpay_webhook",
+      actor: "payment_webhook",
       occurredAt: "2026-01-01T00:00:05.000Z",
       result: "success",
       details: {

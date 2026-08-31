@@ -140,3 +140,68 @@ export function parseMajorUnits(input: string, currency: CurrencyCode): Money {
   const fraction = rawFraction.padEnd(exponent, "0");
   return money(sign * Number(`${whole}${fraction}`), currency);
 }
+
+/**
+ * BigInt boundary.
+ *
+ * PostgreSQL stores every authoritative amount as BIGINT, which Prisma surfaces
+ * as a JavaScript `bigint`. The domain `Money` type uses `number`, guarded by
+ * `Number.isSafeInteger`. These two functions are the only sanctioned crossing
+ * between them, and the conversion is *checked*, never blind.
+ *
+ * The range is not a practical constraint: `Number.MAX_SAFE_INTEGER` paise is
+ * roughly ninety trillion rupees. But an unchecked `Number(bigint)` would
+ * silently round past that instead of failing, and silently wrong money is the
+ * one outcome this system may never produce - so the check exists and throws.
+ */
+export function moneyFromBigInt(minorUnits: bigint, currency: CurrencyCode): Money {
+  if (
+    minorUnits > BigInt(Number.MAX_SAFE_INTEGER) ||
+    minorUnits < BigInt(Number.MIN_SAFE_INTEGER)
+  ) {
+    throw new ValidationError({
+      code: "MONEY_EXCEEDS_SAFE_RANGE",
+      message: `Stored amount ${minorUnits.toString()} exceeds the safe integer range and cannot be represented without precision loss.`,
+      details: { currency },
+    });
+  }
+  return money(Number(minorUnits), currency);
+}
+
+/** Converts domain money to the BIGINT representation the database expects. */
+export function moneyToBigInt(amount: Money): bigint {
+  return BigInt(amount.minorUnits);
+}
+
+/**
+ * Wire representation of an amount.
+ *
+ * `JSON.stringify` throws on a `bigint`, and a JSON number would lose precision
+ * at the top of the range, so amounts cross the API boundary as a decimal
+ * *string* of minor units. The field is named `amountMinor`, never `amount`, so
+ * a consumer cannot mistake paise for rupees.
+ */
+export interface MoneyDto {
+  readonly amountMinor: string;
+  readonly currency: CurrencyCode;
+}
+
+export const moneyDtoSchema = z.object({
+  amountMinor: z.string().regex(/^-?\d+$/, "amountMinor must be an integer string"),
+  currency: currencyCodeSchema,
+});
+
+export function toMoneyDto(amount: Money): MoneyDto {
+  return { amountMinor: amount.minorUnits.toString(), currency: amount.currency };
+}
+
+export function fromMoneyDto(dto: MoneyDto): Money {
+  const parsed = moneyDtoSchema.safeParse(dto);
+  if (!parsed.success) {
+    throw new ValidationError({
+      code: "MONEY_DTO_INVALID",
+      message: "Money DTO did not match the expected shape.",
+    });
+  }
+  return moneyFromBigInt(BigInt(parsed.data.amountMinor), parsed.data.currency);
+}

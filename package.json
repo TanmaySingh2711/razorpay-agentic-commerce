@@ -13,26 +13,46 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:create": "prisma migrate dev --create-only",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:verify": "tsx scripts/db-verify.ts",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "db:test:setup": "tsx scripts/setup-test-schema.ts",
+    "postinstall": "prisma generate",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "gemini:smoke": "tsx scripts/gemini-smoke.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.19.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "next": "16.3.3",
+    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "prettier": "^3.9.6",
+    "prisma": "^7.10.0",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.11"
   },
   "description": "Agent-transactable commerce with deterministic financial controls (Razorpay AI Buildathon 2026, Track 01).",
   "engines": {
-    "node": ">=20.9.0"
-  }
+    "node": ">=24.0.0 <25"
+  },
+  "packageManager": "npm@11.17.0"
 }

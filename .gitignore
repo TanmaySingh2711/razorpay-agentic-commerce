@@ -39,6 +39,10 @@ yarn-error.log*
 # local tooling caches
 /.vitest
 
+# Prisma client is generated from prisma/schema.prisma at install/build time.
+# Migrations are NOT ignored - they are reviewable schema history.
+/src/generated
+
 # vercel
 .vercel
 

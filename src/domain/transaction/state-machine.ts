@@ -1,147 +1,187 @@
-import { DomainRuleError } from "@/domain/errors";
-import type { IdempotencyKey } from "@/domain/identifiers";
+import {
+  isExternalPaymentEvent,
+  type TransactionEvent,
+  type TransitionReasonCode,
+} from "@/domain/transaction/events";
 import {
   isTerminalState,
   type TransactionActor,
   type TransactionState,
 } from "@/domain/transaction/states";
 import {
+  findTransition,
   TRANSACTION_TRANSITIONS,
-  type TransactionTransition,
 } from "@/domain/transaction/transitions";
-import { err, ok, type Result } from "@/lib/result";
 
 /**
  * The deterministic adjudicator for transaction state changes.
  *
- * It is pure: no I/O, no persistence, no clock. The Transaction Service asks it
- * whether a move is legal and then writes the result. Because it is pure it is
- * exhaustively testable, which is what makes "AI cannot mutate transaction
- * state" a checkable property rather than a promise.
+ * Pure: no I/O, no persistence, no clock, no provider. It answers one question -
+ * given a current state and a domain event, what should happen? - and returns a
+ * classification the caller must handle.
+ *
+ * Because it is pure it is exhaustively testable, which is what turns "AI cannot
+ * mutate transaction state" from a promise into a checkable property.
  */
+
+/**
+ * The four possible verdicts.
+ *
+ * `LATE_EVENT_RECONCILIATION_CANDIDATE` exists because payment providers send
+ * events at-least-once, out of order, and sometimes long after a transaction
+ * moved on. Such an event is neither a bug nor a safe no-op: it may be the
+ * authoritative financial truth arriving late, and a human or a reconciliation
+ * job must decide. Collapsing it into INVALID would discard real money events;
+ * collapsing it into APPLY would let a stale webhook rewrite a settled
+ * transaction.
+ */
+export type TransitionDecisionKind =
+  "APPLY" | "IDEMPOTENT_NO_OP" | "INVALID" | "LATE_EVENT_RECONCILIATION_CANDIDATE";
+
 export interface TransitionRequest {
-  readonly from: TransactionState;
-  readonly to: TransactionState;
+  readonly currentState: TransactionState;
+  readonly event: TransactionEvent;
   readonly actor: TransactionActor;
-  /**
-   * Present when the request originates from an at-least-once source (a
-   * Razorpay webhook, a retried API call). The persistence layer stores it so a
-   * replayed request resolves to `already_applied` instead of a second write.
-   */
-  readonly idempotencyKey?: IdempotencyKey;
 }
 
-export type TransitionRejectionReason =
-  "terminal_state" | "unknown_transition" | "actor_not_permitted";
+export type InvalidTransitionReason =
+  "terminal_state" | "event_not_permitted_from_state" | "actor_not_permitted";
 
-export interface TransitionApproval {
-  readonly outcome: "applied" | "already_applied";
-  readonly from: TransactionState;
-  readonly to: TransactionState;
-  readonly actor: TransactionActor;
-  readonly trigger: string;
-}
-
-export interface TransitionRejection {
-  readonly reason: TransitionRejectionReason;
-  readonly from: TransactionState;
-  readonly to: TransactionState;
-  readonly actor: TransactionActor;
-  /** Concise, user-safe explanation. Feeds the structured decision record. */
-  readonly explanation: string;
-}
-
-export function allowedTransitionsFrom(
-  state: TransactionState,
-): readonly TransactionTransition[] {
-  return TRANSACTION_TRANSITIONS[state];
-}
-
-export function findTransition(
-  from: TransactionState,
-  to: TransactionState,
-): TransactionTransition | undefined {
-  return TRANSACTION_TRANSITIONS[from].find((transition) => transition.to === to);
-}
-
-/**
- * Adjudicates a requested transition. A rejection is a normal, auditable
- * outcome, so it is returned as a value rather than thrown.
- */
-export function evaluateTransition(
-  request: TransitionRequest,
-): Result<TransitionApproval, TransitionRejection> {
-  const { from, to, actor } = request;
-
-  // Replay of a transition already applied. Safe to acknowledge, never re-run.
-  if (from === to) {
-    const inbound = Object.values(TRANSACTION_TRANSITIONS)
-      .flat()
-      .find((transition) => transition.to === to);
-    if (inbound !== undefined) {
-      return ok({
-        outcome: "already_applied",
-        from,
-        to,
-        actor,
-        trigger: inbound.trigger,
-      });
+export type TransitionDecision =
+  | {
+      readonly kind: "APPLY";
+      readonly from: TransactionState;
+      readonly to: TransactionState;
+      readonly event: TransactionEvent;
+      readonly actor: TransactionActor;
+      readonly reasonCode: TransitionReasonCode;
     }
-  }
+  | {
+      readonly kind: "IDEMPOTENT_NO_OP";
+      readonly currentState: TransactionState;
+      readonly event: TransactionEvent;
+      /** Concise, user-safe explanation. Feeds a decision record. */
+      readonly explanation: string;
+    }
+  | {
+      readonly kind: "INVALID";
+      readonly currentState: TransactionState;
+      readonly event: TransactionEvent;
+      readonly actor: TransactionActor;
+      readonly reason: InvalidTransitionReason;
+      readonly explanation: string;
+    }
+  | {
+      readonly kind: "LATE_EVENT_RECONCILIATION_CANDIDATE";
+      readonly currentState: TransactionState;
+      readonly event: TransactionEvent;
+      readonly explanation: string;
+    };
 
-  if (isTerminalState(from)) {
-    return err({
-      reason: "terminal_state",
-      from,
-      to,
-      actor,
-      explanation: `Transaction is already finished in state ${from} and cannot change.`,
-    });
-  }
+/**
+ * States in which an external payment event has demonstrably already been
+ * accounted for, so receiving it again is a duplicate rather than news.
+ *
+ * Example: a `PAYMENT_CAPTURE_CONFIRMED` webhook arriving when the transaction
+ * is already COMPLETED. The capture happened; the transaction moved past it.
+ * Replaying it must change nothing.
+ */
+const EVENT_ALREADY_ACCOUNTED_FOR: Partial<
+  Record<TransactionEvent, readonly TransactionState[]>
+> = {
+  PAYMENT_CALLBACK_VERIFIED: ["PAYMENT_VERIFIED", "PAYMENT_CAPTURED", "COMPLETED"],
+  PAYMENT_CAPTURE_CONFIRMED: ["PAYMENT_CAPTURED", "COMPLETED"],
+  PAYMENT_FAILED: ["PAYMENT_FAILED"],
+};
 
-  const transition = findTransition(from, to);
-  if (transition === undefined) {
-    return err({
-      reason: "unknown_transition",
-      from,
-      to,
-      actor,
-      explanation: `Moving from ${from} to ${to} is not a permitted step in the transaction lifecycle.`,
-    });
-  }
-
-  if (!transition.allowedActors.includes(actor)) {
-    return err({
-      reason: "actor_not_permitted",
-      from,
-      to,
-      actor,
-      explanation: `${actor} is not permitted to perform ${transition.trigger}.`,
-    });
-  }
-
-  return ok({ outcome: "applied", from, to, actor, trigger: transition.trigger });
+function alreadyAccountedFor(event: TransactionEvent, state: TransactionState): boolean {
+  return EVENT_ALREADY_ACCOUNTED_FOR[event]?.includes(state) ?? false;
 }
 
 /**
- * Throwing variant for call sites where a rejection means a bug rather than a
- * business outcome. Prefer `evaluateTransition` on any path that must audit
- * the refusal.
+ * Adjudicates one event against one state.
+ *
+ * Order of reasoning matters:
+ *   1. Has this external event already been accounted for? -> duplicate.
+ *   2. Is there a legal edge, and may this actor take it? -> apply or refuse.
+ *   3. Is it an external payment event with no legal edge? -> reconcile, do not
+ *      discard: money may have moved.
+ *   4. Otherwise it is a genuine programming or protocol error.
  */
-export function assertTransition(request: TransitionRequest): TransitionApproval {
-  const result = evaluateTransition(request);
-  if (!result.ok) {
-    throw new DomainRuleError({
-      code: "TRANSACTION_INVALID_TRANSITION",
-      message: result.error.explanation,
-      publicMessage: "That action is not allowed for this transaction right now.",
-      details: {
-        reason: result.error.reason,
-        from: result.error.from,
-        to: result.error.to,
-        actor: result.error.actor,
-      },
-    });
+export function resolveTransition(request: TransitionRequest): TransitionDecision {
+  const { currentState, event, actor } = request;
+
+  // 1. A replayed provider event that this transaction has already moved past.
+  if (isExternalPaymentEvent(event) && alreadyAccountedFor(event, currentState)) {
+    return {
+      kind: "IDEMPOTENT_NO_OP",
+      currentState,
+      event,
+      explanation: `${event} has already been accounted for in state ${currentState}.`,
+    };
   }
-  return result.value;
+
+  const transition = findTransition(currentState, event);
+
+  // 2. A legal edge exists.
+  if (transition !== undefined) {
+    if (!transition.allowedActors.includes(actor)) {
+      return {
+        kind: "INVALID",
+        currentState,
+        event,
+        actor,
+        reason: "actor_not_permitted",
+        explanation: `${actor} is not permitted to perform ${event}.`,
+      };
+    }
+    return {
+      kind: "APPLY",
+      from: currentState,
+      to: transition.to,
+      event,
+      actor,
+      reasonCode: transition.reasonCode,
+    };
+  }
+
+  // 3. No legal edge, but the provider is telling us something about money.
+  if (isExternalPaymentEvent(event)) {
+    return {
+      kind: "LATE_EVENT_RECONCILIATION_CANDIDATE",
+      currentState,
+      event,
+      explanation:
+        `${event} arrived while the transaction is ${currentState}, where it is not a legal ` +
+        `transition. It is held for reconciliation rather than applied or discarded.`,
+    };
+  }
+
+  // 4. Genuinely illegal.
+  if (isTerminalState(currentState)) {
+    return {
+      kind: "INVALID",
+      currentState,
+      event,
+      actor,
+      reason: "terminal_state",
+      explanation: `Transaction is already finished in state ${currentState} and cannot change.`,
+    };
+  }
+
+  return {
+    kind: "INVALID",
+    currentState,
+    event,
+    actor,
+    reason: "event_not_permitted_from_state",
+    explanation: `${event} is not a permitted step from ${currentState}.`,
+  };
+}
+
+/** Events legally available from a state, ignoring actor permissions. */
+export function permittedEventsFrom(
+  state: TransactionState,
+): readonly TransactionEvent[] {
+  return Object.keys(TRANSACTION_TRANSITIONS[state]) as TransactionEvent[];
 }

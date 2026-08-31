@@ -1,0 +1,532 @@
+// razorpay-agentic-commerce - persistence schema
+//
+// PostgreSQL, accessed through Prisma 7 with the `pg` driver adapter.
+//
+// In Prisma 7 the connection URL lives in `prisma.config.ts`, not here: the CLI
+// uses the DIRECT (unpooled) connection for migrations, while the application
+// runtime uses the POOLED connection through the driver adapter. See
+// docs/16-database.md.
+//
+// Two rules govern every model below:
+//   1. Money is BIGINT minor units plus an explicit currency. Never a float,
+//      never a decimal, never an amount without its currency.
+//   2. Financial history is protected. Referential actions are Restrict by
+//      default; nothing that records what happened to money can be cascaded
+//      away by deleting a parent.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+//
+// TransactionStatus and TransactionActor mirror the authoritative domain lists
+// in src/domain/transaction/states.ts. Prisma schema cannot import TypeScript,
+// so the binding is enforced by tests/db/enum-parity.test.ts, which fails the
+// build if the two ever drift. The domain file remains the source of truth.
+// ---------------------------------------------------------------------------
+
+enum MerchantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProductStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum AuthorizationPolicyStatus {
+  ACTIVE
+  SUPERSEDED
+}
+
+enum TransactionStatus {
+  INTENT_RECEIVED
+  PRODUCT_SELECTED
+  PRODUCT_VERIFIED
+  QUOTE_CREATED
+  POLICY_EVALUATED
+  APPROVAL_REQUIRED
+  AUTHORIZED
+  INVENTORY_RESERVED
+  PAYMENT_ORDER_CREATED
+  PAYMENT_PENDING
+  PAYMENT_VERIFIED
+  PAYMENT_CAPTURED
+  COMPLETED
+  PAYMENT_FAILED
+  BLOCKED
+  CANCELLED
+  EXPIRED
+}
+
+enum TransactionActor {
+  human_user
+  buyer_agent
+  product_decision_engine
+  merchant_service
+  quote_service
+  policy_engine
+  approval_gate
+  inventory_service
+  transaction_service
+  payment_provider
+  payment_webhook
+  system
+}
+
+enum PurchaseQuoteStatus {
+  ACTIVE
+  EXPIRED
+  INVALIDATED
+  SUPERSEDED
+  CONSUMED
+}
+
+enum InventoryReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  PENDING
+  VERIFIED
+  CAPTURED
+  FAILED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CONSUMED
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  VERIFIED
+  REJECTED
+  PROCESSED
+  DUPLICATE
+}
+
+/// Payment providers this system can talk to. Vendor names appear here, at the
+/// persistence edge, never in the domain core.
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum AuditEventResult {
+  SUCCESS
+  FAILURE
+  BLOCKED
+  PENDING
+}
+
+// ---------------------------------------------------------------------------
+// Identity and catalog
+// ---------------------------------------------------------------------------
+
+/// The human on whose behalf the agent acts. Demo identity only - Objective 2
+/// deliberately ships no authentication, so there is no credential material,
+/// no OAuth linkage and no session state here.
+model BuyerProfile {
+  id          String   @id @default(uuid(7))
+  displayName String   @db.VarChar(120)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  policies         AuthorizationPolicy[]
+  transactions     Transaction[]
+  approvalsDecided ApprovalRequest[]
+
+  @@map("buyer_profile")
+}
+
+/// The selling entity a transaction is against. Deactivated rather than
+/// deleted, because historical transactions reference it.
+model Merchant {
+  id        String         @id @default(uuid(7))
+  name      String         @db.VarChar(160)
+  slug      String         @unique @db.VarChar(80)
+  status    MerchantStatus @default(ACTIVE)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+
+  products     Product[]
+  transactions Transaction[]
+
+  @@map("merchant")
+}
+
+/// The authoritative price and inventory record. This row - never an agent
+/// claim and never a browser payload - is what a PurchaseQuote is built from.
+///
+/// `version` increments whenever price, currency or availability changes, so a
+/// quote taken against an older version can be invalidated rather than charged.
+model Product {
+  id           String        @id @default(uuid(7))
+  merchantId   String
+  sku          String        @db.VarChar(64)
+  name         String        @db.VarChar(200)
+  description  String        @db.Text
+  category     String        @db.VarChar(64)
+  /// Authoritative unit price in integer minor units (paise for INR).
+  unitAmount   BigInt
+  /// ISO 4217 code, uppercase. Validated by CHECK constraint and by Zod.
+  currency     String        @db.Char(3)
+  /// On-hand stock. A CHECK constraint forbids negative values.
+  ///
+  /// Deliberately NOT moved when stock is reserved: a reservation is a
+  /// temporary claim, not a sale. This column changes only when a reservation
+  /// is permanently committed against proven captured payment.
+  inventory    Int           @default(0)
+  /// Stock currently held by ACTIVE reservations, so reservable stock is
+  /// `inventory - reservedQuantity`. CHECK constraints keep it between zero and
+  /// `inventory`, which is what makes overselling impossible even if the
+  /// application is wrong. See docs/22-approval-and-inventory.md.
+  reservedQuantity Int        @default(0)
+  status       ProductStatus @default(AVAILABLE)
+  /// Structured, application-validated attributes (switch type, layout, ...).
+  attributes   Json          @default("{}")
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  merchant     Merchant               @relation(fields: [merchantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  quotes       PurchaseQuote[]
+  reservations InventoryReservation[]
+  transactions Transaction[]
+
+  @@unique([merchantId, sku])
+  @@index([merchantId, category])
+  @@index([merchantId, status])
+  @@map("product")
+}
+
+/// Deterministic spending boundaries for a buyer. Versioned rather than
+/// mutated, so an audit record can name the exact policy version that decided.
+/// No agent path may ever write this table.
+model AuthorizationPolicy {
+  id                    String                    @id @default(uuid(7))
+  buyerProfileId        String
+  /// Ceiling for automatic (unapproved) spend, in integer minor units.
+  maxAutoApproveAmount  BigInt
+  currency              String                    @db.Char(3)
+  /// Whether the agent may initiate a purchase at all without a human.
+  autoPurchaseAllowed   Boolean                   @default(false)
+  status                AuthorizationPolicyStatus @default(ACTIVE)
+  version               Int                       @default(1)
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                  @updatedAt @db.Timestamptz(3)
+
+  buyerProfile BuyerProfile @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([buyerProfileId, status])
+  @@map("authorization_policy")
+}
+
+// ---------------------------------------------------------------------------
+// Transaction aggregate
+// ---------------------------------------------------------------------------
+
+/// The central internal aggregate. Deliberately NOT a Razorpay order and NOT a
+/// Razorpay payment: provider identifiers live on PaymentAttempt as ordinary
+/// nullable reference columns, never as this table's primary key.
+///
+/// `productId` and `authorizedAmount` are nullable because a transaction exists
+/// from INTENT_RECEIVED, before any product is selected or amount authorized.
+model Transaction {
+  id               String            @id @default(uuid(7))
+  buyerProfileId   String
+  merchantId       String
+  productId        String?
+  status           TransactionStatus @default(INTENT_RECEIVED)
+  /// Amount the policy engine authorized, in integer minor units. Held
+  /// separately from the quote so a later disagreement is visible, not silently
+  /// overwritten.
+  authorizedAmount BigInt?
+  currency         String?           @db.Char(3)
+  /// Ties every log line, audit event and decision of one logical request.
+  ///
+  /// Unique, so one logical request can only ever open one transaction. A
+  /// retry of the same buyer-agent decision finds the existing row instead of
+  /// starting a second purchase, and two simultaneous retries are separated by
+  /// the database rather than by application timing. NULL is exempt from a
+  /// PostgreSQL unique index, so flows that carry no correlation id are
+  /// unaffected.
+  correlationId    String?           @unique @db.VarChar(64)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  completedAt      DateTime?         @db.Timestamptz(3)
+
+  buyerProfile BuyerProfile @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  merchant     Merchant     @relation(fields: [merchantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  quotes       PurchaseQuote[]
+  reservations InventoryReservation[]
+  attempts     PaymentAttempt[]
+  approvals    ApprovalRequest[]
+  transitions  TransactionStateTransition[]
+  auditEvents  AuditEvent[]
+  webhookEvents WebhookEvent[]
+
+  @@index([buyerProfileId, createdAt])
+  @@index([merchantId, createdAt])
+  @@index([status])
+  @@map("transaction")
+}
+
+/// The single place a payable amount exists.
+///
+/// A transaction may accumulate several quotes over time - a price changed, a
+/// quote expired, policy re-evaluated - so this is deliberately one-to-many,
+/// with status distinguishing the one that is live.
+model PurchaseQuote {
+  id             String              @id @default(uuid(7))
+  transactionId  String
+  productId      String
+  quantity       Int
+  /// Authoritative unit price captured at quote time, integer minor units.
+  unitAmount     BigInt
+  /// unitAmount * quantity. A CHECK constraint enforces the arithmetic.
+  totalAmount    BigInt
+  currency       String              @db.Char(3)
+  /// Product.version at the moment of quoting, so a later product change can
+  /// invalidate this quote instead of silently repricing it.
+  productVersion Int
+  status         PurchaseQuoteStatus @default(ACTIVE)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime            @db.Timestamptz(3)
+  consumedAt     DateTime?           @db.Timestamptz(3)
+  invalidatedAt  DateTime?           @db.Timestamptz(3)
+
+  transaction  Transaction            @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product      Product                @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvals    ApprovalRequest[]
+  reservations InventoryReservation[]
+
+  @@index([transactionId, status])
+  @@index([status, expiresAt])
+  /// A partial unique index in the migration enforces at most one ACTIVE quote
+  /// per transaction. Prisma cannot express a filtered index, so it lives in
+  /// SQL; see 20260830230000_single_active_quote_per_transaction.
+  @@map("purchase_quote")
+}
+
+/// Stock held between authorization and payment. Exists to close the
+/// check-then-charge race: verify -> authorize -> reserve -> pay -> commit or
+/// release.
+model InventoryReservation {
+  id            String                     @id @default(uuid(7))
+  transactionId String
+  /// The exact trusted quote this stock is being held for. A reservation that
+  /// did not name its quote could be inherited by a re-quote at a different
+  /// price, holding stock for an amount nobody authorized.
+  purchaseQuoteId String
+  productId     String
+  quantity      Int
+  status        InventoryReservationStatus @default(ACTIVE)
+  createdAt     DateTime                   @default(now()) @db.Timestamptz(3)
+  expiresAt     DateTime                   @db.Timestamptz(3)
+  committedAt   DateTime?                  @db.Timestamptz(3)
+  releasedAt    DateTime?                  @db.Timestamptz(3)
+
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  purchaseQuote PurchaseQuote @relation(fields: [purchaseQuoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([transactionId, status])
+  @@index([productId, status])
+  @@index([status, expiresAt])
+  @@index([purchaseQuoteId])
+  /// A partial unique index in the migration permits at most one ACTIVE
+  /// reservation per transaction. Prisma cannot express a filtered index, so it
+  /// lives in SQL; see 20260831120000_approval_gate_and_inventory_reservation.
+  @@map("inventory_reservation")
+}
+
+/// One attempt to move money. A transaction may have several, because a failed
+/// payment is retried against the same authorization.
+///
+/// Provider identifiers are nullable: an attempt row exists before the provider
+/// order is created, and a failed attempt may never receive a payment id.
+model PaymentAttempt {
+  id                String               @id @default(uuid(7))
+  transactionId     String
+  /// 1-based, unique within a transaction.
+  attemptNumber     Int
+  amount            BigInt
+  currency          String               @db.Char(3)
+  status            PaymentAttemptStatus @default(CREATED)
+  provider          PaymentProvider      @default(RAZORPAY)
+  /// External provider order reference. NOT an internal key.
+  providerOrderId   String?              @db.VarChar(128)
+  /// External provider payment reference. NOT an internal key.
+  providerPaymentId String?              @db.VarChar(128)
+  failureCode       String?              @db.VarChar(64)
+  /// Mapped, safe description. Never the provider's verbatim message.
+  failureReason     String?              @db.VarChar(500)
+  /// Supports future at-least-once retry safety.
+  idempotencyKey    String?              @db.VarChar(128)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([transactionId, attemptNumber])
+  @@unique([provider, providerOrderId])
+  @@unique([provider, providerPaymentId])
+  @@unique([idempotencyKey])
+  @@index([transactionId, status])
+  @@map("payment_attempt")
+}
+
+/// A one-time, scoped human approval. Bound to a transaction, a quote, an exact
+/// amount and a currency, with an expiry - so it cannot be replayed against a
+/// different purchase.
+model ApprovalRequest {
+  id                  String         @id @default(uuid(7))
+  transactionId       String
+  purchaseQuoteId     String
+  requestedAmount     BigInt
+  currency            String         @db.Char(3)
+  /// The policy ceiling in force when approval was demanded, for later replay
+  /// of the decision.
+  policyLimitSnapshot BigInt
+  policyVersion       Int
+  reasonCode          String         @db.VarChar(64)
+  status              ApprovalStatus @default(PENDING)
+  /// SHA-256 of a one-time token. The plaintext token is never stored.
+  nonceHash           String?        @unique @db.Char(64)
+  decidedByBuyerId    String?
+  decidedAt           DateTime?      @db.Timestamptz(3)
+  expiresAt           DateTime       @db.Timestamptz(3)
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  purchaseQuote PurchaseQuote @relation(fields: [purchaseQuoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  decidedBy     BuyerProfile? @relation(fields: [decidedByBuyerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([transactionId, status])
+  @@index([purchaseQuoteId])
+  @@index([status, expiresAt])
+  /// A partial unique index in the migration permits at most one PENDING
+  /// approval per transaction, so there is never more than one live token.
+  @@map("approval_request")
+}
+
+// ---------------------------------------------------------------------------
+// History and external events
+// ---------------------------------------------------------------------------
+
+/// Immutable transition history. Answers "how did this transaction get here",
+/// which Transaction.status alone cannot.
+///
+/// `sequence` gives unambiguous ordering even when two transitions share a
+/// millisecond timestamp.
+model TransactionStateTransition {
+  id            String             @id @default(uuid(7))
+  transactionId String
+  sequence      Int
+  /// Null only for the very first transition into INTENT_RECEIVED.
+  fromStatus    TransactionStatus?
+  toStatus      TransactionStatus
+  actor         TransactionActor
+  trigger       String             @db.VarChar(64)
+  reasonCode    String?            @db.VarChar(64)
+  /// Safe structured context. Never secrets, never model reasoning.
+  details       Json               @default("{}")
+  /// Identity of the logical operation that produced this transition.
+  ///
+  /// Added in Objective 3. A retried command carrying the same key resolves to
+  /// "already applied" instead of writing a second transition, which is what
+  /// makes an at-least-once caller - a webhook, a retried API call - safe.
+  /// Nullable, because an internal transition need not always claim an
+  /// identity; PostgreSQL treats NULLs as distinct, so unkeyed transitions do
+  /// not collide with each other.
+  idempotencyKey String?           @db.VarChar(128)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([transactionId, sequence])
+  @@unique([transactionId, idempotencyKey])
+  @@index([transactionId, createdAt])
+  @@map("transaction_state_transition")
+}
+
+/// Business and financial audit history - a product feature, distinct from the
+/// operational log. Append-only.
+///
+/// `eventType` is a validated string rather than a database enum: the audited
+/// vocabulary grows with each objective, and locking 27-plus values into DDL
+/// would make every new audited action a migration. src/domain/audit-event.ts
+/// holds the authoritative list and validates before write.
+model AuditEvent {
+  id            String           @id @default(uuid(7))
+  transactionId String?
+  actor         TransactionActor
+  eventType     String           @db.VarChar(64)
+  result        AuditEventResult
+  reasonCode    String?          @db.VarChar(64)
+  /// Redaction-safe structured metadata. Never secrets, card data, or hidden
+  /// model chain-of-thought.
+  metadata      Json             @default("{}")
+  correlationId String?          @db.VarChar(64)
+  /// Links to the structured decision record that produced this event.
+  decisionId    String?          @db.VarChar(64)
+  /// Identity of the logical operation that produced this event, namespaced by
+  /// its writer. Unique, so a retried or concurrent repeat of the same
+  /// operation converges on the record that already exists instead of
+  /// appending a second one. NULL for events that carry no operation identity.
+  operationKey  String?          @unique @db.VarChar(160)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([transactionId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("audit_event")
+}
+
+/// Deduplication ledger for inbound provider events.
+///
+/// Uniqueness is (provider, externalEventId) rather than externalEventId alone,
+/// because an event id is only unique within the provider that issued it.
+model WebhookEvent {
+  id              String                  @id @default(uuid(7))
+  provider        PaymentProvider
+  externalEventId String                  @db.VarChar(128)
+  eventType       String                  @db.VarChar(80)
+  status          WebhookProcessingStatus @default(RECEIVED)
+  transactionId   String?
+  /// Digest of the raw body. The raw payload is deliberately NOT stored, so it
+  /// cannot become an accidental secret store.
+  payloadDigest   String?                 @db.Char(64)
+  errorCategory   String?                 @db.VarChar(64)
+  receivedAt      DateTime                @default(now()) @db.Timestamptz(3)
+  processedAt     DateTime?               @db.Timestamptz(3)
+
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([provider, externalEventId])
+  @@index([transactionId])
+  @@index([status, receivedAt])
+  @@map("webhook_event")
+}

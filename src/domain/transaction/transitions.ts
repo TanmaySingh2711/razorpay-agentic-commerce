@@ -1,150 +1,357 @@
+import type { TransactionEvent, TransitionReasonCode } from "@/domain/transaction/events";
 import type { TransactionActor, TransactionState } from "@/domain/transaction/states";
 
 /**
- * A named, actor-scoped edge in the transaction lifecycle.
+ * A single legal edge: from a state, on an event, by a permitted actor.
  *
- * `allowedActors` is the load-bearing field: it is where "AI cannot approve
+ * `allowedActors` is the load-bearing field. It is where "AI cannot approve
  * itself" and "AI cannot mark a payment successful" stop being documentation
- * and become data the state machine enforces.
+ * and become data the machine enforces.
  */
 export interface TransactionTransition {
   readonly to: TransactionState;
-  /** Domain event that justifies the move. Mirrors the audit event vocabulary. */
-  readonly trigger: string;
   readonly allowedActors: readonly TransactionActor[];
+  readonly reasonCode: TransitionReasonCode;
 }
+
+/** The transition matrix: state -> event -> edge. */
+export type TransitionMatrix = Readonly<
+  Record<
+    TransactionState,
+    Partial<Readonly<Record<TransactionEvent, TransactionTransition>>>
+  >
+>;
 
 const CANCEL_ACTORS = ["human_user", "transaction_service"] as const;
 
+/** Expiry is driven by a clock. Never by a user, never by an agent. */
+const EXPIRY_ACTORS = ["system", "transaction_service"] as const;
+
+/** Edges available from most pre-payment states. */
+const CANCELLABLE = {
+  TRANSACTION_CANCELLED: {
+    to: "CANCELLED",
+    allowedActors: CANCEL_ACTORS,
+    reasonCode: "USER_CANCELLED",
+  },
+} as const satisfies Partial<Record<TransactionEvent, TransactionTransition>>;
+
 /**
- * The complete transition table. Any (from, to) pair absent from this map is an
- * invalid transition, including every attempt to skip a control:
- * PRODUCT_SELECTED -> AUTHORIZED, POLICY_CHECKED -> PAYMENT_CAPTURED,
- * APPROVAL_REQUIRED -> AUTHORIZED by anyone but the approval gate, and any
- * move at all out of a terminal state.
+ * THE central transition matrix. Every legal lifecycle change in the system is
+ * here and nowhere else - not in a route handler, not in a service.
+ *
+ * Ordering note: PRODUCT_SELECTED -> PRODUCT_VERIFIED -> QUOTE_CREATED. The
+ * server proves the authoritative product facts *before* issuing a quote that
+ * everything downstream will trust. Quoting first would freeze an amount taken
+ * from an agent's unverified claim.
+ *
+ * Any (state, event) pair absent from this map is not a legal transition,
+ * including every attempt to skip a control.
  */
-export const TRANSACTION_TRANSITIONS: Readonly<
-  Record<TransactionState, readonly TransactionTransition[]>
-> = {
-  INTENT_RECEIVED: [
-    {
+export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
+  INTENT_RECEIVED: {
+    // The single point in the whole lifecycle where an AI actor may act.
+    PRODUCT_SELECTION_CONFIRMED: {
       to: "PRODUCT_SELECTED",
-      trigger: "product_selected",
-      // The single point in the whole lifecycle where an AI actor may act.
       allowedActors: ["buyer_agent", "product_decision_engine"],
+      reasonCode: "PRODUCT_SELECTED",
     },
-    {
+    INTENT_REJECTED: {
       to: "BLOCKED",
-      trigger: "intent_rejected",
       allowedActors: ["policy_engine", "transaction_service"],
+      reasonCode: "INTENT_REJECTED",
     },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    TRANSACTION_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "TRANSACTION_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
 
-  PRODUCT_SELECTED: [
-    // Verification is server-side: the agent's claimed price is discarded here.
-    {
+  PRODUCT_SELECTED: {
+    // Server-side verification: the agent's claimed price is discarded here.
+    PRODUCT_VERIFICATION_SUCCEEDED: {
       to: "PRODUCT_VERIFIED",
-      trigger: "product_verified",
       allowedActors: ["merchant_service"],
+      reasonCode: "PRODUCT_VERIFIED",
     },
-    {
+    PRODUCT_VERIFICATION_FAILED: {
       to: "BLOCKED",
-      trigger: "product_verification_failed",
       allowedActors: ["merchant_service", "transaction_service"],
+      reasonCode: "PRODUCT_VERIFICATION_FAILED",
     },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    TRANSACTION_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "TRANSACTION_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
 
-  PRODUCT_VERIFIED: [
-    {
-      to: "POLICY_CHECKED",
-      trigger: "policy_evaluated",
+  PRODUCT_VERIFIED: {
+    // Only now may an amount be frozen.
+    QUOTE_ISSUED: {
+      to: "QUOTE_CREATED",
+      allowedActors: ["quote_service"],
+      reasonCode: "QUOTE_ISSUED",
+    },
+    TRANSACTION_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "TRANSACTION_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
+
+  QUOTE_CREATED: {
+    /**
+     * Re-quoting: a replacement price, without leaving the quoting phase.
+     *
+     * The only self-loop in the matrix, and it earns its place. A quote can
+     * lapse or be invalidated - the price moved, stock fell, the product
+     * changed - and the honest response is a *new* quote, not an edited one:
+     * the old row is a record of a price the merchant once stood behind, and
+     * rewriting it would destroy the history that makes a disputed charge
+     * explicable.
+     *
+     * The transaction has not progressed, so inventing a new state to express
+     * "still quoting, but again" would model a phase that does not exist.
+     * Staying put is the truthful description.
+     *
+     * It is safe to loop because each pass writes its own history row with the
+     * `QUOTE_REISSUED` reason, and because the database permits at most one
+     * ACTIVE quote per transaction - so a replacement can only exist once its
+     * predecessor has been superseded. Restricted to `quote_service`: no agent,
+     * user or provider can ask for a re-price.
+     */
+    QUOTE_ISSUED: {
+      to: "QUOTE_CREATED",
+      allowedActors: ["quote_service"],
+      reasonCode: "QUOTE_REISSUED",
+    },
+    POLICY_EVALUATION_COMPLETED: {
+      to: "POLICY_EVALUATED",
       allowedActors: ["policy_engine"],
+      reasonCode: "POLICY_EVALUATED",
     },
-    { to: "BLOCKED", trigger: "policy_denied", allowedActors: ["policy_engine"] },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    QUOTE_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "QUOTE_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
 
-  POLICY_CHECKED: [
-    { to: "AUTHORIZED", trigger: "authorized", allowedActors: ["policy_engine"] },
-    {
+  POLICY_EVALUATED: {
+    POLICY_ALLOWED: {
+      to: "AUTHORIZED",
+      allowedActors: ["policy_engine"],
+      reasonCode: "POLICY_ALLOWED",
+    },
+    POLICY_REQUIRES_APPROVAL: {
       to: "APPROVAL_REQUIRED",
-      trigger: "approval_required",
       allowedActors: ["policy_engine"],
+      reasonCode: "POLICY_REQUIRES_APPROVAL",
     },
-    { to: "BLOCKED", trigger: "policy_denied", allowedActors: ["policy_engine"] },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
-
-  APPROVAL_REQUIRED: [
-    // Only the human-backed approval gate can convert an approval into authority.
-    { to: "AUTHORIZED", trigger: "approval_granted", allowedActors: ["approval_gate"] },
-    { to: "BLOCKED", trigger: "approval_denied", allowedActors: ["approval_gate"] },
-    { to: "CANCELLED", trigger: "approval_expired", allowedActors: CANCEL_ACTORS },
-  ],
-
-  AUTHORIZED: [
-    {
-      to: "PAYMENT_CREATED",
-      trigger: "payment_order_created",
-      allowedActors: ["razorpay_integration"],
+    POLICY_BLOCKED: {
+      to: "BLOCKED",
+      allowedActors: ["policy_engine"],
+      reasonCode: "POLICY_BLOCKED",
     },
-    {
+    QUOTE_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "QUOTE_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
+
+  APPROVAL_REQUIRED: {
+    // Only the human-backed approval gate can convert approval into authority.
+    APPROVAL_GRANTED: {
+      to: "AUTHORIZED",
+      allowedActors: ["approval_gate"],
+      reasonCode: "APPROVAL_GRANTED",
+    },
+    APPROVAL_REJECTED: {
+      to: "CANCELLED",
+      allowedActors: ["approval_gate"],
+      reasonCode: "APPROVAL_REJECTED",
+    },
+    APPROVAL_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "APPROVAL_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
+
+  AUTHORIZED: {
+    // Stock is held before money moves: no edge from here to a payment state.
+    INVENTORY_RESERVED: {
+      to: "INVENTORY_RESERVED",
+      allowedActors: ["inventory_service"],
+      reasonCode: "INVENTORY_RESERVED",
+    },
+    INVENTORY_UNAVAILABLE: {
+      to: "BLOCKED",
+      allowedActors: ["inventory_service", "transaction_service"],
+      reasonCode: "INVENTORY_UNAVAILABLE",
+    },
+    ...CANCELLABLE,
+  },
+
+  INVENTORY_RESERVED: {
+    PAYMENT_ORDER_CREATED: {
+      to: "PAYMENT_ORDER_CREATED",
+      allowedActors: ["payment_provider"],
+      reasonCode: "PAYMENT_ORDER_CREATED",
+    },
+    PAYMENT_FAILED: {
       to: "PAYMENT_FAILED",
-      trigger: "payment_order_creation_failed",
-      allowedActors: ["razorpay_integration"],
+      allowedActors: ["payment_provider"],
+      reasonCode: "PAYMENT_ATTEMPT_FAILED",
     },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    RESERVATION_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "RESERVATION_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
 
-  PAYMENT_CREATED: [
-    {
+  PAYMENT_ORDER_CREATED: {
+    PAYMENT_STARTED: {
       to: "PAYMENT_PENDING",
-      trigger: "payment_attempt_started",
-      allowedActors: ["razorpay_integration", "transaction_service"],
+      allowedActors: ["payment_provider", "transaction_service"],
+      reasonCode: "PAYMENT_STARTED",
     },
-    {
+    PAYMENT_FAILED: {
       to: "PAYMENT_FAILED",
-      trigger: "payment_failed",
-      allowedActors: ["razorpay_integration", "razorpay_webhook"],
+      allowedActors: ["payment_provider", "payment_webhook"],
+      reasonCode: "PAYMENT_ATTEMPT_FAILED",
     },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    ...CANCELLABLE,
+  },
 
-  PAYMENT_PENDING: [
-    // Success is only ever asserted by verified server-side evidence.
-    {
+  PAYMENT_PENDING: {
+    PAYMENT_CALLBACK_VERIFIED: {
+      to: "PAYMENT_VERIFIED",
+      allowedActors: ["payment_provider"],
+      reasonCode: "PAYMENT_SIGNATURE_VERIFIED",
+    },
+    // A verified webhook may report settlement without a checkout callback.
+    PAYMENT_CAPTURE_CONFIRMED: {
       to: "PAYMENT_CAPTURED",
-      trigger: "payment_captured",
-      allowedActors: ["razorpay_webhook", "razorpay_integration"],
+      allowedActors: ["payment_webhook", "payment_provider"],
+      reasonCode: "PAYMENT_CAPTURE_CONFIRMED",
     },
-    {
+    PAYMENT_FAILED: {
       to: "PAYMENT_FAILED",
-      trigger: "payment_failed",
-      allowedActors: ["razorpay_webhook", "razorpay_integration"],
+      allowedActors: ["payment_provider", "payment_webhook"],
+      reasonCode: "PAYMENT_ATTEMPT_FAILED",
     },
-  ],
+    PAYMENT_WINDOW_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "PAYMENT_WINDOW_EXPIRED",
+    },
+  },
 
-  PAYMENT_CAPTURED: [
-    {
+  PAYMENT_VERIFIED: {
+    PAYMENT_CAPTURE_CONFIRMED: {
+      to: "PAYMENT_CAPTURED",
+      allowedActors: ["payment_webhook", "payment_provider"],
+      reasonCode: "PAYMENT_CAPTURE_CONFIRMED",
+    },
+    PAYMENT_FAILED: {
+      to: "PAYMENT_FAILED",
+      allowedActors: ["payment_webhook", "payment_provider"],
+      reasonCode: "PAYMENT_ATTEMPT_FAILED",
+    },
+  },
+
+  PAYMENT_CAPTURED: {
+    TRANSACTION_COMPLETED: {
       to: "COMPLETED",
-      trigger: "transaction_completed",
       allowedActors: ["transaction_service"],
+      reasonCode: "TRANSACTION_COMPLETED",
     },
-  ],
+  },
 
-  PAYMENT_FAILED: [
-    // Retry reuses the existing authorization; it never re-enters the AI path.
-    {
-      to: "PAYMENT_CREATED",
-      trigger: "payment_retried",
+  /**
+   * PAYMENT_FAILED is a failure state but NOT terminal, and its exits are
+   * deliberately narrow:
+   *
+   *  - retry, by the transaction service only, reusing the existing
+   *    authorization and reservation - it never re-enters the AI path and never
+   *    re-derives the amount;
+   *  - a late verified capture from the provider, because money may genuinely
+   *    have moved after a failure was recorded. Restricted to `payment_webhook`
+   *    so only verified provider evidence can take it.
+   *
+   * Objective 3 makes these transitions *possible*. The conditions under which
+   * a service may request them belong to the payment objective.
+   */
+  PAYMENT_FAILED: {
+    PAYMENT_RETRY_REQUESTED: {
+      to: "PAYMENT_ORDER_CREATED",
       allowedActors: ["transaction_service"],
+      reasonCode: "PAYMENT_RETRY_REQUESTED",
     },
-    { to: "CANCELLED", trigger: "cancelled", allowedActors: CANCEL_ACTORS },
-  ],
+    PAYMENT_CAPTURE_CONFIRMED: {
+      to: "PAYMENT_CAPTURED",
+      allowedActors: ["payment_webhook"],
+      reasonCode: "LATE_CAPTURE_RECONCILED",
+    },
+    RESERVATION_EXPIRED: {
+      to: "EXPIRED",
+      allowedActors: EXPIRY_ACTORS,
+      reasonCode: "RESERVATION_EXPIRED",
+    },
+    ...CANCELLABLE,
+  },
 
-  COMPLETED: [],
-  BLOCKED: [],
-  CANCELLED: [],
+  // Terminal states. No exits, by design.
+  COMPLETED: {},
+  BLOCKED: {},
+  CANCELLED: {},
+  EXPIRED: {},
 };
+
+/** Every legal edge, flattened. Used by tests to prove coverage. */
+export function allTransitionEdges(): ReadonlyArray<{
+  readonly from: TransactionState;
+  readonly event: TransactionEvent;
+  readonly to: TransactionState;
+  readonly allowedActors: readonly TransactionActor[];
+  readonly reasonCode: TransitionReasonCode;
+}> {
+  const edges: Array<{
+    from: TransactionState;
+    event: TransactionEvent;
+    to: TransactionState;
+    allowedActors: readonly TransactionActor[];
+    reasonCode: TransitionReasonCode;
+  }> = [];
+  for (const [from, events] of Object.entries(TRANSACTION_TRANSITIONS)) {
+    for (const [event, edge] of Object.entries(events)) {
+      edges.push({
+        from: from as TransactionState,
+        event: event as TransactionEvent,
+        to: edge.to,
+        allowedActors: edge.allowedActors,
+        reasonCode: edge.reasonCode,
+      });
+    }
+  }
+  return edges;
+}
+
+export function findTransition(
+  from: TransactionState,
+  event: TransactionEvent,
+): TransactionTransition | undefined {
+  return TRANSACTION_TRANSITIONS[from][event];
+}

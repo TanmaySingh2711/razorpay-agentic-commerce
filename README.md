@@ -11,6 +11,8 @@ trusted with the money.
 
 ## The rule this repository is built around
 
+> **LLM can propose. Deterministic code authorizes. Payment infrastructure executes.**
+>
 > **No LLM output can directly cause a payment.**
 
 ```
@@ -39,28 +41,39 @@ database. See [docs/14](./docs/14-objective-1-scope.md) for the exact line, and
 
 ## Getting started
 
+Requires **Node.js 24 LTS** (`.nvmrc` and `engines` both pin it) and npm.
+
 ```bash
+nvm use              # optional, reads .nvmrc
 npm install
 npm run dev          # http://localhost:3000
 ```
 
-**No API key or secret is required.** The foundation boots, builds and tests
-against an entirely empty environment — that is asserted by a test. Copy
-[`.env.example`](./.env.example) to `.env.local` only when a later objective
-needs a provider.
+**No API key or secret is required to boot.** The application starts, builds and
+runs its foundation tests against an entirely empty environment — asserted by a
+test. Copy [`.env.example`](./.env.example) to `.env.local` and fill in
+`DATABASE_URL` / `DIRECT_URL` to enable the database layer.
+
+```bash
+npm run db:migrate:deploy   # apply the schema
+npm run db:seed             # idempotent demo catalog
+npm run db:verify           # confirm the live DB matches the design
+npm run db:test:setup       # prepare the isolated test schema
+```
 
 ## Scripts
 
-| Command             | Does                            |
-| ------------------- | ------------------------------- |
-| `npm run dev`       | Development server              |
-| `npm run build`     | Production build                |
-| `npm start`         | Serve the production build      |
-| `npm run typecheck` | Route typegen + `tsc --noEmit`  |
-| `npm run lint`      | ESLint                          |
-| `npm run test`      | Vitest                          |
-| `npm run format`    | Prettier                        |
-| `npm run verify`    | typecheck + lint + test + build |
+| Command             | Does                                                    |
+| ------------------- | ------------------------------------------------------- |
+| `npm run dev`       | Development server                                      |
+| `npm run build`     | Production build                                        |
+| `npm start`         | Serve the production build                              |
+| `npm run typecheck` | Route typegen + `tsc --noEmit`                          |
+| `npm run lint`      | ESLint                                                  |
+| `npm run test`      | Vitest                                                  |
+| `npm run format`    | Prettier                                                |
+| `npm run verify`    | typecheck + lint + test + build                         |
+| `npm run db:*`      | Database tooling — see [docs/16](./docs/16-database.md) |
 
 ## Documentation
 
@@ -72,8 +85,18 @@ is where the rule above stops being prose and becomes enforced code.
 
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript 5 (strict) · Zod · Vitest ·
-ESLint · Prettier · npm.
+A **modular monolith** — one Next.js application, one deployable unit, one
+database, with hard internal module boundaries. Explicitly not microservices.
 
-No agent framework, no AI SDK, no payment SDK, no ORM, no state-management
-library. Each arrives with the objective that needs it.
+| Layer              | Choice                                                            |
+| ------------------ | ----------------------------------------------------------------- |
+| App                | Next.js 16 (App Router), React 19                                 |
+| Language           | TypeScript 5, strict                                              |
+| Runtime            | Node.js 24 LTS, npm                                               |
+| Database           | PostgreSQL (authoritative), Prisma ORM — **from Objective 2**     |
+| AI                 | External provider behind an AI Provider Adapter — later objective |
+| Payments           | Razorpay behind a Payment Provider Interface — later objective    |
+| Validation / tests | Zod, Vitest, ESLint, Prettier                                     |
+
+No agent framework, no AI SDK, no payment SDK, no state-management library.
+Each arrives with the objective that needs it.

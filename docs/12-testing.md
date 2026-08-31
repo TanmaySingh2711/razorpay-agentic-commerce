@@ -33,19 +33,25 @@ reason: the interesting assertion is about the payload, not the transport.
 
 39 tests across 6 files. Each targets a stated invariant, not a line of code.
 
-| File                                                                                    | What it holds down                                                                                                                                                                                                                                                                           |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`money.test.ts`](../tests/money.test.ts)                                               | Non-integer and unsafe amounts are rejected; addition is exact where float arithmetic is not; currencies cannot be mixed; budget ceilings are inclusive; formatting and parsing never touch a float.                                                                                         |
-| [`transaction-state-machine.test.ts`](../tests/transaction-state-machine.test.ts)       | Every state has a table entry; terminal states have no exits; **AI actors hold exactly one edge in the entire lifecycle**; the agent cannot authorize, approve or capture; controls cannot be skipped; replays resolve to `already_applied`; retries are limited to the transaction service. |
-| [`config-env.test.ts`](../tests/config-env.test.ts)                                     | The app boots from an empty environment; malformed values are rejected rather than defaulted; provider config fails lazily; error output names variables and never echoes a secret.                                                                                                          |
-| [`logging-redaction.test.ts`](../tests/logging-redaction.test.ts)                       | Credentials, signatures and card data are scrubbed at depth; model reasoning fields are scrubbed; oversized strings truncated; level filtering; child context binding.                                                                                                                       |
-| [`decision-and-audit-contracts.test.ts`](../tests/decision-and-audit-contracts.test.ts) | Decision reasons are length-bounded; AI decisions still carry an explicit `ruleApplied: null`; audit events require everything needed for reconstruction; unknown event types are rejected.                                                                                                  |
-| [`health-route.test.ts`](../tests/health-route.test.ts)                                 | The app answers without any credential; the payload discloses no configuration or credential state.                                                                                                                                                                                          |
+| File                                                                                    | What it holds down                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`money.test.ts`](../tests/money.test.ts)                                               | Non-integer and unsafe amounts are rejected; addition is exact where float arithmetic is not; currencies cannot be mixed; budget ceilings are inclusive; formatting and parsing never touch a float.                                                                                                                                                                                                                                                             |
+| [`transaction-state-machine.test.ts`](../tests/transaction-state-machine.test.ts)       | Every state has a table entry; terminal states have no exits; **AI actors hold exactly one edge in the entire lifecycle**; no payment vendor is named in the domain core; only a clock can expire a transaction; the agent cannot authorize, approve or capture; quote, policy, approval and reservation controls cannot be skipped; replays resolve to `already_applied`; retries are limited to the transaction service; inventory-holding states are correct. |
+| [`config-env.test.ts`](../tests/config-env.test.ts)                                     | The app boots from an empty environment; malformed values are rejected rather than defaulted; provider config fails lazily; error output names variables and never echoes a secret.                                                                                                                                                                                                                                                                              |
+| [`logging-redaction.test.ts`](../tests/logging-redaction.test.ts)                       | Credentials, signatures and card data are scrubbed at depth; model reasoning fields are scrubbed; oversized strings truncated; level filtering; child context binding.                                                                                                                                                                                                                                                                                           |
+| [`decision-and-audit-contracts.test.ts`](../tests/decision-and-audit-contracts.test.ts) | Decision reasons are length-bounded; AI decisions still carry an explicit `ruleApplied: null`; audit events require everything needed for reconstruction; unknown event types are rejected.                                                                                                                                                                                                                                                                      |
+| [`health-route.test.ts`](../tests/health-route.test.ts)                                 | The app answers without any credential; the payload discloses no configuration or credential state.                                                                                                                                                                                                                                                                                                                                                              |
 
-The AI-edge test deserves specific mention: it enumerates the whole transition
-table and asserts the set of AI-triggerable edges equals
-`["INTENT_RECEIVED->PRODUCT_SELECTED"]`. Widening AI authority therefore
-requires deliberately editing a failing assertion.
+Two tests deserve specific mention, because they turn architecture rules into
+build failures:
+
+- The **AI-edge test** enumerates the whole transition table and asserts the set
+  of AI-triggerable edges equals `["INTENT_RECEIVED->PRODUCT_SELECTED"]`.
+  Widening AI authority requires deliberately editing a failing assertion.
+- The **vendor-neutrality test** asserts no actor in the domain core matches a
+  payment brand. Leaking `razorpay` into the state machine fails the suite,
+  which is what keeps the Payment Provider Interface a real boundary rather than
+  a naming convention.
 
 ## Conventions
 
@@ -56,10 +62,34 @@ requires deliberately editing a failing assertion.
 - Where time matters, it is injected (`buildLogEntry(..., now)`,
   `buildHealthPayload(now)`) rather than mocked globally.
 
+## Database tests
+
+`tests/db/` runs against a dedicated `agentic_test` PostgreSQL schema, never
+against the demo data, and never against SQLite - the constraints being tested
+are ones SQLite would silently accept. Prepare it with `npm run db:test:setup`.
+The suites skip themselves when no database is configured, so the foundation
+tests still pass with zero credentials. See [16](./16-database.md).
+
+| File                            | What it holds down                                                                                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enum-parity.test.ts`           | The Prisma enums and the domain state/actor lists cannot drift apart                                                                                                                                         |
+| `entities.test.ts`              | All 12 entities persist, with UUIDv7 ids, timestamps, BIGINT money; the full relation graph traverses                                                                                                        |
+| `constraints.test.ts`           | Negative stock, bad quote arithmetic, non-ISO currency, duplicate slug/SKU/attempt/webhook id, missing FKs, deleting referenced financial history, and garbage enum values are all refused **by PostgreSQL** |
+| `updates.test.ts`               | Lifecycle status changes persist for every entity                                                                                                                                                            |
+| `money-and-persistence.test.ts` | BigInt round-trips at full precision, DTO serialisation, the reconnect proof, and the concurrency foundation                                                                                                 |
+
+Two deserve specific mention. The **reconnect test** writes a transaction and
+its children, fully disconnects, opens a brand-new client, and re-reads them -
+which no in-memory array, module mock or fixture cache could survive. The
+**concurrency test** proves a conditional decrement is atomic and that the
+inventory CHECK is a real backstop, without implementing the reservation
+algorithm that Objective 8 owns.
+
 ## Commands
 
 ```
-npm run test        # single run
-npm run test:watch  # watch mode
-npm run verify      # typecheck + lint + test + build
+npm run db:test:setup   # recreate + migrate the isolated test schema (once)
+npm run test            # single run
+npm run test:watch      # watch mode
+npm run verify          # typecheck + lint + test + build
 ```

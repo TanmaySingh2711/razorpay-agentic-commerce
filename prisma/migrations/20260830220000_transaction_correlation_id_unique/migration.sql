@@ -1,0 +1,12 @@
+-- Objective 6: one logical request may open at most one transaction.
+--
+-- The buyer-agent decision's correlation id becomes the idempotency identity of
+-- a purchase. Enforcing uniqueness in the database rather than in application
+-- code is what makes two *simultaneous* retries safe: the second INSERT is
+-- rejected by PostgreSQL, and the caller falls back to the existing row,
+-- instead of both racing past an application-level "does one exist?" check and
+-- opening two purchases for the same request.
+--
+-- PostgreSQL exempts NULL from a unique index, so transactions created without
+-- a correlation id - tests, and any future flow that has none - are unaffected.
+CREATE UNIQUE INDEX "transaction_correlationId_key" ON "transaction"("correlationId");

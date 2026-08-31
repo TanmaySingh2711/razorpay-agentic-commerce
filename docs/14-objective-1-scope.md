@@ -5,6 +5,10 @@
 ### Application foundation
 
 - Next.js **16.3.3** (App Router, Turbopack), React 19, TypeScript 5, npm.
+- **Modular monolith** — one application, one database, hard internal
+  boundaries. Not microservices.
+- **Node.js 24 LTS**, pinned in `package.json` `engines` and `.nvmrc`;
+  `packageManager` pins npm.
 - Strict TypeScript beyond the default: `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`,
   `noFallthroughCasesInSwitch`, `noPropertyAccessFromIndexSignature`,
@@ -16,14 +20,14 @@
 
 ### Financial core (pure, tested)
 
-| Module                                                   | What it guarantees                                                                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [`money.ts`](../src/domain/money.ts)                     | Integer minor units with explicit currency. No float can become a charge; currencies cannot be mixed.              |
-| [`transaction/`](../src/domain/transaction/)             | 13 typed states, a complete actor-scoped transition table, and a pure adjudicator with idempotent replay handling. |
-| [`errors.ts`](../src/domain/errors.ts)                   | Eight-category taxonomy with separate internal and public faces.                                                   |
-| [`identifiers.ts`](../src/domain/identifiers.ts)         | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs.                                    |
-| [`decision-record.ts`](../src/domain/decision-record.ts) | The explainability contract, with a hard cap on the reason field.                                                  |
-| [`audit-event.ts`](../src/domain/audit-event.ts)         | The audit contract, over a closed event vocabulary.                                                                |
+| Module                                                   | What it guarantees                                                                                                                        |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [`money.ts`](../src/domain/money.ts)                     | Integer minor units with explicit currency. No float can become a charge; currencies cannot be mixed.                                     |
+| [`transaction/`](../src/domain/transaction/)             | 17 typed states, a complete actor-scoped transition table, and a pure adjudicator with idempotent replay handling. Vendor-neutral actors. |
+| [`errors.ts`](../src/domain/errors.ts)                   | Eight-category taxonomy with separate internal and public faces.                                                                          |
+| [`identifiers.ts`](../src/domain/identifiers.ts)         | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs. Covers quote, reservation and transition ids.             |
+| [`decision-record.ts`](../src/domain/decision-record.ts) | The explainability contract, with a hard cap on the reason field.                                                                         |
+| [`audit-event.ts`](../src/domain/audit-event.ts)         | The audit contract, over a closed event vocabulary.                                                                                       |
 
 ### Supporting foundation
 
@@ -35,6 +39,15 @@
 - [`lib/result.ts`](../src/lib/result.ts), [`lib/json.ts`](../src/lib/json.ts).
 - `GET /api/health` — the only route.
 - A landing page that states the architectural rule. No product UI.
+
+### Architecture patch (applied after the initial foundation)
+
+Locked decisions were folded in without rebuilding anything: Node 24 LTS,
+modular monolith stated explicitly, PostgreSQL + Prisma as the persistence
+architecture, AI Provider Adapter and Payment Provider Interface as named
+boundaries, `DIRECT_URL` and `APP_SECRET` added to the config boundary, and the
+state model extended to 17 states covering quote, reservation, payment
+verification and expiry.
 
 ### Documentation
 
@@ -70,7 +83,11 @@ Confirmed absent from the codebase:
 - **Razorpay** — no SDK, no API call, no order creation, no Checkout, no
   signature verification, no webhook endpoint, no keys. **Nothing is faked or
   presented as integrated.**
-- **Database** — no schema, no ORM, no migration, no connection.
+- **Database** — PostgreSQL + Prisma are the locked _decision_, but no schema,
+  no Prisma install, no model, no migration, no seed and no connection exist.
+- **PurchaseQuote, InventoryReservation, TransactionStateTransition** —
+  architecture, states, ids and audit vocabulary only. No behaviour, no
+  persistence.
 - **Transaction service** — no persistence, no orchestration. Only the pure
   state machine it will use.
 - **Audit service** — the contract only; no writer, no store, no UI timeline.

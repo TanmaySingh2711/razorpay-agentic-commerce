@@ -12,8 +12,10 @@ graph LR
   end
 
   subgraph GATE["Validation boundary"]
+    G0[AI Provider Adapter]
     G1[Schema validation]
     G2[Server-side product verification]
+    G3[PurchaseQuote freezes the amount]
   end
 
   subgraph DET["Deterministic domain — decides and executes"]
@@ -82,11 +84,15 @@ one, so widening AI authority requires deliberately editing a failing test.
 
 ## The amount, specifically
 
-The amount charged is derived only from a `VerifiedProduct` that the Merchant
-Service read from the datastore at verification time. It is not read from the
-browser (invariant 7), not read from the model (invariant 8), and not
-recomputed anywhere downstream. The `Money` value produced at verification is
-the same integer that reaches the Razorpay order.
+The amount charged is computed exactly once: when the Quote Service turns a
+`VerifiedProduct` — re-read from PostgreSQL — into a `PurchaseQuote`. It is not
+read from the browser, not read from the model, and never recomputed downstream.
+Policy, approval, authorization and the payment order all read the same frozen
+integer from the same quote.
+
+Having one place where the amount exists is what makes the rule auditable. If
+the amount could be derived at several call sites, "the LLM cannot set the
+amount" would need re-proving at each one.
 
 ## Restated
 

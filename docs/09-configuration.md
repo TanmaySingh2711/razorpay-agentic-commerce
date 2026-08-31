@@ -15,6 +15,18 @@ Read configuration through @/config/env instead of process.env.
 The rule is scoped off for `src/config/**` (the boundary itself) and `tests/**`
 (which builds fake environments to exercise validation failures).
 
+## Runtime
+
+The application targets **Node.js 24 LTS**, declared in two places that serve
+different purposes and are therefore not redundant:
+
+| File                                             | Role                                                    |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `package.json` → `engines.node` (`>=24.0.0 <25`) | Enforcement — npm warns or fails on a wrong runtime     |
+| `.nvmrc` (`24`)                                  | Selection — `nvm use` and most CI setup actions read it |
+
+`packageManager` pins npm. No other package manager is used.
+
 ## Tiers
 
 Configuration is split by _when_ it must exist, which is what lets the
@@ -34,18 +46,21 @@ repository today.**
 
 ### Required later — validated lazily, at the point of use
 
-| Variable                  | Needed by                                            | Server-only     |
-| ------------------------- | ---------------------------------------------------- | --------------- |
-| `ANTHROPIC_API_KEY`       | LLM provider adapter                                 | yes             |
-| `ANTHROPIC_MODEL`         | LLM provider adapter (defaults to `claude-sonnet-5`) | yes             |
-| `RAZORPAY_KEY_ID`         | Razorpay integration, checkout                       | server-supplied |
-| `RAZORPAY_KEY_SECRET`     | Razorpay integration, signature verification         | yes             |
-| `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                 | yes             |
-| `DATABASE_URL`            | Persistence                                          | yes             |
+| Variable                  | Needed by                                                                                        | Server-only     |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | --------------- |
+| `GEMINI_API_KEY`          | Gemini Provider Adapter (server-only; never a NEXT_PUBLIC_* variable)                            | yes             |
+| `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.6-flash`)                                         | yes             |
+| `RAZORPAY_KEY_ID`         | Razorpay adapter, checkout                                                                       | server-supplied |
+| `RAZORPAY_KEY_SECRET`     | Razorpay adapter, signature verification                                                         | yes             |
+| `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                             | yes             |
+| `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                   | yes             |
+| `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled | yes             |
+| `APP_SECRET`              | Session and CSRF signing. Minimum 32 characters                                                  | yes             |
 
-`getAnthropicConfig()`, `getRazorpayConfig()` and `getDatabaseConfig()` throw a
-`ConfigurationError` when their variables are missing. That is the intended
-behaviour: a missing Razorpay secret must fail the payment path loudly and
+`getGeminiConfig()`, `getRazorpayConfig()`, `getDatabaseConfig()`, `getCatalogConfig()` and
+`getAppSecretConfig()` throw a `ConfigurationError` when their variables are
+missing. That is the intended
+behaviour: a missing Razorpay secret or database URL must fail that path loudly and
 immediately, not prevent the application from starting or, worse, let it start
 in a degraded state that silently skips a control.
 

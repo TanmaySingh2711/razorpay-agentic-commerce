@@ -19,6 +19,9 @@ export type MerchantId = Branded<"MerchantId">;
 export type ProductId = Branded<"ProductId">;
 export type PolicyId = Branded<"PolicyId">;
 export type TransactionId = Branded<"TransactionId">;
+export type PurchaseQuoteId = Branded<"PurchaseQuoteId">;
+export type InventoryReservationId = Branded<"InventoryReservationId">;
+export type StateTransitionId = Branded<"StateTransitionId">;
 export type PaymentAttemptId = Branded<"PaymentAttemptId">;
 export type ApprovalRequestId = Branded<"ApprovalRequestId">;
 export type AuditEventId = Branded<"AuditEventId">;
@@ -49,6 +52,12 @@ export const asProductId = (value: string): ProductId => brand("ProductId", valu
 export const asPolicyId = (value: string): PolicyId => brand("PolicyId", value);
 export const asTransactionId = (value: string): TransactionId =>
   brand("TransactionId", value);
+export const asPurchaseQuoteId = (value: string): PurchaseQuoteId =>
+  brand("PurchaseQuoteId", value);
+export const asInventoryReservationId = (value: string): InventoryReservationId =>
+  brand("InventoryReservationId", value);
+export const asStateTransitionId = (value: string): StateTransitionId =>
+  brand("StateTransitionId", value);
 export const asPaymentAttemptId = (value: string): PaymentAttemptId =>
   brand("PaymentAttemptId", value);
 export const asApprovalRequestId = (value: string): ApprovalRequestId =>

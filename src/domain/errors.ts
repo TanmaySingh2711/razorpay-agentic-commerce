@@ -18,6 +18,8 @@ export const ERROR_CATEGORIES = [
   "domain_rule",
   /** A deterministic authorization decision denied the action. */
   "authorization",
+  /** The addressed entity does not exist. */
+  "not_found",
   /** An external provider (Razorpay, LLM) failed, timed out, or misbehaved. */
   "provider",
   /** A payment was attempted and did not succeed. */
@@ -36,6 +38,7 @@ const DEFAULT_PUBLIC_MESSAGE: Record<ErrorCategory, string> = {
   validation: "The request was not valid.",
   domain_rule: "That action is not allowed in the current state.",
   authorization: "This action was not authorized.",
+  not_found: "The requested item could not be found.",
   provider: "An upstream service is currently unavailable.",
   payment: "The payment could not be completed.",
   configuration: "The service is not correctly configured.",
@@ -47,6 +50,7 @@ const DEFAULT_HTTP_STATUS: Record<ErrorCategory, number> = {
   validation: 400,
   domain_rule: 409,
   authorization: 403,
+  not_found: 404,
   provider: 502,
   payment: 402,
   configuration: 500,
@@ -130,6 +134,12 @@ export class DomainRuleError extends AppError {
 export class AuthorizationError extends AppError {
   constructor(options: AppErrorOptions) {
     super("authorization", options);
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super("not_found", options);
   }
 }
 

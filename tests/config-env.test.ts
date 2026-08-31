@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  getAnthropicConfig,
+  getGeminiConfig,
+  getAppSecretConfig,
+  getDatabaseConfig,
   getRazorpayConfig,
   getRuntimeConfig,
   type EnvSource,
@@ -26,8 +28,32 @@ describe("runtime configuration", () => {
 describe("provider configuration", () => {
   it("is validated lazily, so a missing key fails the feature and not the boot", () => {
     // The runtime config above already succeeded against the same empty env.
-    expect(() => getAnthropicConfig(EMPTY_ENV)).toThrow(ConfigurationError);
+    expect(() => getGeminiConfig(EMPTY_ENV)).toThrow(ConfigurationError);
     expect(() => getRazorpayConfig(EMPTY_ENV)).toThrow(ConfigurationError);
+    expect(() => getDatabaseConfig(EMPTY_ENV)).toThrow(ConfigurationError);
+    expect(() => getAppSecretConfig(EMPTY_ENV)).toThrow(ConfigurationError);
+  });
+
+  it("accepts a pooled PostgreSQL URL alone, and a direct URL when migrations need one", () => {
+    const pooledOnly = getDatabaseConfig({
+      DATABASE_URL: "postgresql://user@host:5432/db?pgbouncer=true",
+    });
+    expect(pooledOnly.DIRECT_URL).toBeUndefined();
+
+    const withDirect = getDatabaseConfig({
+      DATABASE_URL: "postgresql://user@host:5432/db?pgbouncer=true",
+      DIRECT_URL: "postgresql://user@host:5432/db",
+    });
+    expect(withDirect.DIRECT_URL).toBe("postgresql://user@host:5432/db");
+  });
+
+  it("rejects an application secret too short to sign anything safely", () => {
+    expect(() => getAppSecretConfig({ APP_SECRET: "tooshort" })).toThrow(
+      ConfigurationError,
+    );
+    expect(getAppSecretConfig({ APP_SECRET: "a".repeat(32) }).APP_SECRET).toHaveLength(
+      32,
+    );
   });
 
   it("names every missing Razorpay variable so the fix is obvious", () => {
@@ -57,7 +83,7 @@ describe("provider configuration", () => {
   });
 
   it("applies a default model while still demanding a real API key", () => {
-    const config = getAnthropicConfig({ ANTHROPIC_API_KEY: "sk-ant-placeholder" });
-    expect(config.ANTHROPIC_MODEL).toBe("claude-sonnet-5");
+    const config = getGeminiConfig({ GEMINI_API_KEY: "placeholder-not-a-real-key" });
+    expect(config.GEMINI_MODEL).toBe("gemini-3.6-flash");
   });
 });

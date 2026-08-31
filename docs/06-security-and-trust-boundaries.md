@@ -1,5 +1,34 @@
 # 06 — Security and trust boundaries
 
+## Three trust levels
+
+Every input in the system sits in exactly one of these.
+
+### UNTRUSTED — never acted on as-is
+
+- the browser / client, and all user-controlled request data
+- **LLM output**, every token of it
+- merchant and product description text (it reaches a model, so it is an
+  injection vector even though the row it came from is authoritative for price)
+- external webhook payloads, **before** signature verification
+
+### TRUSTED ONLY AFTER VALIDATION
+
+- structured AI output, once parsed by a schema inside the AI Provider Adapter
+- webhook data, once its HMAC is verified against the raw bytes
+- API requests, once validated against their Zod schema and bound to an
+  authenticated user
+
+### AUTHORITATIVE — the source of truth
+
+- the server-side PostgreSQL database
+- the deterministic policy engine
+- the transaction state machine
+- verified payment provider state
+
+The whole architecture is the discipline of never letting something in the first
+group be treated as though it were in the third.
+
 ## The trust model
 
 ```mermaid
@@ -9,9 +38,9 @@ graph LR
   S --> L
   M["Merchant / catalog data<br/>UNTRUSTED AS AGENT INPUT<br/>AUTHORITATIVE AS SERVER DATA"] --> S
   S --> P["Policy engine<br/>TRUSTED, DETERMINISTIC"]
-  S --> DB["Database<br/>SOURCE OF TRUTH"]
-  S --> R["Razorpay API<br/>SEMI-TRUSTED, VERIFY RESPONSES"]
-  W["Razorpay webhook<br/>UNTRUSTED UNTIL SIGNATURE VERIFIED"] --> S
+  S --> DB["PostgreSQL via Prisma<br/>SOURCE OF TRUTH"]
+  S --> R["Payment provider API<br/>SEMI-TRUSTED, VERIFY RESPONSES"]
+  W["Payment webhook<br/>UNTRUSTED UNTIL SIGNATURE VERIFIED"] --> S
 ```
 
 ## Zone by zone
@@ -32,7 +61,7 @@ graph LR
 ### Secrets
 
 Server-only, always. `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-`ANTHROPIC_API_KEY` and `DATABASE_URL` are read only through
+`GEMINI_API_KEY`, `APP_SECRET`, `DATABASE_URL` and `DIRECT_URL` are read only through
 [`src/config/env.ts`](../src/config/env.ts), only inside the adapter that needs
 them. No secret is ever prefixed `NEXT_PUBLIC_`. Configuration errors report
 variable **names**, never values — enforced by a test. Redaction (below) is the
@@ -61,11 +90,21 @@ The browser may start a flow, approve an amount it was shown, and read its own
 transactions. It may never supply an amount, a price, a product's authoritative
 data, a policy, a state, or another user's identifier.
 
-### Authoritative price
+### Authoritative price and amount
 
-Read from the datastore at verification time and carried as `Money` (integer
-minor units + currency) through to the Razorpay order without a conversion step.
-Invariants 4, 7, 8.
+Read from PostgreSQL at verification time, frozen once into a `PurchaseQuote`,
+and carried as `Money` (integer minor units + explicit currency) through to the
+payment order without a conversion step. The quote is the only place the payable
+amount exists.
+
+| Concern              | Authoritative source                                       |
+| -------------------- | ---------------------------------------------------------- |
+| Price                | Server / PostgreSQL only                                   |
+| Inventory            | Server / PostgreSQL only                                   |
+| Currency             | Server / PostgreSQL only                                   |
+| Authorization policy | Server / PostgreSQL + deterministic policy layer only      |
+| Transaction state    | Server-side state machine only                             |
+| Payment status       | Verified server-side payment data or verified webhook only |
 
 ### Authoritative authorization
 
@@ -88,7 +127,7 @@ gap; together, a replayed event cannot produce a second state change.
 
 ### Preventing agent bypass of financial controls
 
-Four independent barriers, so no single mistake is sufficient:
+Five independent barriers, so no single mistake is sufficient:
 
 1. The agent's tool surface exposes **search and propose only** — no payment
    tool, no policy tool, no state-mutation tool exists for it to call.
@@ -98,6 +137,8 @@ Four independent barriers, so no single mistake is sufficient:
    write.
 4. Route handlers hold no business logic, so there is no endpoint an agent could
    reach that shortcuts a service.
+5. The payable amount exists in exactly one place — the `PurchaseQuote` — so
+   there is no second code path where a different amount could be introduced.
 
 ## Not implemented in Objective 1
 

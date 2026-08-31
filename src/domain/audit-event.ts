@@ -13,15 +13,38 @@ import { TRANSACTION_ACTORS } from "@/domain/transaction/states";
  */
 export const AUDIT_EVENT_TYPES = [
   "intent_received",
+  /** The agent's free text became a validated, bounded structured intent. */
+  "intent_interpreted",
+  /** The request was too ambiguous to price, and a question went back. */
+  "clarification_requested",
+  /** The server's own candidate set contained nothing that could be bought. */
+  "no_candidate_matched",
   "product_selected",
+  /** The agent proposed something the server refused to quote. */
+  "product_selection_rejected",
   "product_verified",
   "product_verification_failed",
+  "quote_created",
+  /** A replacement quote was issued because the old one no longer held. */
+  "quote_reissued",
+  "quote_expired",
+  /** The product moved underneath a quote: price, stock, currency or version. */
+  "quote_invalidated",
   "policy_evaluated",
   "approval_requested",
   "approval_granted",
   "approval_denied",
+  "approval_expired",
+  /** A token was presented after the approval had already been settled. */
+  "approval_replay_rejected",
+  "inventory_reserved",
+  "inventory_reservation_failed",
+  "inventory_reservation_expired",
+  "inventory_committed",
+  "inventory_released",
   "payment_order_created",
   "payment_attempt_started",
+  "payment_verified",
   "payment_captured",
   "payment_failed",
   "webhook_received",
@@ -30,6 +53,7 @@ export const AUDIT_EVENT_TYPES = [
   "transaction_completed",
   "transaction_blocked",
   "transaction_cancelled",
+  "transaction_expired",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
