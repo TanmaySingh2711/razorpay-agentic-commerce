@@ -12,7 +12,22 @@ import {
   validateSelection,
   type LockedUserAuthority,
 } from "@/domain/buyer-agent/validation";
-import { structuredPurchaseIntentSchema } from "@/domain/buyer-agent/intent";
+import {
+  ATTRIBUTE_NAME_PATTERN,
+  INTENT_RESPONSE_JSON_SCHEMA,
+  MAX_AMOUNT_MINOR_PATTERN,
+  MAX_ATTRIBUTE_NAME_LENGTH,
+  MAX_ATTRIBUTE_VALUE_LENGTH,
+  MAX_BUDGET_SOURCE_TEXT_LENGTH,
+  MAX_CATEGORY_LENGTH,
+  MAX_CLARIFICATION_QUESTION_LENGTH,
+  MAX_HARD_REQUIREMENTS,
+  MAX_PRODUCT_QUERY_LENGTH,
+  MAX_QUANTITY,
+  MAX_SOFT_PREFERENCES,
+  MIN_QUANTITY,
+  structuredPurchaseIntentSchema,
+} from "@/domain/buyer-agent/intent";
 import { productDto } from "./support/fake-ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 
@@ -554,6 +569,266 @@ describe("regressions from the live provider", () => {
     expect(parsed.data.category).toBeNull();
     expect(parsed.data.budget).toBeNull();
     expect(parsed.data.clarificationQuestion).toBeNull();
+  });
+
+  /**
+   * Every bound the runtime enforces must also be stated to the provider.
+   *
+   * The observed failure: the model returned a clarification question longer
+   * than the runtime cap and the whole request died as
+   * AI_PROVIDER_INVALID_RESPONSE. The provider schema declared no length at
+   * all, so the model was being judged against a limit it was never given.
+   * The other fields had the same silent gap and had simply not been hit yet.
+   *
+   * Each case asserts the declared bound *equals the runtime constant* rather
+   * than a literal. That is what makes these regression tests: changing a
+   * runtime limit without telling the provider fails here.
+   */
+  const properties = INTENT_RESPONSE_JSON_SCHEMA.properties;
+
+  const baseIntent = {
+    requestType: "PURCHASE" as const,
+    productQuery: "keyboard",
+    quantity: 1,
+    hardRequirements: [],
+    softPreferences: [],
+    needsClarification: false,
+  };
+
+  const text = (length: number): string => "a".repeat(length);
+  const constraints = (count: number): { attribute: string; operator: string }[] =>
+    Array.from({ length: count }, (_, index) => ({
+      attribute: `attr${String(index)}`,
+      operator: "EQUALS",
+      value: "x",
+    })) as { attribute: string; operator: string }[];
+
+  const cases = [
+    {
+      field: "productQuery",
+      limit: MAX_PRODUCT_QUERY_LENGTH,
+      declared: properties.productQuery.maxLength,
+      atLimit: { ...baseIntent, productQuery: text(MAX_PRODUCT_QUERY_LENGTH) },
+      overLimit: { ...baseIntent, productQuery: text(MAX_PRODUCT_QUERY_LENGTH + 1) },
+    },
+    {
+      field: "category",
+      limit: MAX_CATEGORY_LENGTH,
+      declared: properties.category.maxLength,
+      atLimit: { ...baseIntent, category: text(MAX_CATEGORY_LENGTH) },
+      overLimit: { ...baseIntent, category: text(MAX_CATEGORY_LENGTH + 1) },
+    },
+    {
+      field: "clarificationQuestion",
+      limit: MAX_CLARIFICATION_QUESTION_LENGTH,
+      declared: properties.clarificationQuestion.maxLength,
+      atLimit: {
+        ...baseIntent,
+        needsClarification: true,
+        clarificationQuestion: text(MAX_CLARIFICATION_QUESTION_LENGTH),
+      },
+      overLimit: {
+        ...baseIntent,
+        needsClarification: true,
+        clarificationQuestion: text(MAX_CLARIFICATION_QUESTION_LENGTH + 1),
+      },
+    },
+    {
+      field: "hardRequirements",
+      limit: MAX_HARD_REQUIREMENTS,
+      declared: properties.hardRequirements.maxItems,
+      atLimit: { ...baseIntent, hardRequirements: constraints(MAX_HARD_REQUIREMENTS) },
+      overLimit: {
+        ...baseIntent,
+        hardRequirements: constraints(MAX_HARD_REQUIREMENTS + 1),
+      },
+    },
+    {
+      field: "softPreferences",
+      limit: MAX_SOFT_PREFERENCES,
+      declared: properties.softPreferences.maxItems,
+      atLimit: { ...baseIntent, softPreferences: constraints(MAX_SOFT_PREFERENCES) },
+      overLimit: {
+        ...baseIntent,
+        softPreferences: constraints(MAX_SOFT_PREFERENCES + 1),
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    it(`states the ${testCase.field} bound to the provider and enforces it`, () => {
+      expect(testCase.declared).toBe(testCase.limit);
+      // Exactly at the bound is allowed - the limit is inclusive, and a fix
+      // that quietly tightened it would be a change to runtime behaviour.
+      expect(
+        structuredPurchaseIntentSchema.safeParse(testCase.atLimit).success,
+        "at the bound",
+      ).toBe(true);
+      // One past it is still refused, so nothing was loosened.
+      expect(
+        structuredPurchaseIntentSchema.safeParse(testCase.overLimit).success,
+        "one over the bound",
+      ).toBe(false);
+    });
+  }
+
+  /**
+   * The same bounds, one level down.
+   *
+   * `budget` and each constraint are nested objects, which is the only reason
+   * they were missed when the top-level fields were aligned. The drift is
+   * identical in kind and so is the consequence.
+   */
+  const budgetProperties = properties.budget.properties;
+  const constraintProperties = properties.hardRequirements.items.properties;
+
+  const withBudget = (sourceText: string) => ({
+    ...baseIntent,
+    productQuery: "keyboard",
+    budget: {
+      maxAmountMinor: "300000",
+      currency: "INR",
+      explicit: true,
+      sourceText,
+    },
+  });
+
+  const withConstraint = (attribute: string, value: string) => ({
+    ...baseIntent,
+    hardRequirements: [{ attribute, operator: "EQUALS", value }],
+  });
+
+  const nestedCases = [
+    {
+      field: "budget.sourceText",
+      limit: MAX_BUDGET_SOURCE_TEXT_LENGTH,
+      declared: budgetProperties.sourceText.maxLength,
+      atLimit: withBudget(text(MAX_BUDGET_SOURCE_TEXT_LENGTH)),
+      overLimit: withBudget(text(MAX_BUDGET_SOURCE_TEXT_LENGTH + 1)),
+    },
+    {
+      field: "constraint.attribute",
+      limit: MAX_ATTRIBUTE_NAME_LENGTH,
+      declared: constraintProperties.attribute.maxLength,
+      // Attribute names are identifiers, so the boundary string has to be a
+      // legal one - padding with 'a' keeps it inside the identifier pattern.
+      atLimit: withConstraint(text(MAX_ATTRIBUTE_NAME_LENGTH), "x"),
+      overLimit: withConstraint(text(MAX_ATTRIBUTE_NAME_LENGTH + 1), "x"),
+    },
+    {
+      field: "constraint.value",
+      limit: MAX_ATTRIBUTE_VALUE_LENGTH,
+      declared: constraintProperties.value.maxLength,
+      atLimit: withConstraint("layout", text(MAX_ATTRIBUTE_VALUE_LENGTH)),
+      overLimit: withConstraint("layout", text(MAX_ATTRIBUTE_VALUE_LENGTH + 1)),
+    },
+  ];
+
+  for (const testCase of nestedCases) {
+    it(`states the ${testCase.field} bound to the provider and enforces it`, () => {
+      expect(testCase.declared).toBe(testCase.limit);
+      expect(
+        structuredPurchaseIntentSchema.safeParse(testCase.atLimit).success,
+        "at the bound",
+      ).toBe(true);
+      expect(
+        structuredPurchaseIntentSchema.safeParse(testCase.overLimit).success,
+        "one over the bound",
+      ).toBe(false);
+    });
+  }
+
+  /**
+   * Bounds that are neither lengths nor counts.
+   *
+   * A numeric range and two regexes, each enforced at runtime and previously
+   * not stated to the provider at all. They fail the same way as the length
+   * bounds did - the model emits something the contract permitted and the
+   * runtime refuses it - so they are tested the same way.
+   */
+  it("states the quantity range to the provider and enforces it", () => {
+    expect(properties.quantity.minimum).toBe(MIN_QUANTITY);
+    expect(properties.quantity.maximum).toBe(MAX_QUANTITY);
+
+    const withQuantity = (quantity: number) => ({ ...baseIntent, quantity });
+    for (const quantity of [MIN_QUANTITY, MAX_QUANTITY]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withQuantity(quantity)).success,
+        `at the bound: ${String(quantity)}`,
+      ).toBe(true);
+    }
+    for (const quantity of [MIN_QUANTITY - 1, MAX_QUANTITY + 1]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withQuantity(quantity)).success,
+        `outside the bound: ${String(quantity)}`,
+      ).toBe(false);
+    }
+  });
+
+  it("states the attribute-name pattern to the provider and enforces it", () => {
+    // Compared as source, because that is the only form JSON Schema can carry
+    // and therefore the only place the two can disagree.
+    expect(constraintProperties.attribute.pattern).toBe(ATTRIBUTE_NAME_PATTERN.source);
+
+    for (const attribute of ["layout", "keySwitch", "switch_type", "a"]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withConstraint(attribute, "x")).success,
+        attribute,
+      ).toBe(true);
+    }
+    // Leading digit, punctuation, spaces and emptiness are all refused - an
+    // attribute name is an identifier, not free text.
+    for (const attribute of ["1layout", "key-switch", "key switch", "_layout", ""]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withConstraint(attribute, "x")).success,
+        attribute,
+      ).toBe(false);
+    }
+  });
+
+  it("states the maxAmountMinor pattern to the provider and enforces it", () => {
+    expect(budgetProperties.maxAmountMinor.pattern).toBe(MAX_AMOUNT_MINOR_PATTERN.source);
+
+    const withAmount = (maxAmountMinor: string) => ({
+      ...baseIntent,
+      budget: {
+        maxAmountMinor,
+        currency: "INR",
+        explicit: true,
+        sourceText: "under 3000",
+      },
+    });
+    for (const amount of ["1", "300000", "999999999999999"]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withAmount(amount)).success,
+        amount,
+      ).toBe(true);
+    }
+    // A decimal is the failure this pattern exists to stop: "3000.00" read as
+    // minor units is a hundredfold error in the field that caps spending.
+    for (const amount of ["3000.00", "-1", "1e5", "", "1234567890123456", "₹3000"]) {
+      expect(
+        structuredPurchaseIntentSchema.safeParse(withAmount(amount)).success,
+        amount,
+      ).toBe(false);
+    }
+  });
+
+  it("declares the same constraint bounds in both requirement arrays", () => {
+    // The two arrays hold the same shape. Declaring a bound on one and not the
+    // other would leave exactly the gap this whole block exists to close.
+    expect(properties.softPreferences.items.properties).toEqual(
+      properties.hardRequirements.items.properties,
+    );
+  });
+
+  it("states the minimum length of productQuery to the provider", () => {
+    // An empty productQuery would search the catalog for nothing at all.
+    expect(properties.productQuery.minLength).toBe(1);
+    expect(
+      structuredPurchaseIntentSchema.safeParse({ ...baseIntent, productQuery: "" })
+        .success,
+    ).toBe(false);
   });
 
   it("notices a stated ceiling the model failed to report", () => {

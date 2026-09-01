@@ -36,9 +36,46 @@ export const REQUIREMENT_OPERATORS = ["EQUALS", "NOT_EQUALS"] as const;
 
 export type RequirementOperator = (typeof REQUIREMENT_OPERATORS)[number];
 
+export const MIN_QUANTITY = 1;
 export const MAX_QUANTITY = 10;
+
+/**
+ * Patterns shared by the runtime check and the provider schema.
+ *
+ * A `RegExp` cannot be handed to JSON Schema directly, so the provider gets
+ * `.source`. Deriving it from the same literal is the point: the alternative
+ * is writing the expression twice in two syntaxes, which is how a validator
+ * and the contract it is meant to describe quietly stop meaning the same
+ * thing.
+ */
+export const ATTRIBUTE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+export const MAX_AMOUNT_MINOR_PATTERN = /^\d{1,15}$/;
 export const MAX_HARD_REQUIREMENTS = 8;
 export const MAX_SOFT_PREFERENCES = 8;
+
+/**
+ * Length bounds on the model's free-text fields.
+ *
+ * Named for the same reason as `MAX_CLARIFICATION_QUESTION_LENGTH` below: each
+ * of these limits has to appear in two places - the runtime check and the
+ * JSON Schema the provider generates against - and a limit written twice is a
+ * limit that eventually disagrees with itself. Sharing the constant makes the
+ * two physically incapable of drifting apart.
+ */
+export const MAX_PRODUCT_QUERY_LENGTH = 200;
+export const MAX_CATEGORY_LENGTH = 64;
+
+/**
+ * The same treatment for the bounds inside `budget` and each constraint.
+ *
+ * These sit one level down in the payload, which is the only reason they were
+ * missed the first time round - the drift is identical in kind, and so is the
+ * consequence: a value the runtime refuses that the model was never told to
+ * keep short.
+ */
+export const MAX_BUDGET_SOURCE_TEXT_LENGTH = 200;
+export const MAX_ATTRIBUTE_NAME_LENGTH = 40;
+export const MAX_ATTRIBUTE_VALUE_LENGTH = 100;
 
 /**
  * The upper bound on any budget the agent will accept, in minor units.
@@ -50,10 +87,14 @@ export const MAX_BUDGET_MINOR = 100_000_000n;
 const attributeNameSchema = z
   .string()
   .min(1)
-  .max(40)
-  .regex(/^[A-Za-z][A-Za-z0-9_]*$/, "attribute names are identifiers");
+  .max(MAX_ATTRIBUTE_NAME_LENGTH)
+  .regex(ATTRIBUTE_NAME_PATTERN, "attribute names are identifiers");
 
-const attributeValueSchema = z.union([z.string().max(100), z.number(), z.boolean()]);
+const attributeValueSchema = z.union([
+  z.string().max(MAX_ATTRIBUTE_VALUE_LENGTH),
+  z.number(),
+  z.boolean(),
+]);
 
 export const constraintSchema = z.object({
   attribute: attributeNameSchema,
@@ -96,7 +137,7 @@ export type BudgetScope = (typeof BUDGET_SCOPES)[number];
 export const budgetSchema = z.object({
   maxAmountMinor: z
     .string()
-    .regex(/^\d{1,15}$/, "maxAmountMinor must be whole minor units"),
+    .regex(MAX_AMOUNT_MINOR_PATTERN, "maxAmountMinor must be whole minor units"),
   currency: z.enum(SUPPORTED_CURRENCIES),
   /** True only when the human actually stated a limit. */
   explicit: z.boolean(),
@@ -112,7 +153,7 @@ export const budgetSchema = z.object({
     .nullish()
     .transform((value) => value ?? null),
   /** The exact span of the human's message the limit was read from. */
-  sourceText: z.string().min(1).max(200),
+  sourceText: z.string().min(1).max(MAX_BUDGET_SOURCE_TEXT_LENGTH),
 });
 
 export type BudgetClaim = z.infer<typeof budgetSchema>;
@@ -138,18 +179,31 @@ const nullishString = (max: number) =>
     .nullish()
     .transform((value) => value ?? null);
 
+/**
+ * The longest clarification question accepted, in both schemas below.
+ *
+ * It is a shared constant rather than a number written twice because the two
+ * schemas silently disagreed: the runtime check capped the field at 300
+ * characters while the JSON Schema sent to the provider stated no limit at
+ * all. A model that was never told the bound had no way to respect it, so a
+ * slightly long question became an `AI_PROVIDER_INVALID_RESPONSE` - a failure
+ * caused by our own contract rather than by anything the model did wrong.
+ * Observed against the live provider, not hypothesised.
+ */
+export const MAX_CLARIFICATION_QUESTION_LENGTH = 300;
+
 export const structuredPurchaseIntentSchema = z.object({
   requestType: z.enum(PURCHASE_INTENTS),
   /** Free-text product description, used only to search the catalog. */
-  productQuery: z.string().min(1).max(200),
+  productQuery: z.string().min(1).max(MAX_PRODUCT_QUERY_LENGTH),
   /** Catalog category if the human implied one. Never invented to force a match. */
-  category: nullishString(64),
-  quantity: z.number().int().min(1).max(MAX_QUANTITY),
+  category: nullishString(MAX_CATEGORY_LENGTH),
+  quantity: z.number().int().min(MIN_QUANTITY).max(MAX_QUANTITY),
   budget: budgetSchema.nullish().transform((value) => value ?? null),
   hardRequirements: z.array(constraintSchema).max(MAX_HARD_REQUIREMENTS).default([]),
   softPreferences: z.array(constraintSchema).max(MAX_SOFT_PREFERENCES).default([]),
   needsClarification: z.boolean(),
-  clarificationQuestion: nullishString(300),
+  clarificationQuestion: nullishString(MAX_CLARIFICATION_QUESTION_LENGTH),
 });
 
 export type StructuredPurchaseIntent = z.infer<typeof structuredPurchaseIntentSchema>;
@@ -167,15 +221,28 @@ export const INTENT_RESPONSE_JSON_SCHEMA = {
   type: "object",
   properties: {
     requestType: { type: "string", enum: [...PURCHASE_INTENTS] },
-    productQuery: { type: "string" },
-    category: { type: "string", nullable: true },
-    quantity: { type: "integer" },
+    productQuery: {
+      type: "string",
+      minLength: 1,
+      maxLength: MAX_PRODUCT_QUERY_LENGTH,
+    },
+    category: {
+      type: "string",
+      nullable: true,
+      maxLength: MAX_CATEGORY_LENGTH,
+    },
+    quantity: {
+      type: "integer",
+      minimum: MIN_QUANTITY,
+      maximum: MAX_QUANTITY,
+    },
     budget: {
       type: "object",
       nullable: true,
       properties: {
         maxAmountMinor: {
           type: "string",
+          pattern: MAX_AMOUNT_MINOR_PATTERN.source,
           description: "Whole minor units (paise). '₹3000' is '300000'. Never a decimal.",
         },
         currency: { type: "string", enum: [...SUPPORTED_CURRENCIES] },
@@ -189,6 +256,8 @@ export const INTENT_RESPONSE_JSON_SCHEMA = {
         },
         sourceText: {
           type: "string",
+          minLength: 1,
+          maxLength: MAX_BUDGET_SOURCE_TEXT_LENGTH,
           description:
             "The exact substring of the user's message the limit was read from, copied verbatim.",
         },
@@ -197,30 +266,46 @@ export const INTENT_RESPONSE_JSON_SCHEMA = {
     },
     hardRequirements: {
       type: "array",
+      maxItems: MAX_HARD_REQUIREMENTS,
       items: {
         type: "object",
         properties: {
-          attribute: { type: "string" },
+          attribute: {
+            type: "string",
+            minLength: 1,
+            maxLength: MAX_ATTRIBUTE_NAME_LENGTH,
+            pattern: ATTRIBUTE_NAME_PATTERN.source,
+          },
           operator: { type: "string", enum: [...REQUIREMENT_OPERATORS] },
-          value: { type: "string" },
+          value: { type: "string", maxLength: MAX_ATTRIBUTE_VALUE_LENGTH },
         },
         required: ["attribute", "operator", "value"],
       },
     },
     softPreferences: {
       type: "array",
+      maxItems: MAX_SOFT_PREFERENCES,
       items: {
         type: "object",
         properties: {
-          attribute: { type: "string" },
+          attribute: {
+            type: "string",
+            minLength: 1,
+            maxLength: MAX_ATTRIBUTE_NAME_LENGTH,
+            pattern: ATTRIBUTE_NAME_PATTERN.source,
+          },
           operator: { type: "string", enum: [...REQUIREMENT_OPERATORS] },
-          value: { type: "string" },
+          value: { type: "string", maxLength: MAX_ATTRIBUTE_VALUE_LENGTH },
         },
         required: ["attribute", "operator", "value"],
       },
     },
     needsClarification: { type: "boolean" },
-    clarificationQuestion: { type: "string", nullable: true },
+    clarificationQuestion: {
+      type: "string",
+      nullable: true,
+      maxLength: MAX_CLARIFICATION_QUESTION_LENGTH,
+    },
   },
   required: [
     "requestType",
