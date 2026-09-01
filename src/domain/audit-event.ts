@@ -43,8 +43,13 @@ export const AUDIT_EVENT_TYPES = [
   "inventory_committed",
   "inventory_released",
   "payment_order_created",
+  /** A human pressed Pay and a provider checkout session was authorized. */
   "payment_attempt_started",
+  /** The buyer closed the provider's checkout without completing it. */
+  "payment_checkout_dismissed",
   "payment_verified",
+  /** A checkout callback was refused: bad signature, or a mismatched relationship. */
+  "payment_callback_rejected",
   "payment_captured",
   "payment_failed",
   "webhook_received",

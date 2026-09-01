@@ -105,6 +105,10 @@ enum PaymentAttemptStatus {
   VERIFIED
   CAPTURED
   FAILED
+  /// The provider call left an unresolved outcome: an order may exist at the
+  /// provider that this database did not finish recording. Never retried into a
+  /// second order; resolved by looking the receipt up.
+  RECONCILIATION_REQUIRED
 }
 
 enum ApprovalStatus {
@@ -178,33 +182,33 @@ model Merchant {
 /// `version` increments whenever price, currency or availability changes, so a
 /// quote taken against an older version can be invalidated rather than charged.
 model Product {
-  id           String        @id @default(uuid(7))
-  merchantId   String
-  sku          String        @db.VarChar(64)
-  name         String        @db.VarChar(200)
-  description  String        @db.Text
-  category     String        @db.VarChar(64)
+  id               String        @id @default(uuid(7))
+  merchantId       String
+  sku              String        @db.VarChar(64)
+  name             String        @db.VarChar(200)
+  description      String        @db.Text
+  category         String        @db.VarChar(64)
   /// Authoritative unit price in integer minor units (paise for INR).
-  unitAmount   BigInt
+  unitAmount       BigInt
   /// ISO 4217 code, uppercase. Validated by CHECK constraint and by Zod.
-  currency     String        @db.Char(3)
+  currency         String        @db.Char(3)
   /// On-hand stock. A CHECK constraint forbids negative values.
   ///
   /// Deliberately NOT moved when stock is reserved: a reservation is a
   /// temporary claim, not a sale. This column changes only when a reservation
   /// is permanently committed against proven captured payment.
-  inventory    Int           @default(0)
+  inventory        Int           @default(0)
   /// Stock currently held by ACTIVE reservations, so reservable stock is
   /// `inventory - reservedQuantity`. CHECK constraints keep it between zero and
   /// `inventory`, which is what makes overselling impossible even if the
   /// application is wrong. See docs/22-approval-and-inventory.md.
-  reservedQuantity Int        @default(0)
-  status       ProductStatus @default(AVAILABLE)
+  reservedQuantity Int           @default(0)
+  status           ProductStatus @default(AVAILABLE)
   /// Structured, application-validated attributes (switch type, layout, ...).
-  attributes   Json          @default("{}")
-  version      Int           @default(1)
-  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  attributes       Json          @default("{}")
+  version          Int           @default(1)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
 
   merchant     Merchant               @relation(fields: [merchantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   quotes       PurchaseQuote[]
@@ -221,17 +225,17 @@ model Product {
 /// mutated, so an audit record can name the exact policy version that decided.
 /// No agent path may ever write this table.
 model AuthorizationPolicy {
-  id                    String                    @id @default(uuid(7))
-  buyerProfileId        String
+  id                   String                    @id @default(uuid(7))
+  buyerProfileId       String
   /// Ceiling for automatic (unapproved) spend, in integer minor units.
-  maxAutoApproveAmount  BigInt
-  currency              String                    @db.Char(3)
+  maxAutoApproveAmount BigInt
+  currency             String                    @db.Char(3)
   /// Whether the agent may initiate a purchase at all without a human.
-  autoPurchaseAllowed   Boolean                   @default(false)
-  status                AuthorizationPolicyStatus @default(ACTIVE)
-  version               Int                       @default(1)
-  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime                  @updatedAt @db.Timestamptz(3)
+  autoPurchaseAllowed  Boolean                   @default(false)
+  status               AuthorizationPolicyStatus @default(ACTIVE)
+  version              Int                       @default(1)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
 
   buyerProfile BuyerProfile @relation(fields: [buyerProfileId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
@@ -277,12 +281,12 @@ model Transaction {
   merchant     Merchant     @relation(fields: [merchantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   product      Product?     @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  quotes       PurchaseQuote[]
-  reservations InventoryReservation[]
-  attempts     PaymentAttempt[]
-  approvals    ApprovalRequest[]
-  transitions  TransactionStateTransition[]
-  auditEvents  AuditEvent[]
+  quotes        PurchaseQuote[]
+  reservations  InventoryReservation[]
+  attempts      PaymentAttempt[]
+  approvals     ApprovalRequest[]
+  transitions   TransactionStateTransition[]
+  auditEvents   AuditEvent[]
   webhookEvents WebhookEvent[]
 
   @@index([buyerProfileId, createdAt])
@@ -332,19 +336,19 @@ model PurchaseQuote {
 /// check-then-charge race: verify -> authorize -> reserve -> pay -> commit or
 /// release.
 model InventoryReservation {
-  id            String                     @id @default(uuid(7))
-  transactionId String
+  id              String                     @id @default(uuid(7))
+  transactionId   String
   /// The exact trusted quote this stock is being held for. A reservation that
   /// did not name its quote could be inherited by a re-quote at a different
   /// price, holding stock for an amount nobody authorized.
   purchaseQuoteId String
-  productId     String
-  quantity      Int
-  status        InventoryReservationStatus @default(ACTIVE)
-  createdAt     DateTime                   @default(now()) @db.Timestamptz(3)
-  expiresAt     DateTime                   @db.Timestamptz(3)
-  committedAt   DateTime?                  @db.Timestamptz(3)
-  releasedAt    DateTime?                  @db.Timestamptz(3)
+  productId       String
+  quantity        Int
+  status          InventoryReservationStatus @default(ACTIVE)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  expiresAt       DateTime                   @db.Timestamptz(3)
+  committedAt     DateTime?                  @db.Timestamptz(3)
+  releasedAt      DateTime?                  @db.Timestamptz(3)
 
   transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -374,6 +378,9 @@ model PaymentAttempt {
   currency          String               @db.Char(3)
   status            PaymentAttemptStatus @default(CREATED)
   provider          PaymentProvider      @default(RAZORPAY)
+  /// Our own reference for this order, and the provider's idempotency key for
+  /// creating it. Stable across every retry of the same logical operation.
+  receipt           String?              @unique @db.VarChar(40)
   /// External provider order reference. NOT an internal key.
   providerOrderId   String?              @db.VarChar(128)
   /// External provider payment reference. NOT an internal key.
@@ -441,17 +448,17 @@ model ApprovalRequest {
 /// `sequence` gives unambiguous ordering even when two transitions share a
 /// millisecond timestamp.
 model TransactionStateTransition {
-  id            String             @id @default(uuid(7))
-  transactionId String
-  sequence      Int
+  id             String             @id @default(uuid(7))
+  transactionId  String
+  sequence       Int
   /// Null only for the very first transition into INTENT_RECEIVED.
-  fromStatus    TransactionStatus?
-  toStatus      TransactionStatus
-  actor         TransactionActor
-  trigger       String             @db.VarChar(64)
-  reasonCode    String?            @db.VarChar(64)
+  fromStatus     TransactionStatus?
+  toStatus       TransactionStatus
+  actor          TransactionActor
+  trigger        String             @db.VarChar(64)
+  reasonCode     String?            @db.VarChar(64)
   /// Safe structured context. Never secrets, never model reasoning.
-  details       Json               @default("{}")
+  details        Json               @default("{}")
   /// Identity of the logical operation that produced this transition.
   ///
   /// Added in Objective 3. A retried command carrying the same key resolves to
@@ -460,8 +467,8 @@ model TransactionStateTransition {
   /// Nullable, because an internal transition need not always claim an
   /// identity; PostgreSQL treats NULLs as distinct, so unkeyed transitions do
   /// not collide with each other.
-  idempotencyKey String?           @db.VarChar(128)
-  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  idempotencyKey String?            @db.VarChar(128)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 

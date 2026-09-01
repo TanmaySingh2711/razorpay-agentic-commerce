@@ -113,6 +113,36 @@ function explainPolicy(payload: JsonObject, reasonCode: string | null): string {
 const UNRECOGNISED_EVENT =
   "This event type has no explanation rule yet; its structured fields are still exact.";
 
+/**
+ * The payment-order sentences.
+ *
+ * Three outcomes need three genuinely different sentences, because the
+ * difference between them is the whole point of the record. "Created" is good
+ * news; "refused" is ordinary; "we do not know" is the one a person must be
+ * able to read plainly, because it is the state in which a provider order may
+ * exist that this system has not finished accounting for. Softening that into
+ * "the payment order failed" would hide the one fact worth surfacing.
+ */
+function explainPaymentOrder(
+  payload: JsonObject,
+  result: AuditResult,
+  reasonCode: string | null,
+): string {
+  const total = amount(payload, "amountMinor");
+  const forTotal = total === null ? "" : ` for ${total}`;
+
+  if (result === "SUCCESS") {
+    const orderId = readString(payload, "providerOrderId");
+    const at = orderId === null ? "" : ` (provider order ${orderId})`;
+    return `A payment order was created at the payment provider${forTotal}${at}.`;
+  }
+  if (result === "PENDING") {
+    return `The payment provider's response was lost, so it is not yet known whether an order${forTotal} exists. No second order will be created; the reference is being reconciled.`;
+  }
+  const cause = reasonCode === null ? "" : ` (${reasonCode})`;
+  return `No payment order was created${forTotal}${cause}.`;
+}
+
 function isKnownAction(action: string): action is AuditEventType {
   return (AUDIT_EVENT_TYPES as readonly string[]).includes(action);
 }
@@ -236,14 +266,19 @@ export function explainAuditEvent(input: {
     case "transaction_expired":
       return "The transaction expired before it could complete.";
 
-    // Objective 10 will populate these. Declared now so payment events need no
-    // redesign of this file - only a sentence each.
     case "payment_order_created":
-      return "A payment order was created at the provider.";
+      return explainPaymentOrder(facts, input.result, reasonCode);
     case "payment_attempt_started":
-      return "Checkout was handed to the buyer.";
+      return "A person chose to pay, and checkout was handed to them.";
+    case "payment_checkout_dismissed":
+      return "The buyer closed the payment window without completing payment. Nothing was charged, and the purchase is unchanged.";
     case "payment_verified":
-      return "A payment signature was verified server-side.";
+      // Deliberately says what a signature proves and what it does not. A
+      // reader who takes "verified" to mean "paid" would draw exactly the wrong
+      // conclusion, and this sentence is where that is headed off.
+      return "The payment confirmation was proved genuine server-side. This authenticates the confirmation; it is not yet proof that funds were captured.";
+    case "payment_callback_rejected":
+      return `A payment confirmation was refused because it could not be trusted${reasonTail}. No payment was recorded and the purchase was left unchanged.`;
     case "payment_captured":
       return "The provider confirmed the payment was captured.";
     case "payment_failed":

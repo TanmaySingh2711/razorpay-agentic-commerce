@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AUDIT_EVENT_TYPES, type AuditEventType } from "@/domain/audit-event";
 import { TRANSACTION_ACTORS, type TransactionActor } from "@/domain/transaction/states";
 import { isSensitiveKey } from "@/lib/redact";
+import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import { ValidationError } from "@/domain/errors";
 import type { JsonObject, JsonValue } from "@/lib/json";
 
@@ -57,6 +58,16 @@ export function isAiActor(actor: AuditActor): boolean {
 const minorAmount = z.string().regex(/^-?\d+$/, "amounts are integer minor units");
 
 const identifier = z.string().min(1).max(64);
+
+/**
+ * External provider references, bounded by the columns that store them.
+ *
+ * Wider than `identifier` on purpose: these values come from another company's
+ * namespace, and one of them (`presentedOrderId`) is attacker-controlled. The
+ * bound has to be at least as wide as whatever the request boundary lets in, or
+ * the record of a rejected callback becomes impossible to write.
+ */
+const providerReference = z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH);
 const currency = z.string().regex(/^[A-Z]{3}$/);
 const isoInstant = z.iso.datetime();
 const shortCode = z.string().min(1).max(64);
@@ -168,16 +179,56 @@ const transitionPayload = z.strictObject({
   transitionId: identifier.optional(),
 });
 
-/** Reserved for Objective 10. Declared now so payments need no redesign. */
+/**
+ * A payment interaction, recorded from trusted server state only.
+ *
+ * Note what is absent and must stay absent: the Razorpay key secret, the
+ * webhook secret, any Authorization header, any card number or CVV, and the
+ * provider's own error prose - which is free text that can echo request content
+ * back into a record meant to be evidence. Only mapped, enumerable codes are
+ * allowed through `failureCode`.
+ *
+ * `paymentAttemptId` and `providerOrderId` sit side by side on purpose. The
+ * first is ours and is a key; the second is Razorpay's and is a reference. A
+ * reader of the audit trail should be able to see both and never confuse which
+ * system owns which.
+ */
 const paymentPayload = z.strictObject({
+  /** Internal identity of the attempt. Ours. */
+  paymentAttemptId: identifier.optional(),
   attemptNumber: z.int().positive().optional(),
+  quoteId: identifier.optional(),
+  reservationId: identifier.optional(),
   amountMinor: minorAmount.optional(),
   currency: currency.optional(),
   provider: shortCode.optional(),
+  /** Our reference, and the provider's idempotency key for this order. */
+  receipt: identifier.optional(),
   /** Provider references are external identifiers, never internal keys. */
-  providerOrderId: identifier.optional(),
-  providerPaymentId: identifier.optional(),
+  providerOrderId: providerReference.optional(),
+  providerPaymentId: providerReference.optional(),
+  /** The provider's own lifecycle word, kept for reconciliation. */
+  providerStatus: shortCode.optional(),
+  /** The policy that was in force when the external side effect was authorized. */
+  policyVersion: z.int().nullable().optional(),
+  policyDecision: shortCode.optional(),
+  /** Set when a scoped human approval supplied the authority. */
+  approvalId: identifier.optional(),
+  /** A mapped, enumerable code. Never the provider's message. */
   failureCode: shortCode.optional(),
+  /**
+   * An identifier a *client* presented, recorded only when it disagreed with
+   * what the server holds.
+   *
+   * Kept because "somebody posted this order id against that transaction" is
+   * precisely the fact a security review needs, and it is an opaque provider
+   * reference rather than a credential. It is never used for anything but the
+   * record - no lookup, and certainly no signature.
+   */
+  presentedOrderId: providerReference.optional(),
+  /** Why the server declined before any provider call was made. */
+  refusal: shortCode.optional(),
+  operationId: identifier.optional(),
 });
 
 const genericPayload = z.strictObject({
@@ -220,7 +271,9 @@ const PAYLOAD_SCHEMAS: Record<AuditEventType, z.ZodType> = {
   inventory_released: reservationPayload,
   payment_order_created: paymentPayload,
   payment_attempt_started: paymentPayload,
+  payment_checkout_dismissed: paymentPayload,
   payment_verified: paymentPayload,
+  payment_callback_rejected: paymentPayload,
   payment_captured: paymentPayload,
   payment_failed: paymentPayload,
   webhook_received: paymentPayload,

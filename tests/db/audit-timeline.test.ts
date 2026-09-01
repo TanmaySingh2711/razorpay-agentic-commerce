@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   getTransactionAuditHistory,
   recordAuditEvent,
@@ -194,7 +194,20 @@ describe.skipIf(!databaseConfigured)("the audit timeline", () => {
     reservationDeps = { prisma: testDb(), clock, ttlSeconds: RESERVATION_TTL_SECONDS };
   });
 
-  afterEach(async () => {
+  // Once per file, not once per test.
+  //
+  // `testDb()` builds a new PrismaClient - and with it a new `pg` connection
+  // pool - whenever the cached one has been disconnected. Disconnecting after
+  // every test therefore created a fresh pool per test, roughly a hundred and
+  // forty of them across this suite, all against one hosted database. Under the
+  // full run that churn left connections lingering long enough for a stray lock
+  // to outlive its test, and `resetTestData()`'s TRUNCATE - which needs ACCESS
+  // EXCLUSIVE on every table at once - deadlocked against one.
+  //
+  // Per-test isolation is unaffected: it comes from `resetTestData()` in
+  // `beforeEach`, which still runs before every test. Only the connection is
+  // now shared, which is what the harness's cache was always for.
+  afterAll(async () => {
     await disconnectTestDb();
   });
 

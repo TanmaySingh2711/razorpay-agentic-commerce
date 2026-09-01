@@ -1,0 +1,272 @@
+import { z } from "zod";
+import { jsonData, respond } from "@/lib/api-response";
+import { ValidationError } from "@/domain/errors";
+import { getRazorpayCredentials } from "@/config/env";
+import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
+import {
+  createPaymentOrder,
+  defaultPaymentOrderDeps,
+  type PaymentOrderServiceDeps,
+} from "@/services/payment/payment-order-service";
+import {
+  recordCheckoutDismissal,
+  startCheckout,
+  verifyCheckoutCallback,
+  defaultCheckoutDeps,
+  type CheckoutServiceDeps,
+} from "@/services/payment/checkout-service";
+import type { PaymentOrderResult } from "@/domain/payment/contracts";
+import type {
+  CheckoutCallbackResult,
+  CheckoutStartResult,
+} from "@/domain/payment/checkout";
+import type { JsonObject, JsonValue } from "@/lib/json";
+
+/**
+ * HTTP for payment-order creation.
+ *
+ * The request schema is the security boundary, and it is deliberately almost
+ * empty. `z.strictObject` rejects unknown keys outright, so a caller who sends
+ * `amount`, `currency`, `quoteId` or `providerOrderId` gets a 400 rather than
+ * having those fields quietly ignored — a difference that matters, because
+ * "ignored" is indistinguishable from "honoured" to whoever is probing, and a
+ * loud refusal is what makes the boundary testable.
+ *
+ * Every financial value in the response is loaded server-side from the
+ * persisted quote. The response carries the public key id for a later Checkout
+ * objective; `RAZORPAY_KEY_SECRET` is never read here and could not be
+ * serialised into this envelope even by accident, because nothing on this path
+ * ever holds it.
+ */
+
+const requestSchema = z.strictObject({
+  transactionId: z.string().min(1).max(64),
+  /** Correlates this call in logs and audit. It is not the idempotency key. */
+  operationId: z.string().min(1).max(64).optional(),
+});
+
+/**
+ * HTTP statuses for outcomes that are not errors.
+ *
+ * `409 Conflict` for a claim another request owns, and `202 Accepted` for an
+ * unresolved provider outcome. Neither is a 200 — a client must be able to tell
+ * "your order is ready" from "we do not yet know" without parsing prose — and
+ * neither is a 5xx, because nothing malfunctioned.
+ */
+const STATUS_BY_KIND: Record<PaymentOrderResult["kind"], number> = {
+  ORDER_CREATED: 200,
+  REFUSED: 422,
+  PROVIDER_FAILED: 502,
+  RECONCILIATION_REQUIRED: 202,
+  CREATION_IN_PROGRESS: 409,
+};
+
+export function handleCreatePaymentOrder(
+  request: Request,
+  deps: PaymentOrderServiceDeps = defaultPaymentOrderDeps(),
+): Promise<Response> {
+  return respond(async () => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ValidationError({
+        code: "PAYMENT_ORDER_REQUEST_INVALID",
+        message: "The request body was not valid JSON.",
+        publicMessage: "The request could not be read.",
+      });
+    }
+
+    const parsed = requestSchema.safeParse(body);
+    if (!parsed.success) {
+      const fields = [
+        ...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? "<root>"))),
+      ].sort();
+      throw new ValidationError({
+        code: "PAYMENT_ORDER_REQUEST_INVALID",
+        message: `The request accepts only a transactionId and an optional operationId. Rejected: ${fields.join(", ")}.`,
+        publicMessage:
+          "Send only a transactionId. Amounts and prices are determined by the server.",
+        details: { fields },
+      });
+    }
+
+    const result = await createPaymentOrder(
+      {
+        transactionId: parsed.data.transactionId,
+        ...(parsed.data.operationId === undefined
+          ? {}
+          : { operationId: parsed.data.operationId }),
+      },
+      deps,
+    );
+
+    return jsonData(
+      result as unknown as JsonValue,
+      checkoutMeta(result),
+      STATUS_BY_KIND[result.kind],
+    );
+  });
+}
+
+/**
+ * The public key id, returned only alongside a real order.
+ *
+ * Razorpay Checkout needs `key_id` in the browser and it is designed to be
+ * public — it identifies the merchant and authorizes nothing on its own. It is
+ * still withheld unless there is an order to pay for, so an endpoint probe
+ * cannot be used to read configuration out of the server.
+ *
+ * The Checkout flow itself belongs to the next objective. This is the one field
+ * it will need, placed here so that objective adds a page rather than reworking
+ * this contract.
+ */
+function checkoutMeta(result: PaymentOrderResult): JsonObject {
+  if (result.kind !== "ORDER_CREATED") return {};
+  return { razorpayKeyId: getRazorpayCredentials().RAZORPAY_KEY_ID };
+}
+
+// ---------------------------------------------------------------------------
+// Checkout
+// ---------------------------------------------------------------------------
+
+/**
+ * Starting checkout is a POST, and that is a design decision rather than a REST
+ * convention.
+ *
+ * It moves the transaction to `PAYMENT_PENDING`, which must mean "a person
+ * pressed Pay". If the session were handed out by rendering a page, that state
+ * would also be reached by a refresh, a prefetch, a link preview or a crawler -
+ * and would then mean nothing. A side-effecting verb, reached only from an
+ * explicit click, is what keeps the state honest.
+ */
+const startSchema = z.strictObject({
+  transactionId: z.string().min(1).max(64),
+});
+
+const CHECKOUT_START_STATUS: Record<CheckoutStartResult["kind"], number> = {
+  CHECKOUT_READY: 200,
+  REFUSED: 422,
+};
+
+export function handleStartCheckout(
+  request: Request,
+  deps: CheckoutServiceDeps = defaultCheckoutDeps(),
+): Promise<Response> {
+  return respond(async () => {
+    const parsed = await readBody(startSchema, request, "CHECKOUT_REQUEST_INVALID");
+    const result = await startCheckout({ transactionId: parsed.transactionId }, deps);
+    return jsonData(
+      result as unknown as JsonValue,
+      {},
+      CHECKOUT_START_STATUS[result.kind],
+    );
+  });
+}
+
+/**
+ * The callback boundary.
+ *
+ * `presentedOrderId` is accepted and immediately distrusted. The provider's own
+ * documentation says the order id returned to the browser must not be used for
+ * verification, and this server does not use it: it loads its own copy and
+ * signs over that. Keeping the field lets a mismatch be *detected and audited*
+ * rather than silently discarded - a tampered order id is a security event, not
+ * a stray parameter.
+ *
+ * Nothing else about money is accepted. There is no amount, no currency, and no
+ * status field, so no request can assert that a payment succeeded.
+ */
+const callbackSchema = z.strictObject({
+  transactionId: z.string().min(1).max(64),
+  paymentAttemptId: z.string().min(1).max(64).optional(),
+  // Bounded by the same constant the audit allow-list uses, so nothing this
+  // endpoint accepts can be too long for the trail to record.
+  razorpay_payment_id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH),
+  razorpay_signature: z.string().min(1).max(256),
+  razorpay_order_id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH).optional(),
+});
+
+const CALLBACK_STATUS: Record<CheckoutCallbackResult["kind"], number> = {
+  PAYMENT_VERIFIED: 200,
+  // 422, not 400: the request was well formed and the server understood it
+  // perfectly - it simply refused to believe it.
+  REJECTED: 422,
+};
+
+export function handleCheckoutCallback(
+  request: Request,
+  deps: CheckoutServiceDeps = defaultCheckoutDeps(),
+): Promise<Response> {
+  return respond(async () => {
+    const body = await readBody(callbackSchema, request, "CALLBACK_REQUEST_INVALID");
+    const result = await verifyCheckoutCallback(
+      {
+        transactionId: body.transactionId,
+        ...(body.paymentAttemptId === undefined
+          ? {}
+          : { paymentAttemptId: body.paymentAttemptId }),
+        providerPaymentId: body.razorpay_payment_id,
+        signature: body.razorpay_signature,
+        ...(body.razorpay_order_id === undefined
+          ? {}
+          : { presentedOrderId: body.razorpay_order_id }),
+      },
+      deps,
+    );
+    return jsonData(result as unknown as JsonValue, {}, CALLBACK_STATUS[result.kind]);
+  });
+}
+
+/** The buyer closed the payment window. Recorded; nothing is decided by it. */
+export function handleCheckoutDismissed(
+  request: Request,
+  deps: CheckoutServiceDeps = defaultCheckoutDeps(),
+): Promise<Response> {
+  return respond(async () => {
+    const parsed = await readBody(startSchema, request, "CHECKOUT_REQUEST_INVALID");
+    const result = await recordCheckoutDismissal(
+      { transactionId: parsed.transactionId },
+      deps,
+    );
+    return jsonData(result as unknown as JsonValue);
+  });
+}
+
+/**
+ * Parses a request body against a strict schema.
+ *
+ * `z.strictObject` throughout, so an unexpected field is a `400` rather than
+ * something quietly ignored. On these endpoints that matters more than usual:
+ * a caller probing with `amount` or `status` must be told no, not left unable
+ * to tell whether it worked.
+ */
+async function readBody<TSchema extends z.ZodType>(
+  schema: TSchema,
+  request: Request,
+  code: string,
+): Promise<z.infer<TSchema>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new ValidationError({
+      code,
+      message: "The request body was not valid JSON.",
+      publicMessage: "The request could not be read.",
+    });
+  }
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    const fields = [
+      ...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? "<root>"))),
+    ].sort();
+    throw new ValidationError({
+      code,
+      message: `Rejected fields: ${fields.join(", ")}.`,
+      publicMessage: "The request was not in the expected shape.",
+      details: { fields },
+    });
+  }
+  return parsed.data;
+}

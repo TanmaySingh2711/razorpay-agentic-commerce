@@ -44,9 +44,28 @@ const geminiEnvSchema = z.object({
   GEMINI_MODEL: z.string().min(1).max(100).default("gemini-3.6-flash"),
 });
 
-const razorpayEnvSchema = z.object({
+/**
+ * The API credentials the Razorpay adapter authenticates with.
+ *
+ * Split out from the full Razorpay section deliberately. Creating a payment
+ * order needs a key id and a key secret and nothing else; the webhook secret
+ * belongs to a verification path that does not exist yet. Validating all three
+ * together would mean an unconfigured webhook blocks order creation - a control
+ * failing a path it has no authority over, which is how systems acquire
+ * unexplainable outages.
+ *
+ * `RAZORPAY_KEY_SECRET` is server-only without qualification. It authenticates
+ * this application to Razorpay and signs nothing the browser needs, so it must
+ * never appear in a NEXT_PUBLIC_* variable, a client bundle, a log line, an
+ * audit payload or an API response. `RAZORPAY_KEY_ID` is the public half and
+ * Checkout will legitimately need it in a later objective.
+ */
+const razorpayCredentialsSchema = z.object({
   RAZORPAY_KEY_ID: z.string().min(1),
   RAZORPAY_KEY_SECRET: z.string().min(1),
+});
+
+const razorpayEnvSchema = razorpayCredentialsSchema.extend({
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
 });
 
@@ -122,6 +141,7 @@ const appSecretEnvSchema = z.object({
 
 export type RuntimeConfig = Readonly<z.infer<typeof runtimeEnvSchema>>;
 export type GeminiConfig = Readonly<z.infer<typeof geminiEnvSchema>>;
+export type RazorpayCredentials = Readonly<z.infer<typeof razorpayCredentialsSchema>>;
 export type RazorpayConfig = Readonly<z.infer<typeof razorpayEnvSchema>>;
 export type DatabaseConfig = Readonly<z.infer<typeof databaseEnvSchema>>;
 export type CatalogConfig = Readonly<z.infer<typeof catalogEnvSchema>>;
@@ -187,6 +207,22 @@ export function getRazorpayConfig(source: EnvSource = currentEnv()): RazorpayCon
   return Object.freeze(parseSection(razorpayEnvSchema, "Razorpay", source));
 }
 
+/**
+ * Just the API credentials, for the order and payment adapter.
+ *
+ * Called at the moment a provider request is made, never at import time, so a
+ * repository with no Razorpay account still boots, builds and runs every
+ * deterministic test. The returned secret is passed straight into an
+ * Authorization header and is never returned, rendered or logged.
+ */
+export function getRazorpayCredentials(
+  source: EnvSource = currentEnv(),
+): RazorpayCredentials {
+  return Object.freeze(
+    parseSection(razorpayCredentialsSchema, "Razorpay credentials", source),
+  );
+}
+
 /** PostgreSQL connection. Called only by the Prisma persistence boundary. */
 export function getDatabaseConfig(source: EnvSource = currentEnv()): DatabaseConfig {
   return Object.freeze(parseSection(databaseEnvSchema, "database", source));
@@ -219,11 +255,13 @@ export function getAppSecretConfig(source: EnvSource = currentEnv()): AppSecretC
   return Object.freeze(parseSection(appSecretEnvSchema, "application secret", source));
 }
 
-export type OptionalConfigSection = "gemini" | "razorpay" | "database" | "appSecret";
+export type OptionalConfigSection =
+  "gemini" | "razorpay" | "razorpayCredentials" | "database" | "appSecret";
 
 const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
   gemini: geminiEnvSchema,
   razorpay: razorpayEnvSchema,
+  razorpayCredentials: razorpayCredentialsSchema,
   database: databaseEnvSchema,
   appSecret: appSecretEnvSchema,
 };

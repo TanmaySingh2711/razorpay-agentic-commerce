@@ -10,6 +10,7 @@ import {
 } from "@/services/policy/policy-reader";
 import type { CurrencyCode } from "@/domain/money";
 import type { JsonObject } from "@/lib/json";
+import type { TransactionState } from "@/domain/transaction/states";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -72,6 +73,12 @@ export type PolicyAuthorizationRecheck =
       /** Freshly derived, not read back from the earlier record. */
       readonly decision: PolicyDecisionDto;
       readonly policyVersion: number | null;
+      /**
+       * Set when the fresh verdict was APPROVAL_REQUIRED and an exactly-scoped
+       * human approval supplied the missing authority. Null when the policy
+       * authorized the purchase on its own.
+       */
+      readonly satisfiedByApprovalId: string | null;
     }
   | {
       readonly kind: "NOT_AUTHORIZED";
@@ -88,6 +95,46 @@ export interface AuthorizationRecheckDeps {
   readonly prisma: PrismaClient;
   readonly clock: Clock;
 }
+
+/**
+ * How strictly to read the transaction, and whether a human may supply the
+ * authority the policy alone will not.
+ *
+ * Both default to the original, narrowest behaviour, so a caller that passes
+ * nothing gets exactly the fail-closed gate Objective 7 shipped. Widening is
+ * always an explicit act at a call site, visible in review.
+ */
+export interface AuthorizationRecheckOptions {
+  /**
+   * The states a recheck is meaningful from. Defaults to AUTHORIZED alone.
+   *
+   * Payment order creation happens from INVENTORY_RESERVED - the transaction
+   * has moved on since it was authorized - so it passes that state here rather
+   * than having this gate quietly accept anything downstream of AUTHORIZED.
+   * Naming the state at the call site keeps the accepted set auditable.
+   */
+  readonly acceptedStates?: readonly TransactionState[];
+  /**
+   * Whether a consumed, exactly-scoped approval may satisfy an
+   * APPROVAL_REQUIRED verdict.
+   *
+   * This is the seam this module was written with in mind. Re-running the
+   * engine against an above-ceiling amount will keep answering
+   * APPROVAL_REQUIRED forever - correctly, because the amount really is above
+   * the ceiling. Refusing on that basis would make it impossible to ever pay a
+   * purchase a person deliberately approved, which is not a safety property,
+   * just a broken product.
+   *
+   * The approval is only allowed to answer the question it was asked: it must
+   * name this transaction, this exact quote, this exact amount and currency,
+   * and the policy version still in force. A BLOCKED verdict is checked first
+   * and no approval can override it, because a person may raise their own
+   * ceiling but may not authorize something the policy refuses outright.
+   */
+  readonly approvalMaySatisfy?: boolean;
+}
+
+const DEFAULT_ACCEPTED_STATES: readonly TransactionState[] = ["AUTHORIZED"];
 
 export function defaultRecheckDeps(): AuthorizationRecheckDeps {
   return { prisma: getPrismaClient(), clock: systemClock };
@@ -112,7 +159,11 @@ export function defaultRecheckDeps(): AuthorizationRecheckDeps {
 export async function recheckPolicyAuthorization(
   transactionId: string,
   deps: AuthorizationRecheckDeps = defaultRecheckDeps(),
+  options: AuthorizationRecheckOptions = {},
 ): Promise<PolicyAuthorizationRecheck> {
+  const acceptedStates = options.acceptedStates ?? DEFAULT_ACCEPTED_STATES;
+  const approvalMaySatisfy = options.approvalMaySatisfy ?? false;
+
   const transaction = await deps.prisma.transaction.findUnique({
     where: { id: transactionId },
     select: { id: true, status: true, buyerProfileId: true },
@@ -123,7 +174,7 @@ export async function recheckPolicyAuthorization(
       reason: "no such transaction",
     });
   }
-  if (transaction.status !== "AUTHORIZED") {
+  if (!acceptedStates.includes(transaction.status)) {
     // Includes APPROVAL_REQUIRED and BLOCKED. A payment service that reached
     // this point with either has skipped a control, and gets nothing here.
     return refuse(transactionId, null, "TRANSACTION_NOT_AUTHORIZED", null, {
@@ -248,9 +299,33 @@ export async function recheckPolicyAuthorization(
     });
   }
   if (decision.decision === "APPROVAL_REQUIRED") {
-    return refuse(transactionId, quote.id, "APPROVAL_REQUIRED", dto, {
-      reasonCode: decision.reasonCode,
+    if (!approvalMaySatisfy) {
+      return refuse(transactionId, quote.id, "APPROVAL_REQUIRED", dto, {
+        reasonCode: decision.reasonCode,
+      });
+    }
+
+    const approval = await findSatisfyingApproval(deps.prisma, {
+      transactionId,
+      quoteId: quote.id,
+      amountMinor: snapshot.totalAmountMinor,
+      currency: snapshot.currency,
+      policyVersion: decision.policyVersion,
     });
+    if (approval === null) {
+      return refuse(transactionId, quote.id, "APPROVAL_REQUIRED", dto, {
+        reasonCode: decision.reasonCode,
+        reason: "no consumed approval matches this exact quote, amount and policy",
+      });
+    }
+    return {
+      kind: "AUTHORIZED",
+      transactionId,
+      quoteId: quote.id,
+      decision: dto,
+      policyVersion: decision.policyVersion,
+      satisfiedByApprovalId: approval,
+    };
   }
 
   return {
@@ -259,7 +334,50 @@ export async function recheckPolicyAuthorization(
     quoteId: quote.id,
     decision: dto,
     policyVersion: decision.policyVersion,
+    satisfiedByApprovalId: null,
   };
+}
+
+/**
+ * Finds the consumed approval that authorizes exactly this purchase.
+ *
+ * Every clause is a binding the approval must satisfy, and none of them is
+ * optional. An approval is a person agreeing to one specific charge, so
+ * matching on the transaction alone would let an approval for a `250` order pay
+ * a `25,000` one after a re-quote; matching without the policy version would
+ * let an approval granted under a permissive policy survive the buyer
+ * tightening it.
+ *
+ * `CONSUMED` rather than `APPROVED`: the approval gate marks an approval
+ * consumed at the moment it is redeemed to move the transaction to AUTHORIZED,
+ * so that is the status a genuinely-used approval carries. A row still sitting
+ * at PENDING has not authorized anything yet.
+ */
+async function findSatisfyingApproval(
+  prisma: PrismaClient,
+  binding: {
+    readonly transactionId: string;
+    readonly quoteId: string;
+    readonly amountMinor: bigint;
+    readonly currency: string;
+    readonly policyVersion: number | null;
+  },
+): Promise<string | null> {
+  if (binding.policyVersion === null) return null;
+
+  const approval = await prisma.approvalRequest.findFirst({
+    where: {
+      transactionId: binding.transactionId,
+      purchaseQuoteId: binding.quoteId,
+      requestedAmount: binding.amountMinor,
+      currency: binding.currency,
+      policyVersion: binding.policyVersion,
+      status: "CONSUMED",
+    },
+    orderBy: { decidedAt: "desc" },
+    select: { id: true },
+  });
+  return approval?.id ?? null;
 }
 
 function refuse(

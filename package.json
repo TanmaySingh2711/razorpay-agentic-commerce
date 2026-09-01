@@ -24,7 +24,9 @@
     "db:test:setup": "tsx scripts/setup-test-schema.ts",
     "postinstall": "prisma generate",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "gemini:smoke": "tsx scripts/gemini-smoke.ts"
+    "gemini:smoke": "tsx scripts/gemini-smoke.ts",
+    "razorpay:smoke": "tsx scripts/razorpay-smoke.ts",
+    "checkout:smoke": "tsx scripts/checkout-smoke-setup.ts"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",

@@ -50,16 +50,24 @@ repository today.**
 | ------------------------- | ------------------------------------------------------------------------------------------------ | --------------- |
 | `GEMINI_API_KEY`          | Gemini Provider Adapter (server-only; never a NEXT_PUBLIC_* variable)                            | yes             |
 | `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.6-flash`)                                         | yes             |
-| `RAZORPAY_KEY_ID`         | Razorpay adapter, checkout                                                                       | server-supplied |
+| `RAZORPAY_KEY_ID`         | Razorpay adapter; sent to the browser for Standard Checkout                                      | server-supplied |
 | `RAZORPAY_KEY_SECRET`     | Razorpay adapter, signature verification                                                         | yes             |
 | `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                             | yes             |
 | `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                   | yes             |
 | `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled | yes             |
 | `APP_SECRET`              | Session and CSRF signing. Minimum 32 characters                                                  | yes             |
 
-`getGeminiConfig()`, `getRazorpayConfig()`, `getDatabaseConfig()`, `getCatalogConfig()` and
+`getGeminiConfig()`, `getRazorpayConfig()`, `getRazorpayCredentials()`,
+`getDatabaseConfig()`, `getCatalogConfig()` and
 `getAppSecretConfig()` throw a `ConfigurationError` when their variables are
-missing. That is the intended
+missing.
+
+`getRazorpayCredentials()` is the narrower of the two Razorpay accessors: it
+validates `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` alone, which is everything
+payment-order creation needs. `getRazorpayConfig()` additionally requires
+`RAZORPAY_WEBHOOK_SECRET` and belongs to the webhook path. Splitting them means
+an unconfigured webhook cannot block order creation — a control failing a path
+it has no authority over. That is the intended
 behaviour: a missing Razorpay secret or database URL must fail that path loudly and
 immediately, not prevent the application from starting or, worse, let it start
 in a degraded state that silently skips a control.
