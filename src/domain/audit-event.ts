@@ -52,6 +52,28 @@ export const AUDIT_EVENT_TYPES = [
   "payment_callback_rejected",
   "payment_captured",
   "payment_failed",
+  /** A person explicitly asked to pay again after a failure. */
+  "payment_retry_requested",
+  /**
+   * The deterministic gate granted a retry: the quote was re-validated, the
+   * policy re-run, the approval binding re-checked and the stock hold
+   * confirmed. Written before any provider call, so the trail shows what was
+   * decided independently of what the provider then did.
+   */
+  "payment_retry_authorized",
+  /** The deterministic gate refused. `reasonCode` carries which rule refused. */
+  "payment_retry_denied",
+  /** Every permitted attempt has been used. Recorded once per transaction. */
+  "payment_retry_limit_reached",
+  /**
+   * Two different payment attempts under one transaction were both captured.
+   *
+   * The worst case a retry workflow can produce, and it must never be silent:
+   * one purchase, two real payments. Recorded as a distinct, blocked fact so
+   * the anomaly is visible in the trail rather than hidden behind a duplicate
+   * capture that changed nothing.
+   */
+  "payment_multiple_capture_detected",
   "webhook_received",
   "webhook_rejected",
   /** A redelivery of an event id already recorded. No second effect. */

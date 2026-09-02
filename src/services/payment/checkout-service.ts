@@ -255,17 +255,25 @@ export async function verifyCheckoutCallback(
     return await reject(deps, null, transactionId, "TRANSACTION_NOT_FOUND", {}, claim);
   }
 
-  const attempt = await loadAttempt(deps, claim);
-  if (attempt === null) {
+  const lookup = await loadAttempt(deps, claim);
+  if (!isAttempt(lookup)) {
     return await reject(
       deps,
       transaction.correlationId,
       transactionId,
-      claim.paymentAttemptId === undefined ? "NO_PAYMENT_ORDER" : "ATTEMPT_MISMATCH",
+      // Three distinct facts, kept distinct: the caller named an attempt that
+      // is not ours, several attempts exist and none was named, or there is no
+      // provider order to verify against at all.
+      lookup.ambiguous
+        ? "ATTEMPT_AMBIGUOUS"
+        : claim.paymentAttemptId === undefined
+          ? "NO_PAYMENT_ORDER"
+          : "ATTEMPT_MISMATCH",
       {},
       claim,
     );
   }
+  const attempt = lookup;
   const storedOrderId = attempt.providerOrderId;
   if (storedOrderId === null) {
     return await reject(
@@ -530,24 +538,71 @@ export async function recordCheckoutDismissal(
 /**
  * Finds the attempt a callback is about, refusing any that is not ours.
  *
- * When the client names an attempt it is looked up by id and then checked to
- * belong to the named transaction - so pointing a callback at another
+ * Three ways in, in descending order of how directly they identify an attempt.
+ *
+ * **The attempt id**, when the client names one. Looked up by id and then
+ * checked to belong to the named transaction, so pointing a callback at another
  * transaction's attempt fails here rather than reaching the signature check.
+ *
+ * **The presented order id**, matched against the `providerOrderId` *we* stored.
+ * That is a lookup in our own records, not trust in the caller's: the value is
+ * being used to select a row, never to sign anything, and the signature is
+ * still computed over the column this query returned.
+ *
+ * **The only candidate**, when the transaction has exactly one attempt carrying
+ * a provider order.
+ *
+ * What this deliberately no longer does is pick the newest attempt when several
+ * exist and none was named. Once a transaction can be retried, "the newest
+ * attempt of this transaction" is a guess, and a guess is precisely what must
+ * not decide which attempt a payment belongs to - a callback for attempt #1
+ * must never attach to attempt #2 merely because they share a transaction. The
+ * signature check would have caught it, but only by accident of the order ids
+ * differing; refusing to guess makes the correlation itself correct.
+ *
+ * A presented order id that matches nothing still falls through to the newest
+ * attempt, on purpose: that is the tampered-order-id case, and it belongs in
+ * `ORDER_ID_MISMATCH` - which records what was presented - rather than in a
+ * bare "no attempt found" that would throw that evidence away.
  */
+type AttemptLookup =
+  | PaymentAttempt
+  /** No attempt could be chosen. `ambiguous` says which refusal to report. */
+  | { readonly ambiguous: boolean };
+
+function isAttempt(lookup: AttemptLookup): lookup is PaymentAttempt {
+  return !("ambiguous" in lookup);
+}
+
 async function loadAttempt(
   deps: CheckoutServiceDeps,
   claim: CheckoutCallbackClaim,
-): Promise<PaymentAttempt | null> {
+): Promise<AttemptLookup> {
   if (claim.paymentAttemptId !== undefined) {
     const named = await deps.prisma.paymentAttempt.findUnique({
       where: { id: claim.paymentAttemptId },
     });
-    return named !== null && named.transactionId === claim.transactionId ? named : null;
+    return named !== null && named.transactionId === claim.transactionId
+      ? named
+      : { ambiguous: false };
   }
-  return await deps.prisma.paymentAttempt.findFirst({
+
+  // At most `MAX_PAYMENT_ATTEMPTS` rows, so this is bounded by the retry limit.
+  const candidates = await deps.prisma.paymentAttempt.findMany({
     where: { transactionId: claim.transactionId, providerOrderId: { not: null } },
     orderBy: { attemptNumber: "desc" },
   });
+  const newest = candidates[0] ?? null;
+
+  if (claim.presentedOrderId !== undefined) {
+    const byOrder = candidates.find(
+      (attempt) => attempt.providerOrderId === claim.presentedOrderId,
+    );
+    return byOrder ?? newest ?? { ambiguous: false };
+  }
+
+  if (newest !== null && candidates.length === 1) return newest;
+  return { ambiguous: candidates.length > 1 };
 }
 
 function toSession(

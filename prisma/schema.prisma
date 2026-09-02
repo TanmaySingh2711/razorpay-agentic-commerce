@@ -99,6 +99,25 @@ enum InventoryReservationStatus {
   EXPIRED
 }
 
+/// Safe, user-facing reasons a payment did not complete.
+///
+/// Mirrors PAYMENT_FAILURE_CATEGORIES in src/domain/payment/failure.ts; the
+/// parity test in tests/db/enum-parity.test.ts is what stops the two drifting.
+/// Nothing here names an instrument, a bank or a provider code.
+enum PaymentFailureCategory {
+  DECLINED_BY_BANK
+  INSUFFICIENT_FUNDS
+  AUTHENTICATION_FAILED
+  INSTRUMENT_INVALID
+  LIMIT_EXCEEDED
+  CANCELLED_BY_CUSTOMER
+  PROVIDER_UNAVAILABLE
+  REQUEST_REJECTED
+  UNKNOWN
+
+  @@map("payment_failure_category")
+}
+
 enum PaymentAttemptStatus {
   CREATED
   PENDING
@@ -370,28 +389,39 @@ model InventoryReservation {
 /// Provider identifiers are nullable: an attempt row exists before the provider
 /// order is created, and a failed attempt may never receive a payment id.
 model PaymentAttempt {
-  id                String               @id @default(uuid(7))
+  id                String                  @id @default(uuid(7))
   transactionId     String
   /// 1-based, unique within a transaction.
   attemptNumber     Int
   amount            BigInt
-  currency          String               @db.Char(3)
-  status            PaymentAttemptStatus @default(CREATED)
-  provider          PaymentProvider      @default(RAZORPAY)
+  currency          String                  @db.Char(3)
+  status            PaymentAttemptStatus    @default(CREATED)
+  provider          PaymentProvider         @default(RAZORPAY)
   /// Our own reference for this order, and the provider's idempotency key for
   /// creating it. Stable across every retry of the same logical operation.
-  receipt           String?              @unique @db.VarChar(40)
+  receipt           String?                 @unique @db.VarChar(40)
   /// External provider order reference. NOT an internal key.
-  providerOrderId   String?              @db.VarChar(128)
+  providerOrderId   String?                 @db.VarChar(128)
   /// External provider payment reference. NOT an internal key.
-  providerPaymentId String?              @db.VarChar(128)
-  failureCode       String?              @db.VarChar(64)
+  providerPaymentId String?                 @db.VarChar(128)
+  failureCode       String?                 @db.VarChar(64)
   /// Mapped, safe description. Never the provider's verbatim message.
-  failureReason     String?              @db.VarChar(500)
+  failureReason     String?                 @db.VarChar(500)
+  /// Safe, closed, user-facing classification. See src/domain/payment/failure.ts.
+  failureCategory   PaymentFailureCategory?
+  /// The provider's own vocabulary, normalised and bounded. Diagnostic only.
+  /// Deliberately not enums: an unrecognised provider word must still store, so
+  /// a genuine decline reconciles rather than failing on a name we lack.
+  failureSource     String?                 @db.VarChar(32)
+  failureStep       String?                 @db.VarChar(40)
+  /// The provider's machine reason token. Never free text, never a message.
+  failureReasonCode String?                 @db.VarChar(64)
+  /// When the provider reported the failure, as recorded by our clock.
+  failedAt          DateTime?               @db.Timestamptz(3)
   /// Supports future at-least-once retry safety.
-  idempotencyKey    String?              @db.VarChar(128)
-  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+  idempotencyKey    String?                 @db.VarChar(128)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @db.Timestamptz(3)
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 

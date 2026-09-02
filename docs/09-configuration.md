@@ -111,10 +111,68 @@ inlined into a client bundle.
 
 ## Files
 
-| File                           | Tracked | Contents                                                                                   |
-| ------------------------------ | ------- | ------------------------------------------------------------------------------------------ |
-| `.env.example`                 | **yes** | Names, documentation, placeholders. No real values.                                        |
-| `.env`, `.env.local`, `.env.*` | **no**  | Real values. Git-ignored via `.env` / `.env.*` with an explicit `!.env.example` exception. |
+| File                     | Tracked | Contents                                                                      |
+| ------------------------ | ------- | ----------------------------------------------------------------------------- |
+| `.env.example`           | **yes** | Names, documentation, placeholders. No real values.                           |
+| `.env.local`             | **no**  | Real values, hosted database. Read by staging tooling and the smoke scripts.  |
+| `.env.development.local` | **no**  | Local development overrides. Outranks `.env.local` for `npm run dev`.         |
+| `.env`, `.env.*`         | **no**  | Git-ignored via `.env` / `.env.*` with an explicit `!.env.example` exception. |
+
+## Three databases, and which command reaches which
+
+Local work never touches the hosted database. That is arranged by Next.js's own
+file precedence rather than by anyone remembering to edit a file:
+
+```
+process.env  >  .env.$(NODE_ENV).local  >  .env.local  >  .env.$(NODE_ENV)  >  .env
+```
+
+`next dev` sets `NODE_ENV=development` itself, so `.env.development.local` wins
+for development and `.env.local` — which holds the real staging credentials —
+is never edited to switch between them. Both are git-ignored.
+
+| Purpose                   | Address                                      | Database                                             | Disposable |
+| ------------------------- | -------------------------------------------- | ---------------------------------------------------- | ---------- |
+| `npm run dev`             | `DATABASE_URL` from `.env.development.local` | local `razorpay_agentic_dev`                         | no         |
+| Automated tests           | `TEST_DIRECT_URL`                            | local `razorpay_agentic_test`, schema `agentic_test` | yes        |
+| Vercel / staging          | `DATABASE_URL` from Vercel's own settings    | hosted Prisma Postgres                               | no         |
+| `db:*:staging`, `*:smoke` | `DATABASE_URL` from `.env.local`             | hosted Prisma Postgres                               | no         |
+
+Development and test are separate **databases**, not two schemas in one, so the
+suite's `TRUNCATE ... CASCADE` cannot reach development data across the database
+boundary even if a schema name ever collided.
+
+### What stops a local command writing to staging
+
+- `npm run db:dev:setup` is the only local command that migrates and seeds. It
+  refuses any host outside `localhost`, `127.0.0.1`, `::1` and `0.0.0.0`, checked
+  against an allow-list before a single statement runs
+  (`scripts/local-database-guard.ts`), and refuses to target the disposable test
+  database by name.
+- The test suite cannot fall back to the application's connection
+  (`tests/db/test-database-url.ts`), and cannot make a live network call at all
+  (`tests/support/no-network.ts`).
+- `next dev` never reads `.env.local` for these two variables while
+  `.env.development.local` defines them.
+
+### Commands name their target
+
+A command that reads like ordinary development work does ordinary development
+work. Reaching the hosted database requires saying so.
+
+| Command                                                                                                | Target                        |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| `db:migrate`, `db:migrate:create`, `db:migrate:deploy`, `db:status`, `db:seed`, `db:studio`            | local `razorpay_agentic_dev`  |
+| `db:migrate:staging`, `db:status:staging`, `db:seed:staging`, `db:studio:staging`, `db:verify:staging` | hosted Prisma Postgres        |
+| `db:test:*`                                                                                            | local `razorpay_agentic_test` |
+| `db:dev:*`                                                                                             | local `razorpay_agentic_dev`  |
+
+`scripts/prisma-cli.ts` is what makes this true. It loads only the env file
+belonging to the chosen target, asserts the target, prints where the command is
+going - and for staging, that it is staging - then puts the connection into the
+child process's environment. `prisma.config.ts` still loads `.env.local`, but
+`dotenv` does not overwrite a variable that is already set, so the chosen target
+wins and the staging path through that file behaves exactly as it always did.
 
 ## Adding a variable later
 

@@ -6,6 +6,7 @@ import {
   TEST_SCHEMA_MARKER_TABLE,
   TEST_SCHEMA_MARKER_VALUE,
 } from "../tests/db/schema-identity";
+import { resolveTestDatabaseUrl } from "../tests/db/test-database-url";
 
 loadEnv({ path: ".env.local", quiet: true });
 
@@ -24,8 +25,11 @@ loadEnv({ path: ".env.local", quiet: true });
  *  - It cannot contaminate demo data: the schema is dropped and recreated on
  *    every setup, and `public` is never touched.
  *
- * Anyone who prefers a fully separate database can point TEST_DIRECT_URL at one;
- * this script honours it.
+ * The schema is built inside whatever TEST_DIRECT_URL names - by default the
+ * local Docker PostgreSQL in docker-compose.yml, started with
+ * `npm run db:test:up`. That variable is required rather than optional: see
+ * ../tests/db/test-database-url.ts for why there is no fallback to the
+ * application's own connection.
  *
  * Last, this script stamps the schema with a marker table. The suite truncates
  * tables between tests, and it refuses to do so unless it can first read that
@@ -42,10 +46,14 @@ function withSchema(rawUrl: string, schema: string): string {
 }
 
 function main(): void {
-  const directUrl = process.env["TEST_DIRECT_URL"] ?? process.env["DIRECT_URL"];
-  if (directUrl === undefined || directUrl.length === 0) {
+  // The same resolution the suite itself uses, so the schema is always built
+  // in the database the tests will later truncate - and never in the
+  // application's.
+  const directUrl = resolveTestDatabaseUrl();
+  if (directUrl === undefined) {
     throw new Error(
-      "DIRECT_URL (or TEST_DIRECT_URL) must be set to prepare the test schema.",
+      "TEST_DIRECT_URL must be set to prepare the test schema. Start the local " +
+        "test database with `npm run db:test:up` - see .env.example.",
     );
   }
 

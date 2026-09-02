@@ -3,6 +3,7 @@ import { createIsolatedPrismaClient } from "@/integrations/persistence/client";
 import { createTransaction as createTransactionThroughBoundary } from "@/services/transaction/creation-service";
 import { TEST_SCHEMA } from "./schema-identity";
 import { assertDisposableTestSchema } from "./test-database-guard";
+import { resolveTestDatabaseUrl } from "./test-database-url";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 loadEnv({ path: ".env.local", quiet: true });
@@ -19,7 +20,13 @@ loadEnv({ path: ".env.local", quiet: true });
  */
 export { TEST_SCHEMA };
 
-const testConnectionString = process.env["TEST_DIRECT_URL"] ?? process.env["DIRECT_URL"];
+/**
+ * Resolved once, at import. A throw here fails the file immediately with a
+ * sentence about configuration, rather than surfacing as a connection error
+ * inside somebody's `beforeEach`. See ./test-database-url.ts for why there is
+ * deliberately no fallback to the application's own connection.
+ */
+const testConnectionString = resolveTestDatabaseUrl();
 
 /** True when a database is configured and DB tests should run. */
 export const databaseConfigured =

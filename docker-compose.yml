@@ -1,0 +1,48 @@
+# Local PostgreSQL for automated tests.
+#
+# This file exists so the database the test suite destroys is described in the
+# repository rather than living in one developer's shell history. Anyone can
+# clone, run `npm run db:test:up && npm run db:test:setup`, and get the same
+# database the suite was written against.
+#
+# WHAT THIS IS NOT: it is not the application's database. Vercel and staging
+# keep using the hosted Prisma Postgres named by DATABASE_URL and DIRECT_URL,
+# which this file neither reads nor affects. The suite reaches this container
+# through TEST_DIRECT_URL alone, and tests/db/test-database-url.ts refuses to
+# run if that variable is missing or points at the application's server.
+#
+# ON THE CREDENTIALS BELOW: they are deliberately in version control, and they
+# are safe there because they authorise nothing. They belong to a throwaway
+# container that listens on localhost, holds a schema which is dropped and
+# rebuilt by `npm run db:test:setup`, and is emptied between individual tests.
+# Real secrets live in .env.local, which is git-ignored. Nothing in this file
+# may ever be reused for a database that holds real data.
+#
+# The image is pinned to PostgreSQL 17 to match the hosted database's major
+# version, so a CHECK constraint, an enum, a BIGINT or a unique-index conflict
+# behaves here exactly as it does in staging. Verified: staging reports 17.2.
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: razorpay-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: razorpay
+      POSTGRES_PASSWORD: razorpay_local_test
+      POSTGRES_DB: razorpay_agentic_test
+    ports:
+      - "5432:5432"
+    volumes:
+      - razorpay-test-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `npm run db:test:up` waits on this, so the very next command in a script
+      # can connect without a sleep or a retry loop.
+      test: ["CMD-SHELL", "pg_isready -U razorpay -d razorpay_agentic_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  razorpay-test-pgdata:

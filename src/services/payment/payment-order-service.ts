@@ -66,6 +66,17 @@ assertServerOnly("src/services/payment/payment-order-service.ts");
 /** The actor the state machine permits to move a transaction on a payment event. */
 const PAYMENT_ACTOR = "payment_provider" as const;
 
+/**
+ * The actor for the retry edge out of PAYMENT_FAILED.
+ *
+ * The matrix restricts `PAYMENT_RETRY_REQUESTED` to `transaction_service`, and
+ * that restriction is the point: leaving PAYMENT_FAILED is an internal decision
+ * this system makes after re-running its own controls, not something the
+ * provider - or anything acting for it - may assert. Attributing it to
+ * `payment_provider` would say Razorpay decided to retry, which is false.
+ */
+const RETRY_ACTOR = "transaction_service" as const;
+
 const AUDIT_ACTION = "payment_order_created" as const;
 
 /** PostgreSQL's unique-violation code, surfaced by Prisma as `P2002`. */
@@ -145,6 +156,38 @@ export function defaultPaymentOrderDeps(): PaymentOrderServiceDeps {
 export interface CreatePaymentOrderCommand {
   readonly transactionId: string;
   readonly operationId?: string;
+  /**
+   * Present only when the deterministic retry gate granted this call.
+   *
+   * It is not a flag a caller may set to unlock a shortcut - it changes which
+   * *stricter* checks run, not which are skipped. With it the accepted starting
+   * state becomes PAYMENT_FAILED instead of INVENTORY_RESERVED, the policy
+   * recheck is told to accept that state, the claim key gains the attempt
+   * number so a new attempt row is created rather than converging on the failed
+   * one, and the lifecycle move becomes PAYMENT_RETRY_REQUESTED so the history
+   * says a retry happened.
+   *
+   * The HTTP boundary cannot produce one. Both payment routes parse with
+   * `z.strictObject`, so a request carrying `retry` is a 400 rather than a
+   * field that is quietly honoured; the only constructor is
+   * `@/services/payment/retry-service`, which builds it from persisted rows
+   * after the gate has passed.
+   */
+  readonly retry?: RetryAuthorization;
+}
+
+/**
+ * Proof that the retry gate ran, and the one fact the payment path needs from it.
+ *
+ * Deliberately carries no amount, no currency and no quote id. Everything
+ * financial is still re-read from the persisted quote inside
+ * `checkPreconditions`, so even a wrong value here could not change what is
+ * charged - it could only change which claim key is used, and the unique index
+ * decides that.
+ */
+export interface RetryAuthorization {
+  /** The attempt number this retry is claiming. Always at least 2. */
+  readonly attemptNumber: number;
 }
 
 class PaymentOrderRefusedError extends Error {
@@ -174,7 +217,7 @@ export async function createPaymentOrder(
   command: CreatePaymentOrderCommand,
   deps: PaymentOrderServiceDeps = defaultPaymentOrderDeps(),
 ): Promise<PaymentOrderResult> {
-  const { transactionId } = command;
+  const { transactionId, retry } = command;
   const now = deps.clock.now();
 
   const transaction = await deps.prisma.transaction.findUnique({
@@ -185,13 +228,17 @@ export async function createPaymentOrder(
     return refused(transactionId, { refusal: "TRANSACTION_NOT_FOUND" });
   }
 
+  // The state a payment order may be created from. A retry starts from the
+  // failure it is retrying; an ordinary first order starts from the stock hold.
+  const requiredState = retry === undefined ? "INVENTORY_RESERVED" : "PAYMENT_FAILED";
+
   // --- An order this transaction already has. ------------------------------
   //
   // Checked before the state gate, not after: a transaction that has moved to
   // PAYMENT_ORDER_CREATED fails the "must be INVENTORY_RESERVED" test, and
   // answering a retry with "wrong state" would be true but useless. A repeated
   // logical request should converge on the order it already made.
-  if (transaction.status !== "INVENTORY_RESERVED") {
+  if (transaction.status !== requiredState) {
     if (ORDER_REPLAYABLE_STATES.includes(transaction.status)) {
       const settled = await findSettledOrder(deps.prisma, transactionId);
       if (settled !== null) {
@@ -217,6 +264,7 @@ export async function createPaymentOrder(
       transactionId,
       transaction.correlationId,
       now,
+      requiredState,
     );
 
     // --- The durable claim. Still no provider call. ------------------------
@@ -226,6 +274,7 @@ export async function createPaymentOrder(
       amountMinor: context.amountMinor,
       currency: context.currency,
       now,
+      ...(retry === undefined ? {} : { retryAttemptNumber: retry.attemptNumber }),
     });
     const attempt = claim.attempt;
     const receipt = attempt.receipt ?? deriveReceipt(attempt.id);
@@ -351,6 +400,8 @@ interface OrderContext {
   readonly policyVersion: number | null;
   readonly policyDecision: string;
   readonly approvalId: string | null;
+  /** Decides which lifecycle event finalization emits. Set by the caller, not inferred. */
+  readonly isRetry: boolean;
 }
 
 /**
@@ -368,7 +419,19 @@ async function checkPreconditions(
   transactionId: string,
   correlationId: string | null,
   now: Date,
+  /**
+   * The state this order is being created from.
+   *
+   * Threaded through rather than defaulted because it is also what the
+   * authorization recheck is told to accept. A retry that quietly let the
+   * recheck keep accepting INVENTORY_RESERVED would refuse every retry with
+   * TRANSACTION_NOT_AUTHORIZED - fail-closed, but for the wrong reason and
+   * indistinguishable from a genuine policy refusal.
+   */
+  requiredState: TransactionState,
 ): Promise<OrderContext> {
+  const isRetry = requiredState === "PAYMENT_FAILED";
+
   // --- The trusted quote, re-validated at the moment of use. ---------------
   const quote = await readActiveQuote(deps.prisma, transactionId, now);
   if (quote === null) {
@@ -436,7 +499,7 @@ async function checkPreconditions(
   const recheck = await recheckPolicyAuthorization(
     transactionId,
     { prisma: deps.prisma, clock: deps.clock },
-    { acceptedStates: ["INVENTORY_RESERVED"], approvalMaySatisfy: true },
+    { acceptedStates: [requiredState], approvalMaySatisfy: true },
   );
   if (recheck.kind !== "AUTHORIZED") {
     throw new PaymentOrderRefusedError({
@@ -477,6 +540,7 @@ async function checkPreconditions(
     policyVersion: recheck.policyVersion,
     policyDecision: recheck.decision.decision,
     approvalId: recheck.satisfiedByApprovalId,
+    isRetry,
   };
 }
 
@@ -517,9 +581,27 @@ async function claimPaymentAttempt(
      * different things in tests and in production.
      */
     readonly now: Date;
+    /**
+     * Set on a retry, and it is what makes the claim a *new* one.
+     *
+     * Without it the key is a function of the transaction and its quote alone -
+     * which is exactly right for a first order, because two concurrent requests
+     * for the same purchase must converge. A retry reuses the same quote by
+     * design, so that same key would converge on the attempt that already
+     * failed and hand its dead provider order back as if it were live. Adding
+     * the attempt number makes each retry cycle its own claim while keeping
+     * concurrency safety within the cycle: two simultaneous retries compute the
+     * same number from the same rows, so they still race for one key and
+     * PostgreSQL still picks one winner.
+     */
+    readonly retryAttemptNumber?: number;
   },
 ): Promise<Claim> {
-  const idempotencyKey = `payment_order:${input.transactionId}:${input.quoteId}`;
+  const base = `payment_order:${input.transactionId}:${input.quoteId}`;
+  const idempotencyKey =
+    input.retryAttemptNumber === undefined
+      ? base
+      : `${base}:retry${String(input.retryAttemptNumber)}`;
 
   try {
     const attempt = await prisma.$transaction(async (tx) => {
@@ -665,8 +747,12 @@ async function finalize(
 
       const outcome = await applyTransactionEventWithin(tx, {
         transactionId: context.transactionId,
-        event: "PAYMENT_ORDER_CREATED",
-        actor: PAYMENT_ACTOR,
+        // A retry says so in the history. Both edges land at
+        // PAYMENT_ORDER_CREATED, but only one of them records that a person
+        // asked to pay again - and a lifecycle that replayed the original event
+        // would make a retried purchase indistinguishable from a first attempt.
+        event: context.isRetry ? "PAYMENT_RETRY_REQUESTED" : "PAYMENT_ORDER_CREATED",
+        actor: context.isRetry ? RETRY_ACTOR : PAYMENT_ACTOR,
         idempotencyKey: `payment_order:${attempt.id}`,
         details: {
           paymentAttemptId: attempt.id,
@@ -787,16 +873,20 @@ async function readFinalizedAttempt(
 /**
  * A failure the provider is known to have made before creating anything.
  *
- * The attempt is marked FAILED and the transaction is deliberately left at
- * INVENTORY_RESERVED. Two things follow from that, both intentional:
+ * The attempt is marked FAILED and the transaction is deliberately left where
+ * it was - INVENTORY_RESERVED for a first order, PAYMENT_FAILED for a retry.
+ * Two things follow from that, both intentional:
  *
  *  - **The stock hold is kept.** A transient provider failure is not a reason
  *    to give a buyer's reserved unit away; the reservation has its own expiry
  *    and will lapse on its own if nobody comes back.
- *  - **No PAYMENT_FAILED transition is emitted.** That belongs to the payment
- *    failure and retry workflow of a later objective, which owns the decisions
- *    about when to release stock and when to permit a fresh attempt. Moving the
- *    lifecycle here would pre-empt those decisions with a guess.
+ *  - **No lifecycle event is emitted.** A provider that would not create an
+ *    order has not failed a payment - no payment was ever attempted - so
+ *    recording PAYMENT_FAILED here would consume one of the buyer's bounded
+ *    attempts for something that never reached a payment form. The retry gate
+ *    in @/services/payment/retry-service owns that decision, and it counts
+ *    attempt rows, which this path does create; that is the honest accounting,
+ *    because a provider order really was claimed.
  */
 async function recordDefiniteFailure(
   deps: PaymentOrderServiceDeps,
@@ -1027,12 +1117,26 @@ async function findSettledOrder(
   };
 }
 
-/** Recovers the quote id from `payment_order:<transactionId>:<quoteId>`. */
+/**
+ * Recovers the quote id from a claim key.
+ *
+ * Two shapes, and the quote is in the same position in both:
+ *
+ *     payment_order:<transactionId>:<quoteId>
+ *     payment_order:<transactionId>:<quoteId>:retry<n>
+ *
+ * The retry suffix is matched exactly rather than merely tolerated. Accepting
+ * any fourth segment would let a malformed key parse successfully and report a
+ * quote id nobody wrote, which is worse than reporting none: this value decides
+ * which quote an existing order is attributed to.
+ */
 function quoteIdFromClaimKey(idempotencyKey: string | null): string | null {
   if (idempotencyKey === null) return null;
   const parts = idempotencyKey.split(":");
-  // Exactly three parts, because neither a UUID nor the prefix contains a colon.
-  if (parts.length !== 3 || parts[0] !== "payment_order") return null;
+  // Neither a UUID nor the prefix contains a colon, so the segments are exact.
+  if (parts[0] !== "payment_order") return null;
+  if (parts.length === 4 && !/^retry[1-9]\d*$/.test(parts[3] ?? "")) return null;
+  if (parts.length !== 3 && parts.length !== 4) return null;
   const quoteId = parts[2];
   return quoteId === undefined || quoteId.length === 0 ? null : quoteId;
 }

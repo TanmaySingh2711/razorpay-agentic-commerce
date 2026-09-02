@@ -234,7 +234,7 @@ npm run db:migrate:create -- --name <name>   # plan a migration, do NOT apply
 #   review prisma/migrations/<ts>_<name>/migration.sql
 npm run db:migrate:deploy                    # apply it (uses DIRECT_URL)
 npm run db:status                            # applied? any drift?
-npm run db:verify                            # does the live DB match the design?
+npm run db:verify:staging                    # does the live DB match the design?
 ```
 
 `prisma migrate deploy` is the canonical path; `db push` is never used as
@@ -340,7 +340,7 @@ appears only in the disposable schema's teardown.
 | `npm run db:migrate:create` | Plan a migration without applying it                        |
 | `npm run db:migrate:deploy` | Apply pending migrations                                    |
 | `npm run db:status`         | Migration/drift status                                      |
-| `npm run db:verify`         | Verify the live schema, constraints, FKs and both endpoints |
+| `npm run db:verify:staging` | Verify the live schema, constraints, FKs and both endpoints |
 | `npm run db:seed`           | Idempotent demo seed                                        |
 | `npm run db:studio`         | Prisma Studio                                               |
 | `npm run db:test:setup`     | Recreate, migrate and mark the isolated test schema         |

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
+import type { PaymentFailureClassification } from "@/domain/payment/failure";
 
 /**
  * The inbound provider webhook, as a domain contract.
@@ -86,7 +87,21 @@ const paymentEntitySchema = z.object({
   currency: z.string().min(3).max(8),
   status: z.string().max(40).optional(),
   error_code: z.string().max(64).nullish(),
+  /**
+   * Accepted so the payload still parses, and then deliberately never read.
+   *
+   * It is the provider's free text, written for a merchant's support desk. It
+   * changes without notice and is not ours to show a buyer, so the safe
+   * sentence comes from `describePaymentFailure` instead and this value is
+   * dropped at the boundary rather than carried inward.
+   */
   error_description: z.string().max(500).nullish(),
+  /** customer | business | bank | gateway | internal. Normalised, not stored raw. */
+  error_source: z.string().max(64).nullish(),
+  /** payment_initiation | payment_authentication | payment_authorization | payment_response. */
+  error_step: z.string().max(64).nullish(),
+  /** A machine token such as `payment_failed` or `incorrect_otp`. Never a sentence. */
+  error_reason: z.string().max(64).nullish(),
 });
 
 export const razorpayWebhookSchema = z.object({
@@ -107,6 +122,13 @@ export interface AuthenticatedWebhookFacts {
   readonly amountMinor: bigint;
   readonly currency: string;
   readonly failureCode: string | null;
+  /**
+   * The safe, closed classification of a failure, derived at the boundary.
+   *
+   * Present on every parsed payment event and simply ignored for a capture, so
+   * that reconciliation never has to decide whether it is allowed to look.
+   */
+  readonly failure: PaymentFailureClassification;
 }
 
 /**
@@ -126,6 +148,21 @@ export type WebhookOutcome =
       readonly transactionState: string;
       /** True when the state machine judged the event already accounted for. */
       readonly alreadyAccountedFor: boolean;
+      /**
+       * A financial anomaly this event exposed, or null.
+       *
+       * `MULTIPLE_CAPTURE` means two *different* payment attempts under one
+       * transaction have both been captured by the provider - one purchase,
+       * two real payments. It is reported rather than hidden because the
+       * ordinary duplicate machinery would otherwise swallow it: the state
+       * machine correctly judges the second capture already accounted for, and
+       * without this flag the only trace would be a `webhook_ignored` record
+       * that reads exactly like a harmless redelivery.
+       *
+       * It never changes the transaction's state and never fulfils anything.
+       * It is a signal for reconciliation, not a decision.
+       */
+      readonly anomaly: "MULTIPLE_CAPTURE" | null;
     }
   | {
       readonly kind: "DUPLICATE";

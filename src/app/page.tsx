@@ -87,6 +87,15 @@ export default function HomePage() {
           reconciled, and a late failure can never undo one
         </li>
         <li>
+          <strong>Bounded, human-triggered payment retry</strong> — a failed payment can
+          be retried at most three times in total, counted from payment attempts stored in
+          the database rather than from anything a browser sends. Each retry re-reads the
+          price, re-runs the spending policy and re-checks the stock hold before it may
+          touch the provider, and creates a new payment attempt rather than editing the
+          failed one. Nothing automatic starts a retry — not a webhook, not a page reload,
+          and not the agent
+        </li>
+        <li>
           <strong>Transaction lifecycle through PAYMENT_CAPTURED</strong> — every state
           change goes through one state machine, with an immutable history of how the
           transaction got there

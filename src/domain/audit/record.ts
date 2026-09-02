@@ -217,6 +217,20 @@ const paymentPayload = z.strictObject({
   /** A mapped, enumerable code. Never the provider's message. */
   failureCode: shortCode.optional(),
   /**
+   * The safe, closed classification of a failure, and the provider's normalised
+   * account of where it happened.
+   *
+   * All three are drawn from application-owned sets in
+   * `src/domain/payment/failure.ts`, so nothing a provider invents can reach an
+   * audit record through them. They are here because "the bank declined at
+   * authorization" and "the gateway never answered" are different facts, and an
+   * audit trail that flattened both into `PAYMENT_ATTEMPT_FAILED` would make a
+   * reconciliation question unanswerable from the record alone.
+   */
+  failureCategory: shortCode.optional(),
+  failureSource: shortCode.optional(),
+  failureStep: shortCode.optional(),
+  /**
    * An identifier a *client* presented, recorded only when it disagreed with
    * what the server holds.
    *
@@ -228,6 +242,16 @@ const paymentPayload = z.strictObject({
   presentedOrderId: providerReference.optional(),
   /** Why the server declined before any provider call was made. */
   refusal: shortCode.optional(),
+  /**
+   * The specific facts behind a refusal, when the refusal alone is not enough.
+   *
+   * A retry refused because the financial facts moved is the case this exists
+   * for: `FINANCIAL_FACTS_CHANGED` says a person was not charged, and
+   * `["PRICE_CHANGED", "PRODUCT_VERSION_CHANGED"]` says why - which is the
+   * difference between "come back later" and "the price you were quoted is
+   * gone". Bounded and code-only, like every other list in this file.
+   */
+  reasons: z.array(shortCode).max(10).optional(),
   operationId: identifier.optional(),
   /**
    * The provider's own identifier for one webhook delivery.
@@ -247,6 +271,23 @@ const paymentPayload = z.strictObject({
    */
   observedAmountMinor: minorAmount.optional(),
   observedCurrency: currency.optional(),
+  /**
+   * The retry counters, recorded from persisted PaymentAttempt rows.
+   *
+   * Present so a reader can see the bound that was applied and the count it was
+   * applied to, rather than having to re-derive both. Neither is ever an input:
+   * they are written *from* the database, never *to* a decision.
+   */
+  attemptsUsed: z.int().nonnegative().optional(),
+  maxAttempts: z.int().positive().optional(),
+  /**
+   * The other attempt already captured, on the one path where two exist.
+   *
+   * Only `payment_multiple_capture_detected` sets it, and it is an internal
+   * PaymentAttempt id - ours, and a key - so the anomaly names both attempts
+   * and an investigator does not have to guess which is which.
+   */
+  conflictingAttemptId: identifier.optional(),
 });
 
 const genericPayload = z.strictObject({
@@ -294,6 +335,11 @@ const PAYLOAD_SCHEMAS: Record<AuditEventType, z.ZodType> = {
   payment_callback_rejected: paymentPayload,
   payment_captured: paymentPayload,
   payment_failed: paymentPayload,
+  payment_retry_requested: paymentPayload,
+  payment_retry_authorized: paymentPayload,
+  payment_retry_denied: paymentPayload,
+  payment_retry_limit_reached: paymentPayload,
+  payment_multiple_capture_detected: paymentPayload,
   webhook_received: paymentPayload,
   webhook_rejected: paymentPayload,
   webhook_duplicate: paymentPayload,

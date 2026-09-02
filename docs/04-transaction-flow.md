@@ -100,7 +100,13 @@ Failure is a first-class outcome, not an exception that falls through:
 - **Order creation or payment failure** → `PAYMENT_FAILED`, which is
   recoverable: the Transaction Service may start a fresh attempt against the
   _same authorization and the same reservation_, without re-entering the AI path
-  and without re-deriving the amount.
+  and without re-deriving the amount. Recoverable is not automatic — a retry is
+  granted only to an explicit human request, at most `MAX_PAYMENT_ATTEMPTS`
+  times counted from persisted attempt rows, and only after the quote, the
+  policy, the approval binding and the stock hold have all been re-checked
+  against current facts. Each retry is a **new** `PaymentAttempt` with its own
+  provider order; the failed one is never edited. See
+  [27 — Payment retry](./27-payment-retry.md).
 - **Reservation expiry** → `EXPIRED`, and the hold is released.
 - **Unverifiable webhook** → refused before the body is parsed, with no state
   change and no database write of any kind. It is recorded in the operational

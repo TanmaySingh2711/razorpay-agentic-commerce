@@ -75,6 +75,7 @@ stateDiagram-v2
   INVENTORY_RESERVED --> EXPIRED: RESERVATION_EXPIRED
   PAYMENT_ORDER_CREATED --> PAYMENT_PENDING: PAYMENT_STARTED
   PAYMENT_ORDER_CREATED --> PAYMENT_FAILED: PAYMENT_FAILED
+  PAYMENT_ORDER_CREATED --> PAYMENT_CAPTURED: PAYMENT_CAPTURE_CONFIRMED (late)
   PAYMENT_PENDING --> PAYMENT_VERIFIED: PAYMENT_CALLBACK_VERIFIED
   PAYMENT_PENDING --> PAYMENT_CAPTURED: PAYMENT_CAPTURE_CONFIRMED
   PAYMENT_PENDING --> PAYMENT_FAILED: PAYMENT_FAILED
@@ -129,6 +130,28 @@ A failed payment is an expected outcome with two — and only two — exits:
 Objective 3 makes these transitions _possible_. The conditions under which a
 service may request them belong to the payment objective. Everything else from
 `PAYMENT_FAILED` — completing, restarting the flow, re-quoting — is rejected.
+
+Objective 14 supplies those conditions for the retry edge: the request must come
+from an explicit human action, the persisted attempt count must be below
+`MAX_PAYMENT_ATTEMPTS`, and the quote, policy, approval binding and stock hold
+must all still hold when re-read. See
+[27 — Payment retry](./27-payment-retry.md).
+
+## A late capture during a retry
+
+Objective 14 adds one edge, and it exists for one concrete sequence: attempt #1
+is reported failed, a person retries, attempt #2 puts the transaction back at
+`PAYMENT_ORDER_CREATED` — and only then does a genuine capture for attempt #1
+arrive.
+
+| Exit                                             | Actor             | Why                                                                                                                                                                            |
+| ------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PAYMENT_CAPTURE_CONFIRMED` → `PAYMENT_CAPTURED` | `payment_webhook` | Money moved. Without this edge the event has no legal transition, is held for reconciliation, and a real capture goes unaccounted for while the buyer is invited to pay again. |
+
+Restricted to `payment_webhook`, like every other route to `PAYMENT_CAPTURED`:
+only the party that holds the money may say it arrived. The browser-callback
+actor, `payment_provider`, cannot take it, and does not try — the checkout
+service refuses any callback outside `PAYMENT_PENDING`.
 
 ## `TransactionStatus` ≠ `PaymentAttemptStatus`
 

@@ -227,6 +227,26 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
       allowedActors: ["payment_provider", "transaction_service"],
       reasonCode: "PAYMENT_STARTED",
     },
+    /**
+     * A capture for an *earlier* attempt, arriving after a retry has begun.
+     *
+     * Added in Objective 14, and it exists because of one concrete sequence:
+     * attempt #1 is reported failed, a person requests a retry, the retry
+     * creates attempt #2 and puts the transaction back at PAYMENT_ORDER_CREATED
+     * - and only then does the provider deliver a genuine `payment.captured`
+     * for attempt #1. Money moved. Without this edge the event has no legal
+     * transition, is held for reconciliation, and a real capture sits
+     * unaccounted for while the buyer is invited to pay again.
+     *
+     * Restricted to `payment_webhook`: only the party that holds the money may
+     * say it arrived. The browser callback path cannot take this edge, and does
+     * not try - it refuses any callback outside PAYMENT_PENDING.
+     */
+    PAYMENT_CAPTURE_CONFIRMED: {
+      to: "PAYMENT_CAPTURED",
+      allowedActors: ["payment_webhook"],
+      reasonCode: "LATE_CAPTURE_RECONCILED",
+    },
     PAYMENT_FAILED: {
       to: "PAYMENT_FAILED",
       allowedActors: ["payment_provider", "payment_webhook"],

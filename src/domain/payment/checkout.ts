@@ -129,6 +129,18 @@ export const CALLBACK_REJECTIONS = [
   "NO_PAYMENT_ORDER",
   /** The named attempt belongs to another transaction, or does not exist. */
   "ATTEMPT_MISMATCH",
+  /**
+   * The transaction has several payment attempts and the callback named none
+   * of them.
+   *
+   * Only reachable once a transaction can be retried. Before that there was at
+   * most one attempt carrying a provider order, so "the attempt of this
+   * transaction" was unambiguous; with retries it is a guess, and guessing
+   * which attempt a payment belongs to is not something a financial record may
+   * do. The caller resolves it by sending the attempt id or the order id it
+   * was given.
+   */
+  "ATTEMPT_AMBIGUOUS",
   /** The client presented an order id that is not the one we stored. */
   "ORDER_ID_MISMATCH",
   /** The payment id is not a shape this provider issues. */

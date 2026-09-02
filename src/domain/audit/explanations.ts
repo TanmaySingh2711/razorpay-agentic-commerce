@@ -54,6 +54,20 @@ function units(quantity: number | null): string {
 }
 
 /**
+ * " (attempt 2 of 3)", or nothing when the counters were not recorded.
+ *
+ * Both numbers come from the persisted row and neither is ever an input to a
+ * decision - the limit is enforced by counting PaymentAttempt rows, and this
+ * only reports what that count was.
+ */
+function describeAttempts(payload: JsonObject): string {
+  const used = readNumber(payload, "attemptsUsed");
+  const max = readNumber(payload, "maxAttempts");
+  if (used === null || max === null) return "";
+  return ` (attempt ${String(Math.min(used + 1, max))} of ${String(max)})`;
+}
+
+/**
  * The policy sentences, which are the ones people actually ask about.
  *
  * "Quote total ₹2799.00 is within the ₹3000.00 automatic purchase limit" is an
@@ -283,6 +297,21 @@ export function explainAuditEvent(input: {
       return "The provider confirmed the payment was captured.";
     case "payment_failed":
       return `The payment attempt did not succeed${reasonTail}.`;
+
+    case "payment_retry_requested":
+      return `A person asked to pay again after a failed attempt${describeAttempts(facts)}.`;
+    case "payment_retry_authorized":
+      // Names every control that was re-run, because the point of a retry gate
+      // is that being authorized once is not being authorized now.
+      return `The retry was authorized: the quote, the spending policy and the stock hold were all re-checked against current facts${describeAttempts(facts)}.`;
+    case "payment_retry_denied":
+      return `The retry was refused${reasonTail}. No new payment was started and nothing was charged.`;
+    case "payment_retry_limit_reached":
+      return `Every permitted payment attempt has been used${describeAttempts(facts)}, so no further retry is possible for this purchase.`;
+    case "payment_multiple_capture_detected":
+      // Deliberately blunt. This is the sentence somebody needs to find when
+      // they are working out why one purchase produced two payments.
+      return "Two separate payment attempts for this purchase were both captured by the provider. The purchase was not fulfilled twice; this needs manual reconciliation.";
     case "webhook_received":
       return "A provider webhook was received.";
     case "webhook_rejected":

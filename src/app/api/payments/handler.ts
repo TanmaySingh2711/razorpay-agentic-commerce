@@ -15,6 +15,12 @@ import {
   defaultCheckoutDeps,
   type CheckoutServiceDeps,
 } from "@/services/payment/checkout-service";
+import {
+  requestPaymentRetry,
+  defaultRetryDeps,
+  type RetryServiceDeps,
+} from "@/services/payment/retry-service";
+import type { PaymentRetryResult } from "@/domain/payment/retry";
 import type { PaymentOrderResult } from "@/domain/payment/contracts";
 import type {
   CheckoutCallbackResult,
@@ -79,9 +85,7 @@ export function handleCreatePaymentOrder(
 
     const parsed = requestSchema.safeParse(body);
     if (!parsed.success) {
-      const fields = [
-        ...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? "<root>"))),
-      ].sort();
+      const fields = rejectedFields(parsed.error.issues);
       throw new ValidationError({
         code: "PAYMENT_ORDER_REQUEST_INVALID",
         message: `The request accepts only a transactionId and an optional operationId. Rejected: ${fields.join(", ")}.`,
@@ -218,6 +222,85 @@ export function handleCheckoutCallback(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Retry
+// ---------------------------------------------------------------------------
+
+/**
+ * The retry boundary, and the reason it is this small.
+ *
+ * `z.strictObject` with two fields means every interesting attack is a `400`
+ * rather than something quietly ignored: `retryCount: 0`, `retryLimit: 999`,
+ * `amount: 1`, `currency: "USD"`, `providerOrderId: "order_theirs"`,
+ * `policy: "ALLOWED"` and `approved: true` are all unknown keys and are all
+ * refused by name. There is nothing to sanitise because there is nothing
+ * accepted - the server counts attempts from `payment_attempt` rows, reads the
+ * amount from the persisted quote, and re-derives the policy verdict itself.
+ *
+ * It is a POST because it is an action a person takes. Nothing reaches it from
+ * a render, a prefetch or a webhook, and the buyer agent has no tool for it.
+ */
+const retrySchema = z.strictObject({
+  transactionId: z.string().min(1).max(64),
+  /** Correlates this call in logs and audit. It is not the idempotency key. */
+  operationId: z.string().min(1).max(64).optional(),
+});
+
+/**
+ * The status for an outcome that is not a started retry.
+ *
+ * `ORDER_NOT_READY` carries the payment-order boundary's own discriminator, and
+ * it is mapped back to that boundary's own statuses rather than collapsed into
+ * one code. The distinctions are the whole reason that union has four arms: a
+ * definite provider failure, an outcome nobody can resolve yet, and a claim
+ * another request already owns call for three different responses, and a client
+ * told `202 Accepted` for all of them would treat "we do not know whether an
+ * order exists" as "try again shortly" — which is how a duplicate order gets
+ * created.
+ *
+ * These are the same numbers `/api/payments/order` answers with, so a client
+ * needs one implementation for both.
+ */
+function retryStatus(result: PaymentRetryResult): number {
+  switch (result.kind) {
+    case "RETRY_STARTED":
+      return 200;
+    // Understood perfectly, and declined on its merits.
+    case "DENIED":
+      return 422;
+    case "ORDER_NOT_READY":
+      switch (result.reason) {
+        case "REFUSED":
+          return 422;
+        case "PROVIDER_FAILED":
+          return 502;
+        // Nobody knows whether an order exists. Not an error, and emphatically
+        // not a green light.
+        case "RECONCILIATION_REQUIRED":
+          return 202;
+        case "CREATION_IN_PROGRESS":
+          return 409;
+      }
+  }
+}
+
+export function handleRetryPayment(
+  request: Request,
+  deps: RetryServiceDeps = defaultRetryDeps(),
+): Promise<Response> {
+  return respond(async () => {
+    const parsed = await readBody(retrySchema, request, "PAYMENT_RETRY_REQUEST_INVALID");
+    const result = await requestPaymentRetry(
+      {
+        transactionId: parsed.transactionId,
+        ...(parsed.operationId === undefined ? {} : { operationId: parsed.operationId }),
+      },
+      deps,
+    );
+    return jsonData(result as unknown as JsonValue, {}, retryStatus(result));
+  });
+}
+
 /** The buyer closed the payment window. Recorded; nothing is decided by it. */
 export function handleCheckoutDismissed(
   request: Request,
@@ -258,9 +341,7 @@ async function readBody<TSchema extends z.ZodType>(
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    const fields = [
-      ...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? "<root>"))),
-    ].sort();
+    const fields = rejectedFields(parsed.error.issues);
     throw new ValidationError({
       code,
       message: `Rejected fields: ${fields.join(", ")}.`,
@@ -269,4 +350,30 @@ async function readBody<TSchema extends z.ZodType>(
     });
   }
   return parsed.data;
+}
+
+/**
+ * Names what was actually wrong with a body.
+ *
+ * The `unrecognized_keys` case has to be read specially, and it is the one that
+ * matters most here. Zod reports it with an **empty path** and the offending
+ * names in `issue.keys`, so reading `path[0]` alone reduced every hostile field
+ * - `amount`, `retryCount`, `providerOrderId` - to the single useless token
+ * `<root>`. That is the difference between an operator seeing "somebody posted
+ * an amount to the retry endpoint" and seeing "a request was malformed".
+ *
+ * These names go to the operational log and the internal message only. The
+ * public payload carries a code, a category and a dull sentence, so echoing a
+ * caller's own field names back to them is not a channel this opens.
+ */
+function rejectedFields(issues: readonly z.core.$ZodIssue[]): readonly string[] {
+  const names = new Set<string>();
+  for (const issue of issues) {
+    if (issue.code === "unrecognized_keys") {
+      for (const key of issue.keys) names.add(key);
+      continue;
+    }
+    names.add(String(issue.path[0] ?? "<root>"));
+  }
+  return [...names].sort();
 }

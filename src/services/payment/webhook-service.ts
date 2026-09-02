@@ -4,6 +4,7 @@ import { createLogger } from "@/lib/logger";
 import { getPrismaClient } from "@/integrations/persistence/client";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
 import { recordAuditEvent } from "@/services/audit/audit-service";
+import { classifyPaymentFailure, describePaymentFailure } from "@/domain/payment/failure";
 import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
 import {
   isSupportedWebhookEvent,
@@ -129,6 +130,15 @@ function readFacts(
     amountMinor: BigInt(entity.amount),
     currency: entity.currency.toUpperCase(),
     failureCode: entity.error_code ?? null,
+    // Derived here, at the parse boundary, so nothing downstream ever sees the
+    // provider's vocabulary - and `error_description` is dropped rather than
+    // carried inward, because it is free text written for a support desk.
+    failure: classifyPaymentFailure({
+      errorCode: entity.error_code,
+      errorSource: entity.error_source,
+      errorStep: entity.error_step,
+      errorReason: entity.error_reason,
+    }),
   };
 }
 
@@ -466,6 +476,37 @@ export async function processWebhook(
       const captured = eventType === "payment.captured";
 
       /**
+       * A second, distinct capture under one transaction.
+       *
+       * The worst thing a retry workflow can produce: attempt #1 was reported
+       * failed, a person paid again on attempt #2, and then the provider
+       * captured *both*. Two real payments exist for one purchase.
+       *
+       * It has to be looked for explicitly, because every ordinary mechanism
+       * hides it. The state machine judges the second capture already accounted
+       * for - which is right, the transaction is already PAYMENT_CAPTURED and
+       * must not move again - and the delivery is not a duplicate, so the
+       * dedupe ledger says nothing either. Without this query the only record
+       * would be a `webhook_ignored` row indistinguishable from a harmless
+       * redelivery of the same event.
+       *
+       * The query is keyed on a *different* attempt id, so a genuine redelivery
+       * of this attempt's own capture finds nothing and stays an ordinary
+       * duplicate.
+       */
+      const rivalCapture = captured
+        ? await tx.paymentAttempt.findFirst({
+            where: {
+              transactionId: attempt.transactionId,
+              id: { not: attempt.id },
+              status: "CAPTURED",
+            },
+            select: { id: true },
+          })
+        : null;
+      const doubleCapture = rivalCapture !== null;
+
+      /**
        * Whether the state machine actually took this event.
        *
        * It is the only thing allowed to decide the attempt's status, and that
@@ -486,18 +527,32 @@ export async function processWebhook(
           // record: it is authenticated, and it was just checked against any id
           // we already held, so it can only be new - never a contradiction.
           providerPaymentId: facts.providerPaymentId,
-          // The lifecycle follows the transition, never the event on its own.
-          ...(!applied
+          // The lifecycle follows the transition, never the event on its own -
+          // with one exception, and it is the honest one. A capture the state
+          // machine held because a *different* attempt already captured is
+          // still a real capture of *this* attempt, and recording it as
+          // anything else would leave the ledger denying a payment the provider
+          // has taken. The transaction's own state is unaffected either way.
+          ...(!applied && !doubleCapture
             ? {}
             : captured
               ? { status: "CAPTURED" as const }
               : {
                   status: "FAILED" as const,
-                  // A mapped code only. The provider's own prose is free text
+                  // Mapped values only. The provider's own prose is free text
                   // and can echo request content into a record meant to be
-                  // evidence.
-                  failureCode:
-                    facts.failureCode?.slice(0, 64) ?? "PROVIDER_REPORTED_FAILURE",
+                  // evidence, so the stored reason is our sentence for the
+                  // category rather than anything the vendor wrote.
+                  failureCode: facts.failure.providerCode ?? "PROVIDER_REPORTED_FAILURE",
+                  failureCategory: facts.failure.category,
+                  failureReason: describePaymentFailure(facts.failure.category),
+                  failureSource: facts.failure.source,
+                  failureStep: facts.failure.step,
+                  failureReasonCode: facts.failure.providerReason,
+                  // Our clock, not the provider's: a timestamp an untrusted
+                  // caller could choose is not evidence of when anything
+                  // happened. Same source as `processedAt` on the event row.
+                  failedAt: new Date(),
                 }),
         },
       });
@@ -508,18 +563,21 @@ export async function processWebhook(
         // reported. Writing `payment_failed` for a failure the system refused
         // to act on would make the audit trail read as though the payment had
         // failed, which is the opposite of what happened.
-        action: applied
-          ? captured
-            ? "payment_captured"
-            : "payment_failed"
-          : "webhook_ignored",
+        action:
+          applied || doubleCapture
+            ? captured
+              ? "payment_captured"
+              : "payment_failed"
+            : "webhook_ignored",
         actor: WEBHOOK_ACTOR,
         result: applied && !captured ? "FAILURE" : "SUCCESS",
-        reasonCode: !applied
-          ? "SUPERSEDED_BY_CURRENT_STATE"
-          : captured
-            ? "PAYMENT_CAPTURE_CONFIRMED"
-            : "PAYMENT_ATTEMPT_FAILED",
+        reasonCode: doubleCapture
+          ? "CAPTURE_ON_A_SECOND_ATTEMPT"
+          : !applied
+            ? "SUPERSEDED_BY_CURRENT_STATE"
+            : captured
+              ? "PAYMENT_CAPTURE_CONFIRMED"
+              : "PAYMENT_ATTEMPT_FAILED",
         correlationId: attempt.correlationId,
         operationKey: `webhook_reconciled:${providerEventId}`,
         trustedInputs: {
@@ -530,11 +588,59 @@ export async function processWebhook(
           amountMinor: attempt.amount.toString(),
           currency: attempt.currency,
           provider: "RAZORPAY",
-          ...(facts.failureCode === null
+          ...(captured
             ? {}
-            : { failureCode: facts.failureCode.slice(0, 64) }),
+            : {
+                failureCategory: facts.failure.category,
+                failureSource: facts.failure.source,
+                failureStep: facts.failure.step,
+                ...(facts.failure.providerCode === null
+                  ? {}
+                  : { failureCode: facts.failure.providerCode }),
+              }),
         },
       });
+
+      if (doubleCapture) {
+        /**
+         * The anomaly, recorded as its own blocked fact.
+         *
+         * Separate from the capture record above rather than folded into it,
+         * because they answer different questions. The capture record says what
+         * happened to this attempt; this one says the purchase now has two
+         * captured payments and needs a person. Collapsing them would leave the
+         * problem discoverable only by cross-referencing attempt rows, which is
+         * exactly the work an audit trail exists to save.
+         *
+         * No refund is issued and none is attempted. Refunds are not part of
+         * this system, and inventing one here would be a second unreviewed
+         * money movement on top of the first.
+         */
+        await recordAuditEvent(tx, {
+          transactionId: attempt.transactionId,
+          action: "payment_multiple_capture_detected",
+          actor: WEBHOOK_ACTOR,
+          result: "BLOCKED",
+          reasonCode: "MULTIPLE_CAPTURE",
+          correlationId: attempt.correlationId,
+          operationKey: `webhook_multiple_capture:${providerEventId}`,
+          trustedInputs: {
+            paymentAttemptId: attempt.id,
+            conflictingAttemptId: rivalCapture.id,
+            providerEventId,
+            providerOrderId,
+            providerPaymentId: facts.providerPaymentId,
+            amountMinor: attempt.amount.toString(),
+            currency: attempt.currency,
+            provider: "RAZORPAY",
+          },
+        });
+        log.error("two payment attempts for one transaction were both captured", {
+          transactionId: attempt.transactionId,
+          paymentAttemptId: attempt.id,
+          conflictingAttemptId: rivalCapture.id,
+        });
+      }
 
       await tx.webhookEvent.update({
         where: eventKey(providerEventId),
@@ -542,6 +648,9 @@ export async function processWebhook(
           status: "PROCESSED",
           processedAt: new Date(),
           transactionId: attempt.transactionId,
+          // PROCESSED, because it genuinely was - the anomaly is recorded, not
+          // deferred. The category is what makes the ledger queryable for it.
+          ...(doubleCapture ? { errorCategory: "MULTIPLE_CAPTURE" } : {}),
         },
       });
 
@@ -553,6 +662,7 @@ export async function processWebhook(
         transactionState:
           outcome.kind === "APPLIED" ? outcome.to : attempt.transactionStatus,
         alreadyAccountedFor: outcome.kind !== "APPLIED",
+        anomaly: doubleCapture ? "MULTIPLE_CAPTURE" : null,
       };
     });
   } catch (error) {

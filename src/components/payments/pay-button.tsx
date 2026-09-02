@@ -29,6 +29,7 @@ import type { CheckoutSessionDto } from "@/domain/payment/checkout";
 
 type Phase =
   | { readonly kind: "IDLE" }
+  | { readonly kind: "REQUESTING_RETRY" }
   | { readonly kind: "PREPARING" }
   | { readonly kind: "AWAITING_PAYMENT" }
   | { readonly kind: "VERIFYING" }
@@ -50,10 +51,35 @@ async function postJson<TData>(url: string, body: unknown): Promise<Envelope<TDa
   return (await response.json()) as Envelope<TData>;
 }
 
+/**
+ * How the button behaves, and it is the server that decides which is offered.
+ *
+ * `RETRY` differs from `PAY` by exactly one extra step: it asks the server for
+ * permission first. Everything after that - the checkout session, the provider
+ * script, the callback verification - is the same code, because a retry
+ * payment is an ordinary payment against a new attempt and must not develop its
+ * own quietly different path.
+ */
+export type PayMode = "PAY" | "RETRY";
+
 export function PayButton({
   transactionId,
+  mode = "PAY",
+  attemptsUsed,
+  maxAttempts,
 }: {
   readonly transactionId: string;
+  readonly mode?: PayMode;
+  /**
+   * Shown to the person, never used to decide anything.
+   *
+   * The limit is enforced by counting persisted PaymentAttempt rows on the
+   * server. These two numbers exist so the button can say "attempt 2 of 3"; if
+   * they were wrong, or absent, or edited in a browser console, the only effect
+   * would be a misleading label - the retry request carries neither of them.
+   */
+  readonly attemptsUsed?: number;
+  readonly maxAttempts?: number;
 }): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>({ kind: "IDLE" });
 
@@ -92,8 +118,30 @@ export function PayButton({
 
   const onPay = useCallback(() => {
     void (async () => {
-      setPhase({ kind: "PREPARING" });
       try {
+        if (mode === "RETRY") {
+          setPhase({ kind: "REQUESTING_RETRY" });
+          // The server decides whether a retry is permitted at all. Only a
+          // transaction id is sent: there is no retry count, no amount and no
+          // order id in this request, so nothing here can influence what is
+          // charged or how many attempts are allowed.
+          const retried = await postJson<{ kind: string; denial?: string }>(
+            "/api/payments/retry",
+            { transactionId },
+          );
+          if (retried.data?.kind !== "RETRY_STARTED") {
+            setPhase({
+              kind: "PROBLEM",
+              message:
+                retried.data?.kind === "ORDER_NOT_READY"
+                  ? "We could not prepare another payment just now. Please try again in a moment."
+                  : "This purchase cannot be paid again. Reload the page to see why.",
+            });
+            return;
+          }
+        }
+
+        setPhase({ kind: "PREPARING" });
         // The server decides whether checkout may start at all, and it is this
         // call - not the page render - that records that payment has begun.
         const started = await postJson<{
@@ -158,24 +206,42 @@ export function PayButton({
         });
       }
     })();
-  }, [transactionId, verify]);
+  }, [transactionId, mode, verify]);
 
-  const busy = phase.kind === "PREPARING" || phase.kind === "VERIFYING";
+  // Disabling the button while a request is in flight is a courtesy to the
+  // person, not a control. Two clicks that both get through converge on one
+  // retry and one payment attempt, because the server settles that with a
+  // unique claim in PostgreSQL rather than trusting the browser to behave.
+  const busy =
+    phase.kind === "PREPARING" ||
+    phase.kind === "VERIFYING" ||
+    phase.kind === "REQUESTING_RETRY";
+
+  const label =
+    mode === "RETRY" && attemptsUsed !== undefined && maxAttempts !== undefined
+      ? `Retry payment (attempt ${String(Math.min(attemptsUsed + 1, maxAttempts))} of ${String(maxAttempts)})`
+      : mode === "RETRY"
+        ? "Retry payment"
+        : "Pay";
 
   return (
     <div>
       <button type="button" onClick={onPay} disabled={busy}>
-        {busy ? "Please wait…" : "Pay"}
+        {busy ? "Please wait…" : label}
       </button>
-      <p role="status">{describe(phase)}</p>
+      <p role="status">{describe(phase, mode)}</p>
     </div>
   );
 }
 
-function describe(phase: Phase): string {
+function describe(phase: Phase, mode: PayMode): string {
   switch (phase.kind) {
     case "IDLE":
-      return "Press Pay to open the secure payment window.";
+      return mode === "RETRY"
+        ? "Press Retry payment to try again. You have not been charged for the attempt that failed."
+        : "Press Pay to open the secure payment window.";
+    case "REQUESTING_RETRY":
+      return "Checking whether this purchase can be paid again…";
     case "PREPARING":
       return "Preparing your payment…";
     case "AWAITING_PAYMENT":
