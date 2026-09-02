@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { jsonData, respond } from "@/lib/api-response";
 import { ValidationError } from "@/domain/errors";
+import { checkRequestOrigin } from "@/lib/http/same-origin";
+import { getRuntimeConfig } from "@/config/env";
 import { getRazorpayCredentials } from "@/config/env";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import {
@@ -72,35 +74,17 @@ export function handleCreatePaymentOrder(
   deps: PaymentOrderServiceDeps = defaultPaymentOrderDeps(),
 ): Promise<Response> {
   return respond(async () => {
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      throw new ValidationError({
-        code: "PAYMENT_ORDER_REQUEST_INVALID",
-        message: "The request body was not valid JSON.",
-        publicMessage: "The request could not be read.",
-      });
-    }
-
-    const parsed = requestSchema.safeParse(body);
-    if (!parsed.success) {
-      const fields = rejectedFields(parsed.error.issues);
-      throw new ValidationError({
-        code: "PAYMENT_ORDER_REQUEST_INVALID",
-        message: `The request accepts only a transactionId and an optional operationId. Rejected: ${fields.join(", ")}.`,
-        publicMessage:
-          "Send only a transactionId. Amounts and prices are determined by the server.",
-        details: { fields },
-      });
-    }
+    const parsed = await readBody(
+      requestSchema,
+      request,
+      "PAYMENT_ORDER_REQUEST_INVALID",
+      "Send only a transactionId. Amounts and prices are determined by the server.",
+    );
 
     const result = await createPaymentOrder(
       {
-        transactionId: parsed.data.transactionId,
-        ...(parsed.data.operationId === undefined
-          ? {}
-          : { operationId: parsed.data.operationId }),
+        transactionId: parsed.transactionId,
+        ...(parsed.operationId === undefined ? {} : { operationId: parsed.operationId }),
       },
       deps,
     );
@@ -317,6 +301,26 @@ export function handleCheckoutDismissed(
 }
 
 /**
+/**
+ * Refuses a state-changing request that another website caused.
+ *
+ * The refusal is a `ValidationError`, so it takes the same sanitised path to
+ * the browser as every other rejection here: a stable code and a short public
+ * message, with the detail kept in the operator log. It deliberately does not
+ * say which origin was expected - that is a fact about the deployment, and the
+ * caller already knows the one it sent.
+ */
+function assertNotCrossSite(request: Request, code: string): void {
+  const verdict = checkRequestOrigin(request, getRuntimeConfig().APP_URL);
+  if (verdict.allowed) return;
+  throw new ValidationError({
+    code,
+    message: `A state-changing request arrived from a different site (${verdict.site}).`,
+    publicMessage: "This request did not come from this site.",
+  });
+}
+
+/**
  * Parses a request body against a strict schema.
  *
  * `z.strictObject` throughout, so an unexpected field is a `400` rather than
@@ -328,7 +332,14 @@ async function readBody<TSchema extends z.ZodType>(
   schema: TSchema,
   request: Request,
   code: string,
+  /** A tailored sentence for the caller, when the generic one says too little. */
+  publicMessage = "The request was not in the expected shape.",
 ): Promise<z.infer<TSchema>> {
+  // Before the body is even read. This is the single door into every
+  // state-changing payment endpoint, which is exactly why the cross-site
+  // refusal lives here: a route cannot forget to call it and still read a body.
+  assertNotCrossSite(request, code);
+
   let body: unknown;
   try {
     body = await request.json();
@@ -345,7 +356,7 @@ async function readBody<TSchema extends z.ZodType>(
     throw new ValidationError({
       code,
       message: `Rejected fields: ${fields.join(", ")}.`,
-      publicMessage: "The request was not in the expected shape.",
+      publicMessage,
       details: { fields },
     });
   }

@@ -1,0 +1,481 @@
+/* Objective 16 — the buyer experience.
+
+   Plain CSS, no framework, no runtime. The whole surface is a handful of cards
+   and one input, so a utility framework would ship more bytes than page. Every
+   colour comes from the tokens in globals.css, so light and dark stay in step
+   without a second theme to maintain.
+
+   Loaded after globals.css from the root layout. */
+
+:root {
+  --positive: #0f7b45;
+  --positive-bg: #e8f6ee;
+  --warning: #8a5a00;
+  --warning-bg: #fdf3e2;
+  --negative: #b3261e;
+  --negative-bg: #fdecea;
+  --surface: #f7f8fa;
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --positive: #59d08c;
+    --positive-bg: #10241a;
+    --warning: #e0ac52;
+    --warning-bg: #2a2113;
+    --negative: #f0837c;
+    --negative-bg: #2a1614;
+    --surface: #14171c;
+  }
+}
+
+main.wide {
+  max-width: 54rem;
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.page-head h1 {
+  font-size: clamp(1.6rem, 4vw, 2.25rem);
+}
+
+.lead {
+  font-size: 1.05rem;
+  color: var(--muted);
+  margin: 0.25rem 0 0;
+  max-width: 42rem;
+}
+
+.breadcrumb {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* --- The one input ------------------------------------------------------- */
+
+.console {
+  margin: 2.5rem 0;
+}
+
+h2.plain {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 1.15rem;
+  color: var(--foreground);
+  margin: 0 0 0.75rem;
+}
+
+.ask textarea {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  font: inherit;
+  color: inherit;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  resize: vertical;
+  min-height: 5.5rem;
+}
+
+.ask textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+button.primary,
+button.secondary {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  /* A comfortable touch target on a phone. */
+  min-height: 44px;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+}
+
+.examples ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.examples li {
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+}
+
+/* --- Cards --------------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.35rem;
+  margin: 1.25rem 0;
+  background: var(--surface);
+}
+
+.card.action {
+  border-color: var(--accent);
+  background: var(--background);
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.product-name {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.9rem 1.25rem;
+  margin: 1rem 0 0;
+}
+
+.facts dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0.15rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dd.total {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.attributes {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.attributes li {
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+}
+
+.attr-key {
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+
+/* --- Status badges ------------------------------------------------------- */
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge.positive {
+  background: var(--positive-bg);
+  color: var(--positive);
+}
+
+.badge.warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.badge.negative {
+  background: var(--negative-bg);
+  color: var(--negative);
+}
+
+.badge.neutral {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.notice {
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin: 1.25rem 0;
+  border: 1px solid var(--border);
+}
+
+.notice.negative {
+  background: var(--negative-bg);
+  border-color: var(--negative);
+}
+
+.notice p {
+  margin: 0.25rem 0 0;
+}
+
+.field-error {
+  color: var(--negative);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+}
+
+.field-done {
+  color: var(--positive);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+}
+
+/* --- Progress rail -------------------------------------------------------
+   A list, not a graphic: it reads correctly with styles off and announces
+   sensibly to a screen reader, which a row of coloured divs would not. */
+
+.journey {
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.journey .step {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding-top: 0.75rem;
+  border-top: 3px solid var(--border);
+}
+
+.journey .step .dot {
+  display: none;
+}
+
+.journey .step.done {
+  color: var(--foreground);
+  border-top-color: var(--positive);
+}
+
+.journey .step.current {
+  color: var(--foreground);
+  font-weight: 600;
+  border-top-color: var(--accent);
+}
+
+.journey .step.stopped {
+  color: var(--negative);
+  border-top-color: var(--negative);
+}
+
+/* --- Timeline ------------------------------------------------------------ */
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.timeline time {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline .event {
+  margin: 0;
+}
+
+.timeline .hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+}
+
+/* --- How it works -------------------------------------------------------- */
+
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.steps li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.steps h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.steps p {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* --- Misc ---------------------------------------------------------------- */
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.decision {
+  margin: 0;
+}
+
+.technical {
+  margin: 2rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+}
+
+.technical summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.technical code {
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 30rem) {
+  main {
+    padding: 2rem 1.1rem;
+  }
+
+  .timeline li {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .ask-actions {
+    align-items: stretch;
+  }
+
+  .ask-actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

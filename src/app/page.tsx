@@ -1,125 +1,88 @@
+import Link from "next/link";
+import { BuyerConsole } from "@/components/buyer/buyer-console";
+
 /**
- * The public landing page.
+ * The demo itself.
  *
- * It states the rule the whole system is built to enforce, and then says
- * plainly what is implemented and where the implementation stops. The second
- * half matters as much as the first: a payments demo that overstates how far it
- * goes is worse than one that is narrow and honest about it.
+ * Until Objective 16 this page was an implementation-status document. That was
+ * the right thing to ship while there was nothing to use, and the wrong thing
+ * to keep once there was: a reviewer arriving at a commerce demo should be able
+ * to *buy something* before reading about the architecture. The status page is
+ * still here, at /about, and is linked from the footer.
  *
- * Deliberately static. It reads no database, holds no identifiers, and exposes
- * no configuration - there is nothing here for a visitor to learn about the
- * deployment.
+ * The page itself is a server component holding no state. The one interactive
+ * element is the console, which sends a sentence to a server action and renders
+ * what comes back.
  */
+export const metadata = {
+  title: "Razorpay Agentic Commerce — buy something",
+  description:
+    "Ask for what you want in plain words. The assistant proposes; the server prices, checks the rules and takes payment.",
+};
+
+const STEPS = [
+  {
+    title: "You ask",
+    body: "Describe what you want in ordinary words, with a budget if you have one.",
+  },
+  {
+    title: "The assistant proposes",
+    body: "It reads the merchant's catalog and suggests one product. That is the limit of what it can do.",
+  },
+  {
+    title: "The server decides",
+    body: "It re-reads the real price, freezes it, applies your spending rules and asks you if approval is needed.",
+  },
+  {
+    title: "You pay",
+    body: "Razorpay Test Mode opens only after every check has passed, and only when you press Pay.",
+  },
+];
+
 export default function HomePage() {
   return (
-    <main>
-      <h1>Razorpay Agentic Commerce</h1>
-      <p className="tagline">
-        Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
-      </p>
+    <main className="wide">
+      <header className="page-head">
+        <p className="eyebrow">
+          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
+        </p>
+        <h1>Shop by describing what you want</h1>
+        <p className="lead">
+          An AI assistant that can read a catalog and suggest a product — and a server
+          that decides every single thing about the money.
+        </p>
+      </header>
 
-      <p>
-        A merchant that an AI buyer agent can transact with end to end, where every
-        financial action is explainable, bounded, gated and auditable.
-      </p>
+      <BuyerConsole />
+
+      <section className="how" aria-labelledby="how-heading">
+        <h2 id="how-heading">How it works</h2>
+        <ol className="steps">
+          {STEPS.map((step, index) => (
+            <li key={step.title}>
+              <span className="step-number" aria-hidden="true">
+                {index + 1}
+              </span>
+              <div>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <div className="rule">
-        <strong>No LLM output can directly cause a payment.</strong>
-        AI proposes → deterministic systems validate → authorization gates → payment
-        infrastructure executes.
+        <strong>No AI output can directly cause a payment.</strong>
+        The assistant proposes a product and nothing else. It cannot set a price, approve
+        a purchase, retry a payment, or move a transaction forward.
       </div>
 
-      <h2>What is built</h2>
-      <ul>
-        <li>
-          <strong>Agent-readable merchant catalog</strong> — structured product facts an
-          agent can reason over, served from the merchant&apos;s own source of truth
-        </li>
-        <li>
-          <strong>Gemini-powered buyer agent</strong> — interprets what a shopper wants
-          and proposes a product; it may propose and nothing more
-        </li>
-        <li>
-          <strong>Trusted PurchaseQuote</strong> — the server re-reads price, currency and
-          stock and freezes them, so the amount is never taken from a model or a browser
-        </li>
-        <li>
-          <strong>Deterministic policy engine</strong> — a pure, versioned rule set that
-          answers allowed, approval required, or blocked, and denies by default
-        </li>
-        <li>
-          <strong>Human approval gate</strong> — a single-use, timing-safe token bound to
-          one exact transaction, quote, amount and currency
-        </li>
-        <li>
-          <strong>Inventory reservation</strong> — stock is held atomically before money
-          moves, so two buyers cannot be sold the same last unit
-        </li>
-        <li>
-          <strong>Structured explainability and audit</strong> — an append-only trail
-          where every decision records the values it turned on, in plain sentences
-        </li>
-        <li>
-          <strong>Razorpay Test Mode order creation</strong> — server-side only, with the
-          amount read from the persisted quote and duplicate orders prevented by the
-          database
-        </li>
-        <li>
-          <strong>Standard Checkout</strong> — opened only by an explicit human action;
-          card details are collected by Razorpay and never touch this application
-        </li>
-        <li>
-          <strong>Server-side signature verification</strong> — the payment confirmation
-          is checked with a timing-safe HMAC against the order id this server stored,
-          never the one the browser sent back
-        </li>
-        <li>
-          <strong>Verified provider webhooks</strong> — capture is confirmed by Razorpay,
-          not by the browser: the raw body is authenticated with a timing-safe HMAC before
-          it is even parsed, and the delivery id is claimed in the same database
-          transaction as its effects, so a redelivery changes nothing and a failure can
-          still be retried
-        </li>
-        <li>
-          <strong>Payment reconciliation</strong> — the amount the provider reports is
-          checked against the persisted quote before anything moves, and events are
-          handled in any order: a capture that arrives before the browser returns is
-          reconciled, and a late failure can never undo one
-        </li>
-        <li>
-          <strong>Bounded, human-triggered payment retry</strong> — a failed payment can
-          be retried at most three times in total, counted from payment attempts stored in
-          the database rather than from anything a browser sends. Each retry re-reads the
-          price, re-runs the spending policy and re-checks the stock hold before it may
-          touch the provider, and creates a new payment attempt rather than editing the
-          failed one. Nothing automatic starts a retry — not a webhook, not a page reload,
-          and not the agent
-        </li>
-        <li>
-          <strong>Transaction lifecycle through PAYMENT_CAPTURED</strong> — every state
-          change goes through one state machine, with an immutable history of how the
-          transaction got there
-        </li>
-      </ul>
-
-      <h2>Where this stops, deliberately</h2>
-      <p>
-        A verified signature proves a payment confirmation is genuine and belongs to this
-        order. It is <strong>not</strong> proof that funds were captured — only the
-        provider can assert that, and only through a webhook this server authenticates
-        itself. So <code>PAYMENT_VERIFIED</code> and <code>PAYMENT_CAPTURED</code> stay
-        separate states, reached by different evidence.
-      </p>
-      <p>
-        Captured is still not finished. The lifecycle ends at{" "}
-        <code>PAYMENT_CAPTURED</code>: stock stays reserved rather than sold, and no
-        transaction is marked complete. Inventory commit and final completion are later
-        objectives and are not implemented here.
-      </p>
-
-      <footer>
-        Razorpay Test Mode — no real money moves. Architecture documentation lives in{" "}
-        <code>docs/</code>. Liveness endpoint: <code>/api/health</code>.
+      <footer className="site-footer">
+        <p>
+          <Link href="/about">How this is built, and where it stops</Link>
+        </p>
+        <p className="tagline">Razorpay Test Mode — no real money moves.</p>
       </footer>
     </main>
   );

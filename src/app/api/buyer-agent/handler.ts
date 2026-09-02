@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { checkRequestOrigin } from "@/lib/http/same-origin";
+import { getRuntimeConfig } from "@/config/env";
 import { jsonData, respond } from "@/lib/api-response";
 import { InvalidBuyerRequestError } from "@/domain/buyer-agent/errors";
 import {
@@ -22,7 +24,15 @@ import type { JsonValue } from "@/lib/json";
  * and returns a decision the caller may act on later.
  */
 
-const requestSchema = z.object({
+/**
+ * Strict: an unexpected field is a refusal, not something quietly dropped.
+ *
+ * The only thing this endpoint accepts from a browser is a sentence. A caller
+ * that also sends `budget`, `productId`, `approved` or `policy` is probing for
+ * authority it does not have, and must be told no rather than left unable to
+ * tell whether the extra field did anything.
+ */
+const requestSchema = z.strictObject({
   message: z.string().min(1).max(MAX_REQUEST_LENGTH),
 });
 
@@ -31,6 +41,13 @@ export function handleBuyerAgentRequest(
   deps: BuyerAgentDeps = defaultBuyerAgentDeps(),
 ): Promise<Response> {
   return respond(async () => {
+    // A model call costs quota and money. A page on another site must not be
+    // able to spend either through a visitor's browser.
+    const verdict = checkRequestOrigin(request, getRuntimeConfig().APP_URL);
+    if (!verdict.allowed) {
+      throw new InvalidBuyerRequestError("the request did not come from this site");
+    }
+
     let body: unknown;
     try {
       body = await request.json();

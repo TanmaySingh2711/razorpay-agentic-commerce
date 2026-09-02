@@ -56,6 +56,62 @@ graph LR
 | **Razorpay API**            | Semi-trusted                            | Credentials are ours, but responses are still parsed and validated before use. Provider objects never flow into the domain.                                                                                                     |
 | **Razorpay webhook input**  | Untrusted until verified (invariant 10) | Verify the HMAC against the raw request bytes _before_ parsing, then deduplicate on the provider event id, then act.                                                                                                            |
 
+## Browser-facing hardening (Objective 15)
+
+### Response headers
+
+Declared once in `next.config.ts` and applied to every route.
+
+| Header                      | Why                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Security-Policy`   | No script may load from a host that is not listed; `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'` |
+| `X-Content-Type-Options`    | A JSON error body must never be sniffed into script                                                                                       |
+| `Referrer-Policy`           | Transaction ids live in URLs and must not leak to third parties                                                                           |
+| `Permissions-Policy`        | Camera, microphone, geolocation and USB are denied outright                                                                               |
+| `X-Frame-Options`           | Agrees with `frame-ancestors`, for browsers honouring only this one                                                                       |
+| `Strict-Transport-Security` | Sent only when `APP_URL` is HTTPS, per RFC 6797                                                                                           |
+
+The CSP lists the Razorpay origins Checkout needs — the script host, the payment
+frame, its XHR and telemetry hosts, its images and fonts. A policy missing any
+of these does not fail loudly; it fails as a buyer pressing Pay and nothing
+happening, which is why the allowances are asserted by test.
+
+**Known limitation, stated rather than hidden:** `script-src` still allows
+`'unsafe-inline'`. Next.js App Router inlines its streaming payload as script
+tags, and this project prerenders pages at build time; a nonce must be generated
+per request, so adopting one means making every page dynamically rendered. That
+is a rendering-behaviour decision, deliberately deferred. The CSP therefore does
+not by itself stop an injected inline script — it stops loading from unlisted
+hosts, framing, base-tag rewriting and off-site form posts.
+
+### Cross-site abuse of state-changing endpoints
+
+There are no cookies, no session and no login, so there is no classical CSRF
+exposure — nothing ambient for another site to ride on. Adding a CSRF token
+would be ceremony aimed at a threat that is not there.
+
+What is real: the state-changing endpoints are unauthenticated, so anyone who
+learns a transaction id can host a page that posts to `/api/payments/retry` or
+`/api/payments/order` from a visitor's browser. The server-side gates still hold
+— the amount comes from the persisted quote, the attempt limit is counted from
+rows, policy and approval are re-run — so the damage is bounded. Bounded is not
+intended.
+
+`src/lib/http/same-origin.ts` checks `Sec-Fetch-Site` first (a browser sets it;
+page script cannot), falling back to `Origin` compared against `APP_URL`. It is
+called from `readBody` in the payments boundary, so every state-changing payment
+route is covered by construction rather than by remembering, and from the buyer
+agent handler, where the cost of abuse is model quota.
+
+A request carrying neither header is allowed: it is not a browser, and this is a
+browser-driven attack. `curl` and server-to-server callers cannot be aimed at a
+victim's browser, and an attacker who controls the client controls these headers
+anyway. The value of the check is entirely that it constrains real browsers.
+
+The **webhook** is deliberately exempt. It is machine-to-machine, carries no
+browser headers, and its authenticity comes from an HMAC over the raw body —
+a far stronger claim than any origin header.
+
 ## Conventions
 
 ### Secrets

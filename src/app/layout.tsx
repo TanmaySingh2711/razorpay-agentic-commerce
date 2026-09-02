@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./ui.css";
 
 export const metadata: Metadata = {
   title: "Razorpay Agentic Commerce",
