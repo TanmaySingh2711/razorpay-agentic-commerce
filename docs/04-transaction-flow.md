@@ -102,8 +102,14 @@ Failure is a first-class outcome, not an exception that falls through:
   _same authorization and the same reservation_, without re-entering the AI path
   and without re-deriving the amount.
 - **Reservation expiry** → `EXPIRED`, and the hold is released.
-- **Unverifiable webhook** → rejected and audited as `webhook_rejected`; no
-  state change occurs.
+- **Unverifiable webhook** → refused before the body is parsed, with no state
+  change and no database write of any kind. It is recorded in the operational
+  log rather than the audit trail, and that difference is deliberate: an audit
+  event belongs to a transaction, and a caller who cannot produce a valid
+  signature has not shown us one. Writing a row anyway would let any stranger on
+  the internet grow the audit table by POSTing noise. An _authenticated_ webhook
+  that does not match our records is a different case and is audited, as
+  `webhook_mismatch`.
 
 Every terminal failure that leaves an outstanding hold releases it —
 `holdsInventory(state)` in the domain names exactly which states carry one.

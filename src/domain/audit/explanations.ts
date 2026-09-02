@@ -287,5 +287,11 @@ export function explainAuditEvent(input: {
       return "A provider webhook was received.";
     case "webhook_rejected":
       return `A provider webhook was rejected${reasonTail}.`;
+    case "webhook_duplicate":
+      return "A provider webhook that had already been processed arrived again, and was recorded without repeating its effect.";
+    case "webhook_ignored":
+      return `A genuine provider webhook was acknowledged without being acted on${reasonTail}, either because it reports something this system does not handle or because the transaction had already moved past what it describes.`;
+    case "webhook_mismatch":
+      return `A genuine provider webhook did not match this transaction's stored payment details${reasonTail}, so no payment state was changed.`;
   }
 }

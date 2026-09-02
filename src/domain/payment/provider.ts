@@ -182,6 +182,33 @@ export interface PaymentProvider {
    * for the server's copy so a call site passing the client's is visibly wrong.
    */
   verifyCheckoutSignature(input: CheckoutSignatureInput): boolean;
+
+  /**
+   * Decides whether an inbound webhook genuinely came from the provider.
+   *
+   * Takes the **raw body** as it arrived, never a re-serialisation of parsed
+   * JSON. Two payloads can be equal as objects and different as bytes - key
+   * order, whitespace, unicode escaping - and the provider signed the bytes.
+   * Re-encoding would therefore reject authentic events, and, worse, invites a
+   * design where parsing happens before authentication.
+   *
+   * Signed with the *webhook* secret, which is a different credential from the
+   * API key secret used to authenticate outbound calls. They are not
+   * interchangeable, and using one for the other fails closed but for the wrong
+   * reason, which is a hard mistake to debug.
+   *
+   * Synchronous and total, for the same reasons as the checkout verifier: a
+   * malformed signature answers `false` rather than throwing.
+   */
+  verifyWebhookSignature(input: WebhookSignatureInput): boolean;
+}
+
+/** What an inbound webhook must prove. */
+export interface WebhookSignatureInput {
+  /** Exactly the bytes received, before any parsing. */
+  readonly rawBody: string;
+  /** The value of the provider's signature header. */
+  readonly signature: string;
 }
 
 /** What a checkout callback must prove. */

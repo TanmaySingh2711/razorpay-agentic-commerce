@@ -54,6 +54,16 @@ export const AUDIT_EVENT_TYPES = [
   "payment_failed",
   "webhook_received",
   "webhook_rejected",
+  /** A redelivery of an event id already recorded. No second effect. */
+  "webhook_duplicate",
+  /** Authentic, but not an event type this system acts on. */
+  "webhook_ignored",
+  /**
+   * Authentic, and it does not line up with what we stored - a payment for an
+   * order we do not know, or an amount that disagrees with the trusted quote.
+   * A security-relevant fact that must never move money.
+   */
+  "webhook_mismatch",
   "state_transitioned",
   "transaction_completed",
   "transaction_blocked",

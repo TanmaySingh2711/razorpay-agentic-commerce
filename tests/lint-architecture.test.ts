@@ -72,9 +72,30 @@ function hasDiscardError(messages: readonly string[]): boolean {
   );
 }
 
-beforeAll(() => {
+/**
+ * Builds the linter and pays its start-up cost here, in setup.
+ *
+ * `new ESLint()` is nearly free: it resolves the flat config, loads every
+ * plugin and parser it names, and builds the TypeScript program lazily, on the
+ * first `lintText` call. Measured cold that first call takes ~3.5 seconds
+ * against ~10ms for every one after it - a 350x cliff.
+ *
+ * Left alone, the whole of that cost lands on whichever assertion happens to
+ * run first, which made one arbitrary test look slow and, in a full run behind
+ * thirty-three other files, pushed it past the 30-second budget and failed it.
+ * The test was never slow; the accounting was wrong.
+ *
+ * The warm-up moves the cost to where it belongs. The hook is given room of its
+ * own because it is doing real one-time work, while every actual test keeps the
+ * project's strict default budget - which they now meet with three orders of
+ * magnitude to spare. Nothing is skipped, relaxed or mocked: the tests below
+ * still run the project's real ESLint configuration, which is the entire point
+ * of them.
+ */
+beforeAll(async () => {
   eslint = new ESLint({ cwd: process.cwd() });
-});
+  await messagesFor(PRISMA_STUB, ANY_SERVICE);
+}, 120_000);
 
 describe("transaction write enforcement (ESLint)", () => {
   describe("ordinary application code", () => {

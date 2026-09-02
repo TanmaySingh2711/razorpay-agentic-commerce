@@ -21,6 +21,7 @@ the system**.
 | [13 — Repository structure](./13-repository-structure.md)       | Every directory and why it exists                           |
 | [14 — Objective 1 scope](./14-objective-1-scope.md)             | What was built, what was deliberately not                   |
 | [15 — Roadmap](./15-roadmap.md)                                 | Later objectives, in an order that preserves this design    |
+| [26 — Staging deployment](./26-staging-deployment.md)           | The public Vercel staging environment and its variables     |
 
 ## Reading order for a new contributor
 

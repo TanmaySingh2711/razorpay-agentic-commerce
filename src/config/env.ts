@@ -58,14 +58,47 @@ const geminiEnvSchema = z.object({
  * this application to Razorpay and signs nothing the browser needs, so it must
  * never appear in a NEXT_PUBLIC_* variable, a client bundle, a log line, an
  * audit payload or an API response. `RAZORPAY_KEY_ID` is the public half and
- * Checkout will legitimately need it in a later objective.
+ * Checkout legitimately needs it in the browser.
+ *
+ * The key id must be a Test Mode key, and that is enforced here rather than
+ * described. This project moves no real money, and the smoke scripts already
+ * refused to run against a live key - but the scripts are the one path a
+ * developer takes deliberately, while this is the path every deployed request
+ * takes. Leaving the deployed runtime as the only unguarded entry point had it
+ * exactly backwards: a live key pasted into a hosting dashboard would have been
+ * accepted silently, and the first sign of the mistake would have been a real
+ * charge against a real person.
+ *
+ * It fails closed and names the mode, never the key.
  */
+const RAZORPAY_TEST_KEY_PREFIX = "rzp_test_";
+
 const razorpayCredentialsSchema = z.object({
-  RAZORPAY_KEY_ID: z.string().min(1),
+  RAZORPAY_KEY_ID: z
+    .string()
+    .min(1)
+    .refine((keyId) => keyId.startsWith(RAZORPAY_TEST_KEY_PREFIX), {
+      message: `must be a Razorpay Test Mode key id (${RAZORPAY_TEST_KEY_PREFIX}...). This application must never run against live credentials.`,
+    }),
   RAZORPAY_KEY_SECRET: z.string().min(1),
 });
 
 const razorpayEnvSchema = razorpayCredentialsSchema.extend({
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
+});
+
+/**
+ * Just the webhook secret, for the inbound webhook verifier.
+ *
+ * Narrow for the same reason the credentials are narrow, in the other
+ * direction: verifying an inbound provider event needs no API key, so a
+ * deployment missing one must not stop the system from authenticating the
+ * events it receives. The two secrets are also genuinely different
+ * credentials - the API key secret authenticates us to Razorpay, this one
+ * authenticates Razorpay to us - and keeping them in separate sections makes
+ * reaching for the wrong one at a call site harder.
+ */
+const razorpayWebhookSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1),
 });
 
@@ -143,12 +176,40 @@ export type RuntimeConfig = Readonly<z.infer<typeof runtimeEnvSchema>>;
 export type GeminiConfig = Readonly<z.infer<typeof geminiEnvSchema>>;
 export type RazorpayCredentials = Readonly<z.infer<typeof razorpayCredentialsSchema>>;
 export type RazorpayConfig = Readonly<z.infer<typeof razorpayEnvSchema>>;
+export type RazorpayWebhookConfig = Readonly<z.infer<typeof razorpayWebhookSchema>>;
 export type DatabaseConfig = Readonly<z.infer<typeof databaseEnvSchema>>;
 export type CatalogConfig = Readonly<z.infer<typeof catalogEnvSchema>>;
 export type QuoteConfig = Readonly<z.infer<typeof quoteEnvSchema>>;
 export type ApprovalConfig = Readonly<z.infer<typeof approvalEnvSchema>>;
 export type ReservationConfig = Readonly<z.infer<typeof reservationEnvSchema>>;
 export type AppSecretConfig = Readonly<z.infer<typeof appSecretEnvSchema>>;
+
+/**
+ * Describes one failed variable without ever quoting its value.
+ *
+ * Naming the variable alone is not always enough. A value that is present but
+ * breaks a rule reports identically to one that was never set, so an operator
+ * reading "RAZORPAY_KEY_ID" concludes the variable did not save, sets the same
+ * rejected value again, and learns nothing. That is a poor failure mode for a
+ * configuration error and a genuinely dangerous one for a safety rule.
+ *
+ * Two things are therefore added, both value-free:
+ *
+ *  - `missing` versus `invalid`, decided by whether the variable is present in
+ *    the environment at all.
+ *  - For a `custom` issue - a `.refine()` in this file - the message we wrote
+ *    ourselves. Only `custom` qualifies, deliberately: Zod's built-in messages
+ *    can echo the received value (an enum mismatch quotes what it got), and no
+ *    validator in this file may print a secret. Our own refine messages are
+ *    static strings written here, so they cannot contain one.
+ */
+function describeIssue(issue: z.core.$ZodIssue, source: EnvSource): string {
+  const name = String(issue.path[0] ?? "<unknown>");
+  if (issue.code === "custom") {
+    return `${name} (${issue.message})`;
+  }
+  return source[name] === undefined ? `${name} (missing)` : `${name} (invalid)`;
+}
 
 function parseSection<TSchema extends z.ZodType>(
   schema: TSchema,
@@ -162,9 +223,12 @@ function parseSection<TSchema extends z.ZodType>(
         parsed.error.issues.map((issue) => String(issue.path[0] ?? "<unknown>")),
       ),
     ].sort();
+    const described = [
+      ...new Set(parsed.error.issues.map((issue) => describeIssue(issue, source))),
+    ].sort();
     throw new ConfigurationError({
       code: "CONFIG_INVALID",
-      message: `Invalid or missing ${sectionName} configuration: ${variableNames.join(", ")}. See .env.example.`,
+      message: `Invalid or missing ${sectionName} configuration: ${described.join(", ")}. See .env.example.`,
       details: { section: sectionName, variables: variableNames },
     });
   }
@@ -223,6 +287,16 @@ export function getRazorpayCredentials(
   );
 }
 
+/**
+ * The webhook secret alone. Called only by the inbound webhook verifier, on the
+ * server, at the moment a signature is checked. Never returned or logged.
+ */
+export function getRazorpayWebhookConfig(
+  source: EnvSource = currentEnv(),
+): RazorpayWebhookConfig {
+  return Object.freeze(parseSection(razorpayWebhookSchema, "Razorpay webhook", source));
+}
+
 /** PostgreSQL connection. Called only by the Prisma persistence boundary. */
 export function getDatabaseConfig(source: EnvSource = currentEnv()): DatabaseConfig {
   return Object.freeze(parseSection(databaseEnvSchema, "database", source));
@@ -256,12 +330,18 @@ export function getAppSecretConfig(source: EnvSource = currentEnv()): AppSecretC
 }
 
 export type OptionalConfigSection =
-  "gemini" | "razorpay" | "razorpayCredentials" | "database" | "appSecret";
+  | "gemini"
+  | "razorpay"
+  | "razorpayCredentials"
+  | "razorpayWebhook"
+  | "database"
+  | "appSecret";
 
 const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
   gemini: geminiEnvSchema,
   razorpay: razorpayEnvSchema,
   razorpayCredentials: razorpayCredentialsSchema,
+  razorpayWebhook: razorpayWebhookSchema,
   database: databaseEnvSchema,
   appSecret: appSecretEnvSchema,
 };

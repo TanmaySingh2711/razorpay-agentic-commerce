@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { assertServerOnly } from "@/lib/server-only";
-import { getRazorpayCredentials } from "@/config/env";
+import { getRazorpayCredentials, getRazorpayWebhookConfig } from "@/config/env";
 import { createLogger } from "@/lib/logger";
 import type {
   CheckoutSignatureInput,
+  WebhookSignatureInput,
   PaymentOrderRequest,
   PaymentProvider,
   ProviderFailure,
@@ -85,6 +86,14 @@ const razorpayErrorSchema = z.object({
 export interface RazorpayProviderOptions {
   readonly keyId: string;
   readonly keySecret: string;
+  /**
+   * The webhook secret, supplied instead of read from configuration.
+   *
+   * Separate from `keySecret` because they are separate credentials, and
+   * optional because outbound calls never need it. Tests pass it so a signature
+   * check can be proved against a known secret without an environment.
+   */
+  readonly webhookSecret?: string;
   readonly baseUrl?: string;
   readonly timeoutMs?: number;
   /** Injected in tests so no HTTP stack is involved. */
@@ -217,6 +226,32 @@ export function createRazorpayProvider(
 
       const expected = createHmac("sha256", credentials.RAZORPAY_KEY_SECRET)
         .update(`${input.serverStoredOrderId}|${input.providerPaymentId}`, "utf8")
+        .digest();
+      const received = Buffer.from(input.signature, "hex");
+
+      if (received.length !== expected.length) return false;
+      return timingSafeEqual(expected, received);
+    },
+
+    verifyWebhookSignature(input: WebhookSignatureInput): boolean {
+      // Same digest shape as a checkout signature, and rejected the same way:
+      // `Buffer.from(x, "hex")` truncates malformed input rather than refusing
+      // it, so anything that is not 64 hex characters is turned away here.
+      if (!/^[0-9a-f]{64}$/i.test(input.signature)) return false;
+
+      // The webhook secret, not the API key secret. Razorpay issues these
+      // separately - one authenticates us to them, this one authenticates them
+      // to us - and it is read lazily so a deployment without a webhook
+      // configured still creates orders.
+      const expected = createHmac(
+        "sha256",
+        options?.webhookSecret ?? getRazorpayWebhookConfig().RAZORPAY_WEBHOOK_SECRET,
+      )
+        // The body exactly as received. Razorpay's documentation is explicit:
+        // "Do not parse or cast the webhook request body." The provider signed
+        // bytes, and two payloads can be equal as objects while differing as
+        // bytes - key order, whitespace, unicode escaping.
+        .update(input.rawBody, "utf8")
         .digest();
       const received = Buffer.from(input.signature, "hex");
 

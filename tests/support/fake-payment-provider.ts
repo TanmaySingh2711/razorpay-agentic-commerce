@@ -1,5 +1,6 @@
 import type {
   CheckoutSignatureInput,
+  WebhookSignatureInput,
   PaymentOrderRequest,
   PaymentProvider,
   ProviderLookupOutcome,
@@ -28,6 +29,8 @@ export interface FakePaymentProvider extends PaymentProvider {
   readonly lookupReceipts: string[];
   /** Every signature check, so a test can assert which order id was used. */
   readonly verifyInputs: CheckoutSignatureInput[];
+  /** Every webhook check, so a test can assert the raw body was passed through. */
+  readonly webhookInputs: WebhookSignatureInput[];
 }
 
 export interface FakePaymentProviderOptions {
@@ -39,6 +42,14 @@ export interface FakePaymentProviderOptions {
    * HMAC is proved against the real adapter, not against this.
    */
   readonly onVerify?: (input: CheckoutSignatureInput) => boolean;
+  /**
+   * Decides webhook signature checks. Defaults to **rejecting**, the opposite
+   * of `onVerify`, because a suite that forgets to arrange authentication must
+   * fail rather than silently reconcile an unauthenticated event. Verification
+   * is the whole control here; defaulting it open would make the tests that
+   * matter most vacuous.
+   */
+  readonly onVerifyWebhook?: (input: WebhookSignatureInput) => boolean;
   /** Fixes the order id, instead of issuing a distinct one per creation. */
   readonly providerOrderId?: string;
 }
@@ -60,6 +71,7 @@ export function fakePaymentProvider(
   const createRequests: PaymentOrderRequest[] = [];
   const lookupReceipts: string[] = [];
   const verifyInputs: CheckoutSignatureInput[] = [];
+  const webhookInputs: WebhookSignatureInput[] = [];
   const store = new Map<string, ProviderOrder>();
   let issued = 0;
   const nextOrderId = (): string => {
@@ -75,6 +87,7 @@ export function fakePaymentProvider(
     createRequests,
     lookupReceipts,
     verifyInputs,
+    webhookInputs,
 
     createOrder(request) {
       createRequests.push(request);
@@ -112,6 +125,11 @@ export function fakePaymentProvider(
     verifyCheckoutSignature(input) {
       verifyInputs.push(input);
       return options.onVerify?.(input) ?? true;
+    },
+
+    verifyWebhookSignature(input) {
+      webhookInputs.push(input);
+      return options.onVerifyWebhook?.(input) ?? false;
     },
   };
 }

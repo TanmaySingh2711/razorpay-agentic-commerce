@@ -46,16 +46,16 @@ repository today.**
 
 ### Required later — validated lazily, at the point of use
 
-| Variable                  | Needed by                                                                                        | Server-only     |
-| ------------------------- | ------------------------------------------------------------------------------------------------ | --------------- |
-| `GEMINI_API_KEY`          | Gemini Provider Adapter (server-only; never a NEXT_PUBLIC_* variable)                            | yes             |
-| `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.6-flash`)                                         | yes             |
-| `RAZORPAY_KEY_ID`         | Razorpay adapter; sent to the browser for Standard Checkout                                      | server-supplied |
-| `RAZORPAY_KEY_SECRET`     | Razorpay adapter, signature verification                                                         | yes             |
-| `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                             | yes             |
-| `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                   | yes             |
-| `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled | yes             |
-| `APP_SECRET`              | Session and CSRF signing. Minimum 32 characters                                                  | yes             |
+| Variable                  | Needed by                                                                                                                     | Server-only     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `GEMINI_API_KEY`          | Gemini Provider Adapter (server-only; never a NEXT_PUBLIC_* variable)                                                         | yes             |
+| `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.6-flash`)                                                                      | yes             |
+| `RAZORPAY_KEY_ID`         | Razorpay adapter; sent to the browser for Standard Checkout. Must be a Test Mode (`rzp_test_`) key id — a live key is refused | server-supplied |
+| `RAZORPAY_KEY_SECRET`     | Razorpay adapter, signature verification                                                                                      | yes             |
+| `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                                                          | yes             |
+| `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                                                | yes             |
+| `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled                              | yes             |
+| `APP_SECRET`              | Session and CSRF signing. Minimum 32 characters                                                                               | yes             |
 
 `getGeminiConfig()`, `getRazorpayConfig()`, `getRazorpayCredentials()`,
 `getDatabaseConfig()`, `getCatalogConfig()` and
@@ -75,13 +75,35 @@ in a degraded state that silently skips a control.
 `isSectionConfigured()` answers "is this feature available?" without throwing —
 useful for a demo that wants to show a disabled state.
 
+## Test Mode is enforced, not requested
+
+`RAZORPAY_KEY_ID` must begin with `rzp_test_`. This application moves no real
+money, and a live key would make that statement false everywhere at once — so
+the rule is a validation rather than a note in this file. The smoke scripts
+already refused to run against a live key; the configuration boundary now
+refuses too, which matters more, because the scripts are a path a developer
+takes deliberately while the config boundary is the path every deployed request
+takes. The refusal names the variable and the mode, never the key.
+
+See [26 — Staging deployment](./26-staging-deployment.md) for the deployed
+variable set.
+
 ## Secrets never leak through config errors
 
-Validation failures report variable **names** only:
+Validation failures report variable **names**, plus why each one failed — never
+a value:
 
 ```
-Invalid or missing Razorpay configuration: RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET. See .env.example.
+Invalid or missing Razorpay configuration: RAZORPAY_KEY_SECRET (missing), RAZORPAY_WEBHOOK_SECRET (missing). See .env.example.
+Invalid or missing Razorpay credentials configuration: RAZORPAY_KEY_ID (must be a Razorpay Test Mode key id (rzp_test_...). This application must never run against live credentials.). See .env.example.
 ```
+
+`(missing)` and `(invalid)` distinguish a variable that was never set from one
+that is set but breaks a rule — a distinction worth making, because without it a
+refused live key reads as "the variable did not save" and the operator sets the
+same value again. A rule written in this repository, such as the Test Mode
+check, states itself. Zod's own messages never do: they can quote the value they
+received, so they collapse to `(invalid)`.
 
 A test asserts that a configured secret value appears in neither the message nor
 the log payload. No variable is ever prefixed `NEXT_PUBLIC_`, so nothing here is

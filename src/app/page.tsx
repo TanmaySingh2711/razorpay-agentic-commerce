@@ -74,7 +74,20 @@ export default function HomePage() {
           never the one the browser sent back
         </li>
         <li>
-          <strong>Transaction lifecycle through PAYMENT_VERIFIED</strong> — every state
+          <strong>Verified provider webhooks</strong> — capture is confirmed by Razorpay,
+          not by the browser: the raw body is authenticated with a timing-safe HMAC before
+          it is even parsed, and the delivery id is claimed in the same database
+          transaction as its effects, so a redelivery changes nothing and a failure can
+          still be retried
+        </li>
+        <li>
+          <strong>Payment reconciliation</strong> — the amount the provider reports is
+          checked against the persisted quote before anything moves, and events are
+          handled in any order: a capture that arrives before the browser returns is
+          reconciled, and a late failure can never undo one
+        </li>
+        <li>
+          <strong>Transaction lifecycle through PAYMENT_CAPTURED</strong> — every state
           change goes through one state machine, with an immutable history of how the
           transaction got there
         </li>
@@ -82,15 +95,17 @@ export default function HomePage() {
 
       <h2>Where this stops, deliberately</h2>
       <p>
-        A verified signature proves the payment confirmation is genuine and belongs to
-        this order. It is <strong>not</strong> proof that funds were captured, and it is
-        not fulfilment. So the lifecycle ends at <code>PAYMENT_VERIFIED</code>: stock
-        stays reserved rather than sold, and no transaction is marked complete.
+        A verified signature proves a payment confirmation is genuine and belongs to this
+        order. It is <strong>not</strong> proof that funds were captured — only the
+        provider can assert that, and only through a webhook this server authenticates
+        itself. So <code>PAYMENT_VERIFIED</code> and <code>PAYMENT_CAPTURED</code> stay
+        separate states, reached by different evidence.
       </p>
       <p>
-        Confirming capture is the payment provider&apos;s job to assert, not the
-        browser&apos;s. Webhook verification, payment reconciliation, inventory commit and
-        final completion are later objectives and are not implemented here.
+        Captured is still not finished. The lifecycle ends at{" "}
+        <code>PAYMENT_CAPTURED</code>: stock stays reserved rather than sold, and no
+        transaction is marked complete. Inventory commit and final completion are later
+        objectives and are not implemented here.
       </p>
 
       <footer>

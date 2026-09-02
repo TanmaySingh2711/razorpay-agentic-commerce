@@ -229,6 +229,24 @@ const paymentPayload = z.strictObject({
   /** Why the server declined before any provider call was made. */
   refusal: shortCode.optional(),
   operationId: identifier.optional(),
+  /**
+   * The provider's own identifier for one webhook delivery.
+   *
+   * Recorded so a delivery in a provider dashboard can be lined up against
+   * what this system did with it. It is an opaque reference, not a credential,
+   * and it is never used to authenticate anything.
+   */
+  providerEventId: providerReference.optional(),
+  /**
+   * What the provider said the amount was, recorded only when it disagreed
+   * with the trusted quote.
+   *
+   * Kept beside `amountMinor` - which is always ours - so a reader can see both
+   * numbers and which one the system believed. The provider's figure is
+   * evidence in the record; it is never the amount anything is decided on.
+   */
+  observedAmountMinor: minorAmount.optional(),
+  observedCurrency: currency.optional(),
 });
 
 const genericPayload = z.strictObject({
@@ -278,6 +296,9 @@ const PAYLOAD_SCHEMAS: Record<AuditEventType, z.ZodType> = {
   payment_failed: paymentPayload,
   webhook_received: paymentPayload,
   webhook_rejected: paymentPayload,
+  webhook_duplicate: paymentPayload,
+  webhook_ignored: paymentPayload,
+  webhook_mismatch: paymentPayload,
   state_transitioned: transitionPayload,
   transaction_completed: genericPayload,
   transaction_blocked: genericPayload,
