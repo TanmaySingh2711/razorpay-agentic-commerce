@@ -59,6 +59,19 @@ export interface TransactionOverview {
   /** ACTIVE, RELEASED, COMMITTED or EXPIRED - whatever the hold actually is. */
   readonly reservationStatus: string | null;
   readonly reservationExpiresAt: string | null;
+  /**
+   * True only when the reservation both reads ACTIVE and has not yet reached
+   * its own `expiresAt`, judged against this read's own clock.
+   *
+   * `reservationStatus` alone is not enough for a page to decide whether Pay
+   * can legally proceed: expiry is swept lazily, by the next reservation
+   * attempt for the same product, not by this read, so a lapsed hold can still
+   * carry the column value ACTIVE for a while. This field is what makes the
+   * page's own idea of "still held" agree with what `createPaymentOrder` and
+   * `startCheckout` will actually accept, rather than a page computing that
+   * itself with its own clock read.
+   */
+  readonly reservationHeld: boolean;
   /** Server-computed. The page never works out retry eligibility itself. */
   readonly retry: RetryStatusDto | null;
   readonly timeline: readonly AuditTimelineEntry[];
@@ -162,6 +175,10 @@ export async function loadTransactionOverview(
         : null,
     reservationStatus: reservation?.status ?? null,
     reservationExpiresAt: reservation?.expiresAt.toISOString() ?? null,
+    reservationHeld:
+      reservation !== null &&
+      reservation.status === "ACTIVE" &&
+      reservation.expiresAt.getTime() > now.getTime(),
     retry,
     timeline,
   };

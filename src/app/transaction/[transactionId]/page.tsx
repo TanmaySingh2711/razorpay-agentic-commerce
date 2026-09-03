@@ -254,6 +254,30 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
   }
 
   if (state === "INVENTORY_RESERVED" || state === "PAYMENT_ORDER_CREATED") {
+    // Pressing Pay from INVENTORY_RESERVED now prepares the Razorpay order
+    // itself before starting checkout (see PayButton), so that step is legal
+    // exactly when the stock hold is still genuinely active -
+    // `overview.reservationHeld`, computed server-side against the same clock
+    // `createPaymentOrder` and `startCheckout` will judge it by, rather than by
+    // this page reading its own. The quote only still needs to be valid before
+    // an order is created; once one exists, its amount is already fixed and
+    // the quote's later fate no longer decides whether checkout may start.
+    const paymentPreparable =
+      overview.reservationHeld &&
+      (state === "PAYMENT_ORDER_CREATED" || overview.quoteUsable);
+
+    if (!paymentPreparable) {
+      return (
+        <section className="card action" aria-labelledby="pay-heading">
+          <h2 id="pay-heading">Payment</h2>
+          <p role="status" className="field-error">
+            This item is no longer held for you, or its price is no longer valid. Start a
+            new purchase to try again.
+          </p>
+        </section>
+      );
+    }
+
     return (
       <section className="card action" aria-labelledby="pay-heading">
         <h2 id="pay-heading">Payment</h2>

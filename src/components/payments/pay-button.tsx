@@ -154,6 +154,37 @@ export function PayButton({
             });
             return;
           }
+        } else {
+          // A first payment needs its Razorpay order created before a checkout
+          // session can be started for it - the same two-step shape RETRY uses
+          // above, just without a prior failure to gate it. This is the step
+          // that used to be missing entirely: the item card offers Pay as soon
+          // as the hold succeeds (state INVENTORY_RESERVED), but nothing had
+          // ever asked the server to create the order that session depends on,
+          // so `startCheckout` below found none and refused every click with a
+          // generic "not ready" - even though the hold and the quote were both
+          // still perfectly good.
+          //
+          // Safe to call unconditionally: the server's claim is idempotent and
+          // converges on an order that already exists rather than creating a
+          // second one, so this is a no-op on a retried click or a refreshed
+          // page that is already past this state.
+          setPhase({ kind: "PREPARING" });
+          const prepared = await postJson<{ kind: string; refusal?: string }>(
+            "/api/payments/order",
+            { transactionId },
+          );
+          if (prepared.data?.kind !== "ORDER_CREATED") {
+            setPhase({
+              kind: "PROBLEM",
+              message:
+                prepared.data?.refusal === "RESERVATION_EXPIRED" ||
+                prepared.data?.refusal === "NO_ACTIVE_RESERVATION"
+                  ? "This item is no longer held for you. Please start again."
+                  : "We could not prepare this payment just now. Please try again in a moment.",
+            });
+            return;
+          }
         }
 
         setPhase({ kind: "PREPARING" });
