@@ -76,7 +76,27 @@ describe("provider configuration", () => {
 
   it("applies a default model while still demanding a real API key", () => {
     const config = getGeminiConfig({ GEMINI_API_KEY: "placeholder-not-a-real-key" });
-    expect(config.GEMINI_MODEL).toBe("gemini-3.6-flash");
+    expect(config.GEMINI_MODEL).toBe("gemini-3.5-flash-lite");
+  });
+
+  it("defaults the thinking level to minimal, the latency-oriented setting", () => {
+    const config = getGeminiConfig({ GEMINI_API_KEY: "placeholder-not-a-real-key" });
+    expect(config.GEMINI_THINKING_LEVEL).toBe("minimal");
+  });
+
+  it("accepts an explicit thinking level and rejects an unsupported one", () => {
+    const raised = getGeminiConfig({
+      GEMINI_API_KEY: "placeholder-not-a-real-key",
+      GEMINI_THINKING_LEVEL: "high",
+    });
+    expect(raised.GEMINI_THINKING_LEVEL).toBe("high");
+
+    expect(() =>
+      getGeminiConfig({
+        GEMINI_API_KEY: "placeholder-not-a-real-key",
+        GEMINI_THINKING_LEVEL: "maximum-overdrive",
+      }),
+    ).toThrow(ConfigurationError);
   });
 });
 

@@ -12,7 +12,8 @@ The earlier roadmap named Anthropic. That is no longer the runtime provider.
 | Provider    | Google Gemini Developer API                                    |
 | SDK         | [`@google/genai`](https://www.npmjs.com/package/@google/genai) |
 | API surface | Interactions API — `client.interactions.create()`              |
-| Model       | `GEMINI_MODEL` (default `gemini-3.6-flash`)                    |
+| Model       | `GEMINI_MODEL` (default `gemini-3.5-flash-lite`)               |
+| Thinking    | `GEMINI_THINKING_LEVEL` (default `minimal`)                    |
 | Credential  | `GEMINI_API_KEY`                                               |
 
 Both values are read **only** through the config boundary in
@@ -22,6 +23,14 @@ boots and tests without a key. The key is server-only: it is never a
 never included in a response. The Anthropic configuration section has been
 removed rather than left as misleading dead config — no Anthropic credential is
 required anywhere.
+
+`gemini-3.5-flash-lite` and `thinking_level: "minimal"` are the production
+defaults, chosen for latency: this is a synchronous request inside a user's
+browser session, and `gemini-3.6-flash` was repeatedly observed reaching the
+full per-attempt timeout in production. Nothing in the Buyer Agent's own work
+benefits from extended hidden reasoning — intent extraction and product
+selection are schema-constrained, catalog access is tool-constrained, and
+every financial decision is deterministic and made outside the model.
 
 The model id is configuration, not a constant. It appears in exactly one place
 so switching models is an environment change, not a code change.

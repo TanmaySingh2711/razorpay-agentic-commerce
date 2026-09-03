@@ -22,14 +22,14 @@ not configured.
 
 ## Platform and runtime
 
-| Concern      | Choice                                                                  |
-| ------------ | ----------------------------------------------------------------------- |
-| Platform     | Vercel, deploying automatically from `main`                             |
-| Framework    | Next.js App Router                                                      |
-| Node runtime | Node.js 24                                                              |
-| Database     | Neon PostgreSQL through Prisma ORM, over Neon's pooled endpoint         |
-| AI provider  | Google Gemini, `gemini-3.6-flash`, through the provider-neutral adapter |
-| Payments     | Razorpay **Test Mode**, through the payment-provider adapter            |
+| Concern      | Choice                                                                       |
+| ------------ | ---------------------------------------------------------------------------- |
+| Platform     | Vercel, deploying automatically from `main`                                  |
+| Framework    | Next.js App Router                                                           |
+| Node runtime | Node.js 24                                                                   |
+| Database     | Neon PostgreSQL through Prisma ORM, over Neon's pooled endpoint              |
+| AI provider  | Google Gemini, `gemini-3.5-flash-lite`, through the provider-neutral adapter |
+| Payments     | Razorpay **Test Mode**, through the payment-provider adapter                 |
 
 Every API route declares `runtime = "nodejs"` and `dynamic = "force-dynamic"`.
 Both are load-bearing rather than habitual. The routes use Node built-ins that
@@ -46,7 +46,8 @@ Names only. Values live in the hosting dashboard and in the git-ignored
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`            | **Pooled** PostgreSQL connection. Serverless invocations would exhaust a database's connection limit over a direct endpoint.                                                                                                                                      |
 | `GEMINI_API_KEY`          | Gemini credentials. Server-only.                                                                                                                                                                                                                                  |
-| `GEMINI_MODEL`            | Pinned to `gemini-3.6-flash` for staging consistency.                                                                                                                                                                                                             |
+| `GEMINI_MODEL`            | Pinned to `gemini-3.5-flash-lite` for staging consistency.                                                                                                                                                                                                        |
+| `GEMINI_THINKING_LEVEL`   | Pinned to `minimal`, the latency-oriented production setting.                                                                                                                                                                                                     |
 | `RAZORPAY_KEY_ID`         | Test Mode key id. Reaches the browser only through the checkout session DTO.                                                                                                                                                                                      |
 | `RAZORPAY_KEY_SECRET`     | Test Mode key secret. Server-only, without qualification.                                                                                                                                                                                                         |
 | `RAZORPAY_WEBHOOK_SECRET` | Authenticates inbound Razorpay webhooks. A different credential from the key secret: that one authenticates us to Razorpay, this one authenticates Razorpay to us. Server-only, and validated as its own section so a deployment without it still creates orders. |

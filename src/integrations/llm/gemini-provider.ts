@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { assertServerOnly } from "@/lib/server-only";
 import { getGeminiConfig } from "@/config/env";
+import type { GeminiThinkingLevel } from "@/config/env";
 import {
   AiProviderAuthError,
   AiProviderInvalidResponseError,
@@ -46,6 +47,11 @@ import type {
  *    would silently multiply every attempt our own bounded policy makes, and
  *    the combined behaviour would be untestable. Retry lives in one place, in
  *    the agent service, where it is deterministic.
+ *  - `generation_config: { thinking_level }`. Every call declares how much
+ *    hidden reasoning the model may spend before answering. The Buyer Agent's
+ *    own tasks are schema- or tool-constrained and every financial decision is
+ *    made deterministically outside the model, so the production default is
+ *    `minimal` - see `GEMINI_THINKING_LEVEL` in `@/config/env`.
  *
  * ## How a tool conversation is continued
  *
@@ -225,10 +231,14 @@ function translateProviderError(error: unknown, correlationId: string): Error {
   return new AiProviderUnavailableError(details);
 }
 
+/** The production default: no benefit from extended hidden reasoning here, only latency it would spend. */
+export const DEFAULT_THINKING_LEVEL: GeminiThinkingLevel = "minimal";
+
 export interface GeminiProviderOptions {
   readonly apiKey: string;
   readonly modelId: string;
   readonly timeoutMs?: number;
+  readonly thinkingLevel?: GeminiThinkingLevel;
 }
 
 /**
@@ -240,6 +250,7 @@ export interface GeminiProviderOptions {
 export function createGeminiProvider(options: GeminiProviderOptions): AiProvider {
   const client = new GoogleGenAI({ apiKey: options.apiKey });
   const timeoutMs = options.timeoutMs ?? GEMINI_TIMEOUT_MS;
+  const thinkingLevel = options.thinkingLevel ?? DEFAULT_THINKING_LEVEL;
 
   /**
    * Per-call request options, so an `abortSignal` the caller supplies genuinely
@@ -286,6 +297,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
             input: request.userMessage,
             system_instruction: request.systemInstruction,
             store: false,
+            generation_config: { thinking_level: thinkingLevel },
             ...(request.responseSchema === undefined
               ? {}
               : {
@@ -340,6 +352,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
             model: options.modelId,
             system_instruction: request.systemInstruction,
             store: false,
+            generation_config: { thinking_level: thinkingLevel },
             // The SDK types `input` as its own step union. Every item here is
             // either a text item or one of those very steps handed straight
             // back, so the cast asserts a round trip rather than inventing a
@@ -375,5 +388,6 @@ export function defaultGeminiProvider(): AiProvider {
   return createGeminiProvider({
     apiKey: config.GEMINI_API_KEY,
     modelId: config.GEMINI_MODEL,
+    thinkingLevel: config.GEMINI_THINKING_LEVEL,
   });
 }

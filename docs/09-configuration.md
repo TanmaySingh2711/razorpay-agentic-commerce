@@ -49,7 +49,8 @@ repository today.**
 | Variable                  | Needed by                                                                                                                     | Server-only     |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | `GEMINI_API_KEY`          | Gemini Provider Adapter (server-only; never a NEXT_PUBLIC_* variable)                                                         | yes             |
-| `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.6-flash`)                                                                      | yes             |
+| `GEMINI_MODEL`            | Gemini Provider Adapter (defaults to `gemini-3.5-flash-lite`)                                                                 | yes             |
+| `GEMINI_THINKING_LEVEL`   | Gemini Provider Adapter (defaults to `minimal`)                                                                               | yes             |
 | `RAZORPAY_KEY_ID`         | Razorpay adapter; sent to the browser for Standard Checkout. Must be a Test Mode (`rzp_test_`) key id — a live key is refused | server-supplied |
 | `RAZORPAY_KEY_SECRET`     | Razorpay adapter, signature verification                                                                                      | yes             |
 | `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                                                          | yes             |

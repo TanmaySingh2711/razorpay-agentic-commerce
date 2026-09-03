@@ -192,7 +192,7 @@ function reportSchemaIssues(
 
 async function stagedPass(): Promise<void> {
   const apiKey = process.env["GEMINI_API_KEY"] ?? "";
-  const modelId = process.env["GEMINI_MODEL"] ?? "gemini-3.6-flash";
+  const modelId = process.env["GEMINI_MODEL"] ?? "gemini-3.5-flash-lite";
   const provider = createGeminiProvider({ apiKey, modelId, timeoutMs: 30_000 });
   const catalog = createServiceCatalogReader();
 
@@ -354,7 +354,7 @@ async function main(): Promise<void> {
 
   console.log("Buyer Agent live smoke test (read-only)");
   console.log("  provider : gemini (@google/genai)");
-  console.log(`  model    : ${process.env["GEMINI_MODEL"] ?? "gemini-3.6-flash"}`);
+  console.log(`  model    : ${process.env["GEMINI_MODEL"] ?? "gemini-3.5-flash-lite"}`);
   console.log("  key      : present (never printed)");
   console.log("  catalog  : the configured hosted database (never printed)");
   console.log(`  prompt   : ${PROMPT}\n`);

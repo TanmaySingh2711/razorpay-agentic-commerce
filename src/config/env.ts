@@ -37,12 +37,34 @@ const runtimeEnvSchema = z.object({
  *
  * `GEMINI_MODEL` is configuration rather than a constant scattered through the
  * source: changing model must be an environment decision, not a code change in
- * several files at once.
+ * several files at once. The production default is `gemini-3.5-flash-lite`,
+ * chosen for latency: the Buyer Agent is a synchronous request inside a user's
+ * browser session, and `gemini-3.6-flash` was repeatedly observed in
+ * production reaching the full 30-second per-attempt ceiling, leaving no room
+ * for a retry inside the overall request budget.
+ *
+ * `GEMINI_THINKING_LEVEL` bounds how much hidden reasoning the model performs
+ * before answering, using the Interactions API's `generation_config.thinking_level`.
+ * The Buyer Agent's own work is schema-constrained (intent extraction, product
+ * selection) or tool-constrained (catalog access), and every financial
+ * decision is deterministic and made outside the model entirely - so there is
+ * nothing here that benefits from extended hidden reasoning, only latency it
+ * would spend. `minimal` is the default and the intended production value;
+ * the variable exists so a deployment can raise it deliberately without a code
+ * change, not because a higher value is expected to be needed.
  */
+const geminiThinkingLevelSchema = z
+  .enum(["minimal", "low", "medium", "high"])
+  .default("minimal");
+
 const geminiEnvSchema = z.object({
   GEMINI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().min(1).max(100).default("gemini-3.6-flash"),
+  GEMINI_MODEL: z.string().min(1).max(100).default("gemini-3.5-flash-lite"),
+  GEMINI_THINKING_LEVEL: geminiThinkingLevelSchema,
 });
+
+/** The Interactions API's supported `generation_config.thinking_level` values. */
+export type GeminiThinkingLevel = z.infer<typeof geminiThinkingLevelSchema>;
 
 /**
  * The API credentials the Razorpay adapter authenticates with.

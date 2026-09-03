@@ -55,7 +55,7 @@ function fail(message: string): never {
 
 async function main(): Promise<void> {
   const apiKey = process.env["GEMINI_API_KEY"];
-  const modelId = process.env["GEMINI_MODEL"] ?? "gemini-3.6-flash";
+  const modelId = process.env["GEMINI_MODEL"] ?? "gemini-3.5-flash-lite";
 
   if (apiKey === undefined || apiKey.length === 0) {
     console.log("GEMINI_API_KEY is not set. Skipping the live smoke test.");
