@@ -241,11 +241,25 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
   const client = new GoogleGenAI({ apiKey: options.apiKey });
   const timeoutMs = options.timeoutMs ?? GEMINI_TIMEOUT_MS;
 
-  const requestOptions = {
-    timeout_ms: timeoutMs,
-    // Our own bounded policy owns retrying; see the note at the top.
-    retries: { strategy: "none" } as const,
-  };
+  /**
+   * Per-call request options, so an `abortSignal` the caller supplies genuinely
+   * cancels this specific call's underlying HTTP request rather than a fixed
+   * option baked in once for every call this provider instance ever makes.
+   *
+   * `timeout_ms` stays as the SDK's own floor even when a signal is present:
+   * the SDK's documented behaviour is that an explicit `signal` takes
+   * precedence, so ours firing earlier (a caller with less than
+   * `GEMINI_TIMEOUT_MS` of its own budget left) still wins, while `timeout_ms`
+   * remains a backstop if no signal is supplied at all.
+   */
+  function requestOptionsFor(abortSignal: AbortSignal | undefined) {
+    return {
+      timeout_ms: timeoutMs,
+      // Our own bounded policy owns retrying; see the note at the top.
+      retries: { strategy: "none" } as const,
+      ...(abortSignal === undefined ? {} : { signal: abortSignal }),
+    };
+  }
 
   const toResponse = (
     interaction: GeminiInteractionLike,
@@ -285,7 +299,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
               ? {}
               : { tools: [...(toGeminiTools(request.tools) ?? [])] }),
           },
-          requestOptions,
+          requestOptionsFor(request.abortSignal),
         );
         return toResponse(interaction as GeminiInteractionLike, inputItems);
       } catch (error) {
@@ -345,7 +359,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
               ? {}
               : { tools: [...(toGeminiTools(request.tools) ?? [])] }),
           },
-          requestOptions,
+          requestOptionsFor(request.abortSignal),
         );
         return toResponse(interaction as GeminiInteractionLike, inputItems);
       } catch (error) {

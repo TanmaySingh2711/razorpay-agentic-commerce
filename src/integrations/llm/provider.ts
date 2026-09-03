@@ -74,6 +74,15 @@ export interface AiGenerationRequest {
   readonly tools?: readonly AiToolDeclaration[];
   /** Correlates provider logs with the agent run. Never the user's prompt. */
   readonly correlationId: string;
+  /**
+   * Bounds this one call. When present, an implementation must wire it into
+   * whatever cancels its own underlying network request - Gemini's adapter
+   * aborts the HTTP call itself - so that a caller giving up on this attempt
+   * genuinely stops it rather than merely stops awaiting it. Provider-neutral
+   * on purpose: `AbortSignal` is a web standard, not a Gemini concept, so this
+   * interface still names no vendor.
+   */
+  readonly abortSignal?: AbortSignal;
 }
 
 /**
@@ -103,6 +112,8 @@ export interface AiToolResponseRequest {
   readonly responseSchema?: JsonObject;
   readonly tools?: readonly AiToolDeclaration[];
   readonly correlationId: string;
+  /** See `AiGenerationRequest.abortSignal`. Bounds this one continuation call. */
+  readonly abortSignal?: AbortSignal;
 }
 
 /**

@@ -89,6 +89,35 @@ export class AiProviderInvalidResponseError extends ProviderError {
   }
 }
 
+/**
+ * The request's own execution budget ran out before another provider attempt
+ * could be started.
+ *
+ * Distinct from `AiProviderTimeoutError`: that one means a single call to the
+ * provider took too long. This one means the *request as a whole* - every
+ * attempt and every tool-loop turn combined - has already spent enough
+ * wall-clock time that starting another call could not realistically finish
+ * before the hosting platform would kill the function outright. Refusing here
+ * and returning this instead is strictly better than letting that happen: the
+ * caller gets an error it can show a person and classify in a log, instead of
+ * a connection the platform simply dropped.
+ *
+ * Not retryable. The request has already run out of the time it was given;
+ * trying again immediately would not change that.
+ */
+export class AiProviderRequestBudgetExceededError extends ProviderError {
+  constructor(details: JsonObject = {}) {
+    super({
+      code: "AI_PROVIDER_REQUEST_BUDGET_EXCEEDED",
+      message:
+        "The request's execution budget was exhausted before the provider could be tried again.",
+      publicMessage: "The assistant took too long to respond. Please try again.",
+      details,
+      retryable: false,
+    });
+  }
+}
+
 /** The model kept calling tools and never produced an answer. */
 export class AiProviderToolLoopLimitError extends ProviderError {
   constructor(limit: number, details: JsonObject = {}) {

@@ -13,7 +13,21 @@ import { BuyerConsole } from "@/components/buyer/buyer-console";
  * The page itself is a server component holding no state. The one interactive
  * element is the console, which sends a sentence to a server action and renders
  * what comes back.
+ *
+ * `maxDuration` bounds that server action (`submitRequest`, in
+ * `src/app/actions/purchase.ts`), which is where it invokes the Buyer Agent.
+ * Next.js reads a Server Action's execution limit from the route segment that
+ * invokes it, not from the action's own file, so it is declared here.
+ *
+ * 60 is a deliberate application-level cap, not a hosting platform ceiling -
+ * the current hosting tier supports materially longer executions than this.
+ * It exists so this file states, verifiably, the longest this action is ever
+ * meant to run, and the agent's own worst case is kept under it - see
+ * `OVERALL_REQUEST_BUDGET_MS` in `buyer-agent-service.ts` - so that cap is
+ * never the thing a slow request actually meets.
  */
+export const maxDuration = 60;
+
 export const metadata = {
   title: "Razorpay Agentic Commerce — buy something",
   description:

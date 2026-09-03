@@ -21,6 +21,7 @@ import {
 } from "@/domain/buyer-agent/validation";
 import {
   AiProviderInvalidResponseError,
+  AiProviderRequestBudgetExceededError,
   AiProviderToolLoopLimitError,
   InvalidBuyerRequestError,
   InvalidModelSelectionError,
@@ -39,7 +40,10 @@ import {
   createServiceCatalogReader,
   type CatalogReader,
 } from "@/services/buyer-agent/catalog-reader";
-import { defaultGeminiProvider } from "@/integrations/llm/gemini-provider";
+import {
+  defaultGeminiProvider,
+  GEMINI_TIMEOUT_MS,
+} from "@/integrations/llm/gemini-provider";
 import { isAppError } from "@/domain/errors";
 import type { AppError } from "@/domain/errors";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
@@ -92,6 +96,43 @@ export const MAX_PROVIDER_ATTEMPTS = 3;
 /** Base backoff between provider attempts, in milliseconds. */
 export const RETRY_BASE_DELAY_MS = 250;
 
+/**
+ * The whole request's wall-clock budget, shared across every provider call -
+ * intent extraction and every tool-loop turn alike.
+ *
+ * This is what was missing when a production request timed out twice (60s of
+ * Gemini alone) and was then simply never heard from again: three retries of
+ * a `GEMINI_TIMEOUT_MS` call is already up to 90 seconds for *one* provider
+ * call, and the tool loop can make up to `MAX_TOOL_ITERATIONS + 1` such calls
+ * - a worst case with no ceiling of its own, that this application's own
+ * `maxDuration` (set on the page and route that invoke this agent) would
+ * eventually meet first. When that happens the platform kills the function
+ * outright: no error reaches this code, nothing is logged, and the caller
+ * sees a dropped connection instead of a classified failure.
+ *
+ * Sized with margin below `maxDuration` (60s - a deliberate application-level
+ * cap this project chose, not an assumed hosting limit) for the deterministic
+ * work either side of the agent and for general overhead, while still
+ * leaving room for a genuine retry after one full-length timeout: see
+ * `withRetry`, which checks this budget before every attempt (not only
+ * between them, so it also covers time already spent by an earlier stage of
+ * the same request) and shrinks a retry's own allowance to whatever remains
+ * rather than requiring the full `GEMINI_TIMEOUT_MS` every time.
+ */
+export const OVERALL_REQUEST_BUDGET_MS = 50_000;
+
+/**
+ * The least time an attempt needs left in the budget to be worth starting.
+ *
+ * Below this, a call is more likely to be cut off mid-flight than to finish,
+ * so refusing outright and returning a clean, classified error is the more
+ * honest answer than spending the wait anyway. Chosen as a plausible fast
+ * success - most Gemini calls that succeed at all do so in a few seconds -
+ * not as a fraction of `GEMINI_TIMEOUT_MS`: this is a floor on "is trying at
+ * all worthwhile", a different question from "how long may this attempt run".
+ */
+export const MIN_ATTEMPT_BUDGET_MS = 5_000;
+
 export interface BuyerAgentRequest {
   readonly message: string;
   /** Supplied by tests to make retry timing and ids deterministic. */
@@ -114,6 +155,43 @@ const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Runs `operation` under an attempt's own abort-backed budget.
+ *
+ * `operation` receives an `AbortSignal` and must pass it into the provider
+ * call it makes (`AiGenerationRequest.abortSignal` /
+ * `AiToolResponseRequest.abortSignal`), so that when `budgetMs` elapses the
+ * *underlying network request is genuinely cancelled* - not merely stopped
+ * being awaited. Racing `operation()` against a timer alone would let a
+ * losing call keep running in the background: real quota still spent, a real
+ * connection still held open, past the budget that was supposed to bound it.
+ * Aborting is what actually stops it, and it is the provider's own
+ * translation of that abort (a real cancelled fetch, or - in a deterministic
+ * test - a fake that honours the same signal) that produces the eventual
+ * `AiProviderTimeoutError`, not this function synthesising one of its own.
+ *
+ * Real `setTimeout`, never the injected `sleep` - that hook exists to skip
+ * *backoff* waiting in tests and answers a different question (how long
+ * between attempts), not this one (how long is this attempt itself allowed to
+ * run). A test that needs this to fire deterministically uses
+ * `vi.useFakeTimers()` and advances the clock itself.
+ *
+ * The timer is always cleared once `operation` settles, whichever came first,
+ * so no timer and no in-flight abort ever outlives one attempt.
+ */
+async function withAttemptBudget<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  budgetMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), budgetMs);
+  try {
+    return await operation(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Runs one provider call with a bounded retry policy.
  *
  * Only errors the taxonomy marks `retryable` are retried — timeouts, rate
@@ -123,18 +201,58 @@ const defaultSleep = (ms: number): Promise<void> =>
  *
  * Backoff is exponential with jitter, so several concurrent agent runs hitting
  * the same rate limit do not retry in lockstep.
+ *
+ * `deadlineAt` is the second bound, checked *before* every attempt, including
+ * the first of this call: a request that arrives here having already spent
+ * most of its budget on an earlier stage must refuse just as readily as one
+ * that has spent it all on this stage's own retries. Below
+ * `MIN_ATTEMPT_BUDGET_MS` remaining, refusing outright -
+ * `AiProviderRequestBudgetExceededError`, never silence - is the honest
+ * answer.
+ *
+ * Between those two floors, an attempt's own allowed duration is
+ * `min(GEMINI_TIMEOUT_MS, remaining)`, not always the full
+ * `GEMINI_TIMEOUT_MS`. This is deliberate: requiring a full, untouched
+ * `GEMINI_TIMEOUT_MS` of remaining budget before ever allowing a retry meant
+ * that one genuine full-length timeout - the single most common transient
+ * failure this policy exists to survive - left too little of a 50-second
+ * budget for a second attempt to ever legally start, so the "bounded retry"
+ * a timeout is marked eligible for never actually happened. Capping the
+ * *retry's* window to whatever remains instead gives it a real, if shorter,
+ * chance - the first attempt of any call still gets the full
+ * `GEMINI_TIMEOUT_MS`, unchanged, so ordinary single-attempt reliability is
+ * untouched; only a retry's own ceiling shrinks, and only when the budget
+ * genuinely demands it. Every attempt, including the first, runs under
+ * `withAttemptBudget`, so that ceiling is always backed by a real abort, not
+ * only the provider's own configured worst case.
  */
 async function withRetry<T>(
-  operation: () => Promise<T>,
+  operation: (signal: AbortSignal) => Promise<T>,
   deps: BuyerAgentDeps,
   correlationId: string,
+  deadlineAt: number,
 ): Promise<T> {
   const sleep = deps.sleep ?? defaultSleep;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs < MIN_ATTEMPT_BUDGET_MS) {
+      log.warn("ai provider attempt skipped, request budget exhausted", {
+        correlationId,
+        attempt,
+        remainingMs: Math.max(0, remainingMs),
+      });
+      throw new AiProviderRequestBudgetExceededError({
+        correlationId,
+        attempt,
+        ...(isAppError(lastError) ? { lastErrorCode: (lastError as AppError).code } : {}),
+      });
+    }
+    const attemptBudgetMs = Math.min(GEMINI_TIMEOUT_MS, remainingMs);
+
     try {
-      return await operation();
+      return await withAttemptBudget(operation, attemptBudgetMs);
     } catch (error) {
       lastError = error;
       const retryable = isAppError(error) && (error as AppError).retryable;
@@ -175,17 +293,20 @@ async function extractIntent(
   message: string,
   deps: BuyerAgentDeps,
   correlationId: string,
+  deadlineAt: number,
 ): Promise<StructuredPurchaseIntent> {
   const response = await withRetry(
-    () =>
+    (signal) =>
       deps.provider.generate({
         systemInstruction: INTENT_EXTRACTION_INSTRUCTION,
         userMessage: message,
         responseSchema: INTENT_RESPONSE_JSON_SCHEMA as unknown as JsonObject,
         correlationId,
+        abortSignal: signal,
       }),
     deps,
     correlationId,
+    deadlineAt,
   );
 
   // Validated locally even though the provider was given the schema. Provider
@@ -242,6 +363,7 @@ async function runToolLoop(
   intent: StructuredPurchaseIntent,
   deps: BuyerAgentDeps,
   correlationId: string,
+  deadlineAt: number,
 ): Promise<ToolLoopOutcome> {
   const observed = new Map<string, CatalogProductDto>();
   let toolCallCount = 0;
@@ -252,16 +374,18 @@ async function runToolLoop(
   ].join("\n\n");
 
   let response = await withRetry(
-    () =>
+    (signal) =>
       deps.provider.generate({
         systemInstruction: PRODUCT_SELECTION_INSTRUCTION,
         userMessage,
         responseSchema: SELECTION_RESPONSE_JSON_SCHEMA as unknown as JsonObject,
         tools: CATALOG_TOOL_DECLARATIONS,
         correlationId,
+        abortSignal: signal,
       }),
     deps,
     correlationId,
+    deadlineAt,
   );
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
@@ -308,7 +432,7 @@ async function runToolLoop(
     }
 
     response = await withRetry(
-      () =>
+      (signal) =>
         deps.provider.continueWithToolResults({
           providerStateRef: response.providerStateRef,
           systemInstruction: PRODUCT_SELECTION_INSTRUCTION,
@@ -316,9 +440,11 @@ async function runToolLoop(
           responseSchema: SELECTION_RESPONSE_JSON_SCHEMA as unknown as JsonObject,
           tools: CATALOG_TOOL_DECLARATIONS,
           correlationId,
+          abortSignal: signal,
         }),
       deps,
       correlationId,
+      deadlineAt,
     );
   }
 
@@ -341,6 +467,10 @@ export async function runBuyerAgent(
 ): Promise<BuyerAgentDecision> {
   const correlationId = request.correlationId ?? (deps.newCorrelationId ?? randomUUID)();
   const startedAt = Date.now();
+  // One deadline for the whole run, shared by every provider call this request
+  // makes - intent extraction and every tool-loop turn alike. See
+  // `OVERALL_REQUEST_BUDGET_MS`.
+  const deadlineAt = startedAt + OVERALL_REQUEST_BUDGET_MS;
 
   const message = request.message.trim();
   if (message.length === 0) {
@@ -360,7 +490,7 @@ export async function runBuyerAgent(
   });
 
   try {
-    const intent = await extractIntent(message, deps, correlationId);
+    const intent = await extractIntent(message, deps, correlationId, deadlineAt);
 
     // --- Lock the user's authority. Nothing after this may widen it. ---
     const budget =
@@ -427,7 +557,7 @@ export async function runBuyerAgent(
     }
 
     // --- Catalog exploration, bounded. ---
-    const loop = await runToolLoop(message, intent, deps, correlationId);
+    const loop = await runToolLoop(message, intent, deps, correlationId, deadlineAt);
 
     const parsedSelection = modelSelectionSchema.safeParse(
       parseModelJson(loop.text, correlationId),

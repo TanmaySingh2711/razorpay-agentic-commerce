@@ -1,3 +1,4 @@
+import { AiProviderTimeoutError } from "@/domain/buyer-agent/errors";
 import { AppError } from "@/domain/errors";
 import { CatalogProductNotFoundError } from "@/domain/catalog/errors";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
@@ -32,6 +33,20 @@ export interface ScriptedTurn {
   readonly toolCalls?: readonly { name: string; args: Record<string, unknown> }[];
   /** Thrown instead of answering, to simulate a provider failure. */
   readonly error?: Error;
+  /**
+   * Simulated wall-clock milliseconds this turn "takes" to answer.
+   *
+   * Modelled as a real `setTimeout` (so a test controls it with
+   * `vi.useFakeTimers()` plus `vi.advanceTimersByTimeAsync()`, never a real
+   * wait), and raced against the request's own `abortSignal` when the caller
+   * supplies one - exactly what a real provider call does against a real
+   * cancelled fetch. If the signal fires first, this turn never settles on
+   * its own account; the call rejects with `AiProviderTimeoutError`, the same
+   * classification an aborted live call would produce. Omitted (the default,
+   * every turn in every test that does not need this), a turn resolves on the
+   * same microtask as before - no timer, no signal, no behaviour change.
+   */
+  readonly elapsedMs?: number;
 }
 
 export interface FakeProviderOptions {
@@ -55,26 +70,68 @@ export function createFakeAiProvider(options: FakeProviderOptions): FakeAiProvid
   const requests: (AiGenerationRequest | AiToolResponseRequest)[] = [];
   let index = 0;
 
-  const next = (): AiGenerationResponse => {
+  const next = (abortSignal?: AbortSignal): Promise<AiGenerationResponse> => {
     const turn =
       options.turns[Math.min(index, options.turns.length - 1)] ??
       ({ text: null } satisfies ScriptedTurn);
     index += 1;
 
-    if (turn.error !== undefined) throw turn.error;
-
-    return {
-      text: turn.text ?? null,
-      toolCalls: (turn.toolCalls ?? []).map((call, position) => ({
-        id: `call-${String(index)}-${String(position)}`,
-        name: call.name,
-        arguments: call.args as never,
-      })),
-      // Opaque to everything above the adapter, so a fake has to say so too.
-      // The recognisable value is deliberate: a test asserts it never appears
-      // in a decision, which is how "provider state does not leak" is checked.
-      providerStateRef: `interaction-${String(index)}` as unknown as AiProviderStateRef,
+    const produce = (): AiGenerationResponse => {
+      if (turn.error !== undefined) throw turn.error;
+      return {
+        text: turn.text ?? null,
+        toolCalls: (turn.toolCalls ?? []).map((call, position) => ({
+          id: `call-${String(index)}-${String(position)}`,
+          name: call.name,
+          arguments: call.args as never,
+        })),
+        // Opaque to everything above the adapter, so a fake has to say so
+        // too. The recognisable value is deliberate: a test asserts it never
+        // appears in a decision, which is how "provider state does not leak"
+        // is checked.
+        providerStateRef: `interaction-${String(index)}` as unknown as AiProviderStateRef,
+      };
     };
+
+    if (turn.elapsedMs === undefined) {
+      // No simulated delay: nothing for an abort to race against, so this
+      // stays exactly the previous, instant behaviour.
+      return Promise.resolve().then(produce);
+    }
+
+    // A real timer, genuinely raced against a real abort signal - modelling
+    // what an actual cancelled fetch does, not merely what the caller stops
+    // awaiting. `vi.useFakeTimers()` plus `vi.advanceTimersByTimeAsync()` in
+    // the test drives both without any real wait.
+    return new Promise<AiGenerationResponse>((resolve, reject) => {
+      let settled = false;
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(
+          new AiProviderTimeoutError({
+            reason: "aborted before the scripted turn settled",
+          }),
+        );
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        abortSignal?.removeEventListener("abort", onAbort);
+        try {
+          resolve(produce());
+        } catch (error) {
+          reject(error as Error);
+        }
+      }, turn.elapsedMs);
+
+      if (abortSignal?.aborted === true) {
+        onAbort();
+        return;
+      }
+      abortSignal?.addEventListener("abort", onAbort, { once: true });
+    });
   };
 
   return {
@@ -84,13 +141,13 @@ export function createFakeAiProvider(options: FakeProviderOptions): FakeAiProvid
     callCount: () => index,
     generate(request: AiGenerationRequest): Promise<AiGenerationResponse> {
       requests.push(request);
-      return Promise.resolve(next());
+      return next(request.abortSignal);
     },
     continueWithToolResults(
       request: AiToolResponseRequest,
     ): Promise<AiGenerationResponse> {
       requests.push(request);
-      return Promise.resolve(next());
+      return next(request.abortSignal);
     },
   };
 }
