@@ -69,11 +69,20 @@ REQUEST TYPE
 - PURCHASE: they asked to buy ("find one under ₹3000 and buy it").
 
 REQUIREMENTS
-- hardRequirements are non-negotiable: "must be mechanical", "must have
-  Bluetooth", "75% layout".
+- hardRequirements are non-negotiable: "must have Bluetooth", "75% layout",
+  "linear switches only".
 - softPreferences are wishes: "prefer black", "ideally wireless", "I like RGB".
 - Use the attribute vocabulary the catalog uses where you can infer it, for
-  example switchType, layout, connectivity, colour, backlight.
+  example switchType, layout, connectivity, colour, backlight. switchType names
+  a specific switch feel - "linear-red", "tactile-brown", "clicky-blue" - never
+  the literal word "mechanical".
+- A general product type the shopper names - "mechanical keyboard", "gaming
+  keyboard" - is not itself a checkable attribute value unless you saw that
+  exact value in a tool result. If a catalog already sells only that type, the
+  word is satisfied automatically and needs no hardRequirement at all; do not
+  invent one on switchType, category or any other attribute just to represent
+  it, because a value the catalog never uses can never match and every product
+  will be refused.
 
 CLARIFICATION
 Set needsClarification and ask one short question when acting would require

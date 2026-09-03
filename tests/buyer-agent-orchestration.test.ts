@@ -293,6 +293,72 @@ describe("product id provenance, end to end", () => {
   });
 });
 
+describe("a hard requirement the catalog vocabulary can never satisfy", () => {
+  /**
+   * Reproduces a live production failure: `AI_INVALID_SELECTION` for exactly
+   * this message, correlationId `4deaefa2-770a-4d1b-9afb-5f67039ce881`.
+   *
+   * The intent-extraction instructions used to offer "must be mechanical" as
+   * the canonical hardRequirements example. This catalog sells nothing but
+   * mechanical keyboards and names its switchType attribute "linear-red",
+   * "tactile-brown", "clicky-blue" - never the literal word "mechanical" - so
+   * a model that reasonably encoded "mechanical keyboard" as a hardRequirement
+   * on switchType produced a value no real product's attribute ever holds.
+   * Every candidate then failed the deterministic gate, however well it
+   * otherwise fit the request.
+   *
+   * The instructions no longer invite this (see instructions.ts), but that is
+   * advisory, not enforcement: the fix under test here is that the
+   * deterministic gate goes on refusing an unsatisfiable requirement exactly
+   * as before - hard-requirement enforcement is not weakened to accommodate a
+   * model's mistake. The fixture below uses the catalog's real attribute
+   * vocabulary (matching `productDto`'s own default) rather than the
+   * unrealistic `switchType: "mechanical"` the fixtures above use, which is
+   * precisely what let this exact scenario pass in-suite while failing live.
+   */
+  const REALISTIC_KEYBOARD = productDto({
+    id: "01930000-0000-7000-8000-00000000a001",
+    name: "Aurora TKL",
+    amount: { amountMinor: "279900", currency: "INR" },
+    attributes: { switchType: "linear-red", layout: "tkl-87", connectivity: "wired" },
+  });
+
+  it("still refuses the selection, and now names the failing check safely", async () => {
+    const error = await captureError(
+      runBuyerAgent(
+        { message: MESSAGE },
+        deps(
+          [
+            {
+              text: intentJson({
+                hardRequirements: [
+                  { attribute: "switchType", operator: "EQUALS", value: "mechanical" },
+                ],
+              }),
+            },
+            { toolCalls: [SEARCH_CALL] },
+            {
+              text: selectionJson({
+                selectedProductId: REALISTIC_KEYBOARD.id,
+                reasonCodes: ["WITHIN_BUDGET", "MATCHES_REQUIRED_ATTRIBUTE"],
+              }),
+            },
+          ],
+          [REALISTIC_KEYBOARD],
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(InvalidModelSelectionError);
+    expect(error.code).toBe("AI_INVALID_SELECTION");
+    expect(error.message).toContain("does not meet a required attribute: switchType");
+    // The safe, closed reason code that makes this diagnosable from the
+    // operational log alone - never the model's text, never a prompt, never a
+    // catalog payload.
+    expect(error.details["reasonCode"]).toBe("HARD_REQUIREMENT_UNMET");
+  });
+});
+
 describe("a model-invented price has no authority", () => {
   it("ignores extra fields the model attaches to its answer", async () => {
     // The model claims the product costs ₹1. There is no field for it, and the

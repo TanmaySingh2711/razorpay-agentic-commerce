@@ -224,6 +224,24 @@ describe("the instructions leak nothing", () => {
     expect(INTENT_EXTRACTION_INSTRUCTION).toContain("BUDGET IS ABSOLUTE");
   });
 
+  it("never invites a hardRequirement the catalog vocabulary cannot satisfy", () => {
+    // A production failure (AI_INVALID_SELECTION): this instruction used to
+    // offer "must be mechanical" as its hardRequirements example. Every
+    // product in this catalog is a mechanical keyboard whose switchType names
+    // a specific feel ("linear-red", "tactile-brown", "clicky-blue") - never
+    // the literal word "mechanical" - so a model following that example
+    // produced a requirement no real product could ever satisfy, and every
+    // candidate was refused. This locks in the fix at the source: the
+    // instruction must not hand the model that example again, and must say
+    // plainly that switchType names a specific feel, never "mechanical".
+    expect(INTENT_EXTRACTION_INSTRUCTION).not.toContain("must be mechanical");
+    // Whitespace-normalised: the instruction wraps across lines, and the
+    // property under test is the words appearing in order, not the exact
+    // line breaks.
+    const normalised = INTENT_EXTRACTION_INSTRUCTION.replace(/\s+/g, " ").toLowerCase();
+    expect(normalised).toContain('never the literal word "mechanical"');
+  });
+
   it("never asks the model to explain its private reasoning", () => {
     const lowered = instructions.toLowerCase();
     for (const phrase of [

@@ -140,6 +140,13 @@ export class InvalidToolArgumentsError extends ValidationError {
  * and a product that breaks the user's explicit budget. Both mean the proposal
  * is discarded — never repaired. Silently correcting a financial value would
  * hide exactly the failure this error exists to surface.
+ *
+ * Callers should pass `reasonCode` (a `SelectionRejectionReason`, from
+ * `src/domain/buyer-agent/validation.ts`) in `details`. The code alone,
+ * `AI_INVALID_SELECTION`, does not distinguish a hallucinated id from an
+ * over-budget pick from an unmet requirement — indistinguishable in the
+ * operational log without it, and a live rerun was once the only way to tell
+ * them apart.
  */
 export class InvalidModelSelectionError extends ValidationError {
   constructor(reason: string, details: JsonObject = {}) {

@@ -32,13 +32,38 @@ export interface LockedUserAuthority {
   readonly category: string | null;
 }
 
+/**
+ * Which deterministic check a rejected selection failed.
+ *
+ * A closed vocabulary, safe to log and safe to hand to an operator: it names
+ * the check, never the model's text, the catalog payload, or a prompt. Without
+ * it, an `AI_INVALID_SELECTION` failure was diagnosable only by reproducing the
+ * exact request against a live model - this is what lets a future occurrence
+ * be read straight off the operational log instead.
+ */
+export const SELECTION_REJECTION_REASONS = [
+  "PRODUCT_NOT_OBSERVED",
+  "PRODUCT_NOT_PURCHASABLE",
+  "INSUFFICIENT_STOCK",
+  "QUANTITY_MISMATCH",
+  "CURRENCY_MISMATCH",
+  "OVER_BUDGET",
+  "HARD_REQUIREMENT_UNMET",
+] as const;
+
+export type SelectionRejectionReason = (typeof SELECTION_REJECTION_REASONS)[number];
+
 export type SelectionValidation =
   | {
       readonly kind: "VALID";
       readonly product: CatalogProductDto;
       readonly reasonCodes: readonly DecisionReasonCode[];
     }
-  | { readonly kind: "REJECTED"; readonly reason: string };
+  | {
+      readonly kind: "REJECTED";
+      readonly reason: string;
+      readonly reasonCode: SelectionRejectionReason;
+    };
 
 /**
  * Whether a catalog product satisfies one hard requirement.
@@ -119,6 +144,7 @@ export function validateSelection(
     return {
       kind: "REJECTED",
       reason: "the selected product was never returned by a catalog search",
+      reasonCode: "PRODUCT_NOT_OBSERVED",
     };
   }
 
@@ -129,7 +155,11 @@ export function validateSelection(
   //    rather than assuming: a defence that only exists one layer up is a
   //    defence that disappears when that layer is refactored.
   if (!product.availability.purchasable) {
-    return { kind: "REJECTED", reason: "the selected product is not purchasable" };
+    return {
+      kind: "REJECTED",
+      reason: "the selected product is not purchasable",
+      reasonCode: "PRODUCT_NOT_PURCHASABLE",
+    };
   }
   reasonCodes.push("IN_STOCK");
 
@@ -139,6 +169,7 @@ export function validateSelection(
       kind: "REJECTED",
       reason:
         "the selected product does not have enough stock for the requested quantity",
+      reasonCode: "INSUFFICIENT_STOCK",
     };
   }
   if (quantity > 1) reasonCodes.push("SUFFICIENT_INVENTORY");
@@ -149,6 +180,7 @@ export function validateSelection(
     return {
       kind: "REJECTED",
       reason: "the proposed quantity does not match the quantity the user asked for",
+      reasonCode: "QUANTITY_MISMATCH",
     };
   }
 
@@ -160,12 +192,14 @@ export function validateSelection(
       return {
         kind: "REJECTED",
         reason: "the selected product is priced in a different currency to the budget",
+        reasonCode: "CURRENCY_MISMATCH",
       };
     }
     if (!isWithinBudget(product, authority.maxAmountMinor, authority.currency)) {
       return {
         kind: "REJECTED",
         reason: "the selected product costs more than the user's stated maximum",
+        reasonCode: "OVER_BUDGET",
       };
     }
     reasonCodes.push("WITHIN_BUDGET");
@@ -179,6 +213,7 @@ export function validateSelection(
       reason: `the selected product does not meet a required attribute: ${unmet
         .map((requirement) => requirement.attribute)
         .join(", ")}`,
+      reasonCode: "HARD_REQUIREMENT_UNMET",
     };
   }
   if (authority.hardRequirements.length > 0) {

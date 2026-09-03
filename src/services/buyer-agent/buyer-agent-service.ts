@@ -489,7 +489,10 @@ export async function runBuyerAgent(
     );
     if (validation.kind === "REJECTED") {
       // Never repaired. A financial proposal that fails validation is discarded.
-      throw new InvalidModelSelectionError(validation.reason, { correlationId });
+      throw new InvalidModelSelectionError(validation.reason, {
+        correlationId,
+        reasonCode: validation.reasonCode,
+      });
     }
 
     const decision: BuyerAgentDecision = {
@@ -522,6 +525,15 @@ export async function runBuyerAgent(
     log.error("buyer agent failed", {
       correlationId,
       code: isAppError(error) ? (error as AppError).code : "UNEXPECTED_ERROR",
+      // A closed, safe code naming *which* deterministic check failed - never
+      // the model's text, a prompt, or a catalog payload. Present only on
+      // AI_INVALID_SELECTION today; absent (never fabricated) for every other
+      // error. Without this, that one code told an operator nothing beyond
+      // "the model proposed something the server refused" - identical for a
+      // hallucinated id, an over-budget pick, and an unmet requirement.
+      ...(isAppError(error) && typeof error.details["reasonCode"] === "string"
+        ? { reasonCode: error.details["reasonCode"] }
+        : {}),
       durationMs: Date.now() - startedAt,
     });
     throw error;
