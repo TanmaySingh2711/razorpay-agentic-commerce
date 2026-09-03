@@ -22,6 +22,7 @@ import {
 import {
   AiProviderInvalidResponseError,
   AiProviderRequestBudgetExceededError,
+  AiProviderTimeoutError,
   AiProviderToolLoopLimitError,
   InvalidBuyerRequestError,
   InvalidModelSelectionError,
@@ -98,7 +99,7 @@ export const RETRY_BASE_DELAY_MS = 250;
 
 /**
  * The whole request's wall-clock budget, shared across every provider call -
- * intent extraction and every tool-loop turn alike.
+ * intent extraction, every tool-loop turn, and every continuation alike.
  *
  * This is what was missing when a production request timed out twice (60s of
  * Gemini alone) and was then simply never heard from again: three retries of
@@ -110,16 +111,27 @@ export const RETRY_BASE_DELAY_MS = 250;
  * outright: no error reaches this code, nothing is logged, and the caller
  * sees a dropped connection instead of a classified failure.
  *
- * Sized with margin below `maxDuration` (60s - a deliberate application-level
- * cap this project chose, not an assumed hosting limit) for the deterministic
- * work either side of the agent and for general overhead, while still
- * leaving room for a genuine retry after one full-length timeout: see
- * `withRetry`, which checks this budget before every attempt (not only
+ * A first fix bounded this with an `AbortSignal` alone, trusting the provider
+ * to honour it promptly. A production request still hit the platform's 60s
+ * kill after that fix shipped: aborting a request and *waiting for the
+ * provider to notice* are two different guarantees, and nothing enforced the
+ * second one - if the SDK's own cancellation plumbing is slow, buffered
+ * behind an internal retry, or simply does not propagate the way this file
+ * assumed, the abort is real but `await`ing its effect is not bounded on its
+ * own. `withAttemptBudget` now races the operation against its own timer
+ * regardless of whether the provider ever notices the abort, so this budget
+ * is enforced by this process, not requested of a dependency.
+ *
+ * Sized with substantial margin below `maxDuration` (60s - a deliberate
+ * application-level cap this project chose, not an assumed hosting limit):
+ * about 18 seconds of headroom for error translation, the Server Action's own
+ * catch, RSC serialisation and response delivery, none of which this budget
+ * itself accounts for. `withRetry` checks it before every attempt (not only
  * between them, so it also covers time already spent by an earlier stage of
  * the same request) and shrinks a retry's own allowance to whatever remains
  * rather than requiring the full `GEMINI_TIMEOUT_MS` every time.
  */
-export const OVERALL_REQUEST_BUDGET_MS = 50_000;
+export const OVERALL_REQUEST_BUDGET_MS = 42_000;
 
 /**
  * The least time an attempt needs left in the budget to be worth starting.
@@ -155,40 +167,91 @@ const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Runs `operation` under an attempt's own abort-backed budget.
+ * Runs `operation` under an attempt's own budget - enforced by this process,
+ * never merely requested of the provider.
  *
- * `operation` receives an `AbortSignal` and must pass it into the provider
- * call it makes (`AiGenerationRequest.abortSignal` /
- * `AiToolResponseRequest.abortSignal`), so that when `budgetMs` elapses the
- * *underlying network request is genuinely cancelled* - not merely stopped
- * being awaited. Racing `operation()` against a timer alone would let a
- * losing call keep running in the background: real quota still spent, a real
- * connection still held open, past the budget that was supposed to bound it.
- * Aborting is what actually stops it, and it is the provider's own
- * translation of that abort (a real cancelled fetch, or - in a deterministic
- * test - a fake that honours the same signal) that produces the eventual
- * `AiProviderTimeoutError`, not this function synthesising one of its own.
+ * Two things happen when `budgetMs` elapses, and only the first is a
+ * courtesy:
+ *
+ *  1. `operation`'s own `AbortSignal` is aborted - the cooperative path, and
+ *     the one that actually cancels a well-behaved provider's real network
+ *     request (`AiGenerationRequest.abortSignal` /
+ *     `AiToolResponseRequest.abortSignal`), so quota stops being spent and
+ *     the connection is released.
+ *  2. This function settles anyway, immediately, whether or not that abort
+ *     was ever honoured.
+ *
+ * That second half is load-bearing, and its absence is exactly what let a
+ * production request run past this budget and into the hosting platform's
+ * own 60-second kill: a version of this function that only aborted and then
+ * `await`ed `operation()` directly was betting the whole request's execution
+ * time on the provider noticing the signal promptly. Nothing in the
+ * `AbortSignal` contract guarantees that - a slow SDK, a proxy that buffers
+ * the underlying connection, or an internal retry the abort does not reach
+ * are all real ways for a provider to keep running regardless of being told
+ * to stop. This budget must hold even against a provider that ignores
+ * cancellation entirely, so it is enforced by a second, independent
+ * mechanism rather than requested once and trusted.
+ *
+ * The abandoned operation, if it settles later, is never used: a stale
+ * response is discarded (the Buyer Agent is read-only, so nothing it could
+ * still do would mutate anything), and a stale rejection is swallowed rather
+ * than left an unhandled promise rejection - both handled by the no-op
+ * `.then` attached once this function has already returned.
  *
  * Real `setTimeout`, never the injected `sleep` - that hook exists to skip
  * *backoff* waiting in tests and answers a different question (how long
  * between attempts), not this one (how long is this attempt itself allowed to
  * run). A test that needs this to fire deterministically uses
- * `vi.useFakeTimers()` and advances the clock itself.
- *
- * The timer is always cleared once `operation` settles, whichever came first,
- * so no timer and no in-flight abort ever outlives one attempt.
+ * `vi.useFakeTimers()` and drives it with `vi.advanceTimersByTimeAsync()`.
  */
-async function withAttemptBudget<T>(
+function withAttemptBudget<T>(
   operation: (signal: AbortSignal) => Promise<T>,
   budgetMs: number,
+  correlationId: string,
 ): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), budgetMs);
-  try {
-    return await operation(controller.signal);
-  } finally {
-    clearTimeout(timer);
-  }
+  const attempt = operation(controller.signal);
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      log.warn("ai provider attempt aborted, attempt budget elapsed", {
+        correlationId,
+        budgetMs,
+      });
+      // 1. Ask the provider to stop. Best-effort; not trusted.
+      controller.abort();
+      // 2. Settle this attempt right now regardless. The budget is a hard
+      //    ceiling on this attempt, not a request the provider may decline.
+      reject(new AiProviderTimeoutError({ correlationId, attemptBudgetMs: budgetMs }));
+      // 3. Whatever the abandoned operation eventually does - resolve,
+      //    reject, or never settle at all - must never surface here and must
+      //    never become an unhandled rejection.
+      attempt.then(
+        () => {},
+        () => {},
+      );
+    }, budgetMs);
+
+    attempt.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error as Error);
+      },
+    );
+  });
 }
 
 /**
@@ -250,9 +313,10 @@ async function withRetry<T>(
       });
     }
     const attemptBudgetMs = Math.min(GEMINI_TIMEOUT_MS, remainingMs);
+    log.info("ai provider attempt started", { correlationId, attempt, attemptBudgetMs });
 
     try {
-      return await withAttemptBudget(operation, attemptBudgetMs);
+      return await withAttemptBudget(operation, attemptBudgetMs, correlationId);
     } catch (error) {
       lastError = error;
       const retryable = isAppError(error) && (error as AppError).retryable;
@@ -261,12 +325,24 @@ async function withRetry<T>(
       }
       const backoff = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
       const jitter = Math.floor(Math.random() * RETRY_BASE_DELAY_MS);
+      // Capped to whatever budget remains: backing off is only ever meant to
+      // space attempts out, never to spend time the request does not have.
+      // The next iteration's own check refuses cleanly either way, but a
+      // request that already knows it has nothing left must not additionally
+      // sleep through the time it would have used to say so.
+      const cappedBackoff = Math.max(
+        0,
+        Math.min(backoff + jitter, deadlineAt - Date.now()),
+      );
       log.warn("ai provider attempt failed, retrying", {
         correlationId,
         attempt,
         code: (error as AppError).code,
+        backoffMs: cappedBackoff,
       });
-      await sleep(backoff + jitter);
+      if (cappedBackoff > 0) {
+        await sleep(cappedBackoff);
+      }
     }
   }
 
@@ -393,6 +469,18 @@ async function runToolLoop(
       return { text: response.text, observed, toolCallCount };
     }
 
+    // Checked before spending any time executing tools, not only before the
+    // next provider call: a budget already too low for another provider call
+    // is too low for the continuation those tools exist to feed, so nothing
+    // is gained by running them first and refusing afterward.
+    if (deadlineAt - Date.now() < MIN_ATTEMPT_BUDGET_MS) {
+      log.warn("tool execution skipped, request budget exhausted", { correlationId });
+      throw new AiProviderRequestBudgetExceededError({
+        correlationId,
+        stage: "tool_execution",
+      });
+    }
+
     const results: AiToolResult[] = [];
     for (const call of response.toolCalls) {
       toolCallCount += 1;
@@ -487,6 +575,7 @@ export async function runBuyerAgent(
     provider: deps.provider.providerName,
     model: deps.provider.modelId,
     requestLength: message.length,
+    overallBudgetMs: OVERALL_REQUEST_BUDGET_MS,
   });
 
   try {
