@@ -152,11 +152,14 @@ function webhookDeps(): WebhookServiceDeps {
 }
 
 function retryDeps(prisma: PrismaClient = testDb()): RetryServiceDeps {
+  const quote = { prisma, clock, ttlSeconds: QUOTE_TTL_SECONDS };
   return {
     prisma,
     clock,
     provider,
     reservation: { prisma, clock, ttlSeconds: RESERVATION_TTL_SECONDS },
+    quote,
+    policy: { prisma, clock, quote },
   };
 }
 
@@ -727,48 +730,72 @@ describe.skipIf(!databaseConfigured)(
     // -------------------------------------------------------------------------
 
     describe("when the financial facts change before a retry", () => {
-      it("refuses rather than charging the old or the new price", async () => {
+      it("re-quotes at the new price and continues the retry, rather than charging the old price or refusing outright", async () => {
         const arranged = await arrangeFailed();
+        const NEW_PRICE = 199_900n;
 
         // The merchant repriced. Version is bumped exactly as the catalog does.
+        // Not a stale quote yet by its own clock - `assessQuote` reports it
+        // invalid because the product moved underneath it, which is exactly
+        // the case a controlled retry must repair rather than merely refuse.
         await testDb().product.update({
           where: { id: arranged.productId },
-          data: { unitAmount: 199_900n, version: { increment: 1 } },
+          data: { unitAmount: NEW_PRICE, version: { increment: 1 } },
         });
 
-        const denied = await requestPaymentRetry(
+        const result = await requestPaymentRetry(
           { transactionId: arranged.transactionId },
           retryDeps(),
         );
-        expect(denied.kind).toBe("DENIED");
-        if (denied.kind !== "DENIED") throw new Error("unreachable");
-        expect(denied.denial).toBe("FINANCIAL_FACTS_CHANGED");
-        expect(denied.reasons).toContain("PRICE_CHANGED");
-        expect(denied.reasons).toContain("PRODUCT_VERSION_CHANGED");
+        expect(result.kind).toBe("RETRY_STARTED");
+        if (result.kind !== "RETRY_STARTED") throw new Error("unreachable");
+        expect(result.amount.amountMinor).toBe(NEW_PRICE.toString());
+        expect(result.attemptNumber).toBe(2);
 
-        // No attempt, no order, and - the point of the scenario - no silent
-        // reprice: the historical quote still records the amount that was
-        // actually offered.
-        expect(await attemptsOf(arranged.transactionId)).toHaveLength(1);
-        const quote = await testDb().purchaseQuote.findUniqueOrThrow({
+        // A second attempt exists; the first is untouched.
+        const attempts = await attemptsOf(arranged.transactionId);
+        expect(attempts).toHaveLength(2);
+        expect(attempts[0]?.amount).toBe(PRICE);
+        expect(attempts[1]?.amount).toBe(NEW_PRICE);
+        // A new provider order every time - never the first attempt's.
+        expect(attempts[1]?.providerOrderId).not.toBe(arranged.providerOrderId);
+
+        // The original quote is superseded, never edited: it still records the
+        // price actually offered when it was live.
+        const oldQuote = await testDb().purchaseQuote.findUniqueOrThrow({
           where: { id: arranged.quoteId },
         });
-        expect(quote.totalAmount).toBe(PRICE);
-        expect(denied.reservationReleased).toBe(true);
+        expect(oldQuote.status).toBe("SUPERSEDED");
+        expect(oldQuote.totalAmount).toBe(PRICE);
 
-        // The refusal is in the trail with the facts behind it. "We would not
-        // charge you" and "because the price changed" are different statements,
-        // and a buyer asking later needs the second one.
-        const record = await testDb().auditEvent.findFirstOrThrow({
+        // Exactly one fresh ACTIVE quote exists, at the new price, and the
+        // still-held reservation was rebound to it rather than a second
+        // reservation being created.
+        const activeQuote = await testDb().purchaseQuote.findFirstOrThrow({
+          where: { transactionId: arranged.transactionId, status: "ACTIVE" },
+        });
+        expect(activeQuote.id).not.toBe(arranged.quoteId);
+        expect(activeQuote.totalAmount).toBe(NEW_PRICE);
+
+        const reservations = await testDb().inventoryReservation.findMany({
+          where: { transactionId: arranged.transactionId },
+        });
+        expect(reservations).toHaveLength(1);
+        expect(reservations[0]?.purchaseQuoteId).toBe(activeQuote.id);
+        expect(reservations[0]?.status).toBe("ACTIVE");
+
+        // The re-quote and the fresh policy run both left their own record.
+        const reissued = await testDb().auditEvent.findFirstOrThrow({
+          where: { transactionId: arranged.transactionId, eventType: "quote_reissued" },
+        });
+        expect(reissued.reasonCode).toBe("QUOTE_REISSUED");
+        const rebound = await testDb().auditEvent.findFirstOrThrow({
           where: {
             transactionId: arranged.transactionId,
-            eventType: "payment_retry_denied",
+            eventType: "inventory_reservation_requoted",
           },
         });
-        expect(record.reasonCode).toBe("FINANCIAL_FACTS_CHANGED");
-        expect((record.metadata as Record<string, unknown>)["reasons"]).toContain(
-          "PRICE_CHANGED",
-        );
+        expect(rebound.reasonCode).toBe("RESERVATION_REQUOTED");
       });
 
       it("refuses when the product can no longer be sold", async () => {

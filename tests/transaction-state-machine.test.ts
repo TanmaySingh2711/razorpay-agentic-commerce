@@ -282,7 +282,7 @@ describe("payment failure semantics", () => {
     expect(decision.kind).toBe("INVALID");
   });
 
-  it("permits only the two explicitly reserved recovery paths", () => {
+  it("permits only the three explicitly reserved recovery paths", () => {
     // Controlled retry, by the transaction service alone.
     expect(
       resolveTransition({
@@ -291,6 +291,16 @@ describe("payment failure semantics", () => {
         actor: "transaction_service",
       }),
     ).toMatchObject({ kind: "APPLY", to: "PAYMENT_ORDER_CREATED" });
+
+    // Re-quoting a stale quote, by the quote service alone - a retry whose own
+    // quote no longer holds, never a caller naming a price.
+    expect(
+      resolveTransition({
+        currentState: "PAYMENT_FAILED",
+        event: "QUOTE_ISSUED",
+        actor: "quote_service",
+      }),
+    ).toMatchObject({ kind: "APPLY", to: "QUOTE_CREATED" });
 
     // A late verified capture - money really did move - by the webhook alone.
     expect(
@@ -309,10 +319,17 @@ describe("payment failure semantics", () => {
         actor: "buyer_agent",
       }).kind,
     ).toBe("INVALID");
+    expect(
+      resolveTransition({
+        currentState: "PAYMENT_FAILED",
+        event: "QUOTE_ISSUED",
+        actor: "transaction_service",
+      }).kind,
+    ).toBe("INVALID");
   });
 
   it("does not allow arbitrary continuation of the normal flow", () => {
-    for (const event of ["PAYMENT_STARTED", "POLICY_ALLOWED", "QUOTE_ISSUED"] as const) {
+    for (const event of ["PAYMENT_STARTED", "POLICY_ALLOWED"] as const) {
       expect(
         resolveTransition({
           currentState: "PAYMENT_FAILED",
@@ -321,6 +338,39 @@ describe("payment failure semantics", () => {
         }).kind,
       ).toBe("INVALID");
     }
+  });
+});
+
+describe("the retry re-quote path stays inside its own lane", () => {
+  it("lets a requoted retry proceed from AUTHORIZED straight to order creation", () => {
+    // Reachable only via requoteAndContinue: it never claims a fresh
+    // reservation, so PAYMENT_ORDER_CREATED must be reachable without ever
+    // passing through INVENTORY_RESERVED again.
+    expect(
+      resolveTransition({
+        currentState: "AUTHORIZED",
+        event: "PAYMENT_RETRY_REQUESTED",
+        actor: "transaction_service",
+      }),
+    ).toMatchObject({ kind: "APPLY", to: "PAYMENT_ORDER_CREATED" });
+  });
+
+  it("does not let anyone else take that edge, or let it claim stock", () => {
+    expect(
+      resolveTransition({
+        currentState: "AUTHORIZED",
+        event: "PAYMENT_RETRY_REQUESTED",
+        actor: "inventory_service",
+      }).kind,
+    ).toBe("INVALID");
+    // Still the only way an ordinary first authorization reaches a hold.
+    expect(
+      resolveTransition({
+        currentState: "AUTHORIZED",
+        event: "INVENTORY_RESERVED",
+        actor: "inventory_service",
+      }),
+    ).toMatchObject({ kind: "APPLY", to: "INVENTORY_RESERVED" });
   });
 });
 

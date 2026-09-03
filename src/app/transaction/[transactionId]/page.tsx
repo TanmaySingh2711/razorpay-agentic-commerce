@@ -239,6 +239,20 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
   }
 
   if (state === "AUTHORIZED") {
+    // Ordinarily AUTHORIZED means nothing is held yet. The exception is a
+    // controlled retry whose stale quote was just replaced and re-approved:
+    // it lands back here with its *original* hold still ACTIVE, only rebound
+    // to the fresh price - `reserveStock` would try to claim a second one, so
+    // the card must not offer it in that case.
+    if (overview.reservationHeld) {
+      return (
+        <section className="card action" aria-labelledby="pay-heading">
+          <h2 id="pay-heading">Payment</h2>
+          <p>The new price for this purchase was approved. Press Pay to continue.</p>
+          <PayButton transactionId={overview.transactionId} mode="RETRY" />
+        </section>
+      );
+    }
     return (
       <section className="card action" aria-labelledby="hold-heading">
         <h2 id="hold-heading">Hold the item</h2>

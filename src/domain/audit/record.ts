@@ -326,6 +326,7 @@ const PAYLOAD_SCHEMAS: Record<AuditEventType, z.ZodType> = {
   inventory_reserved: reservationPayload,
   inventory_reservation_failed: reservationPayload,
   inventory_reservation_expired: reservationPayload,
+  inventory_reservation_requoted: reservationPayload,
   inventory_committed: reservationPayload,
   inventory_released: reservationPayload,
   payment_order_created: paymentPayload,

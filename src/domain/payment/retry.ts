@@ -92,17 +92,21 @@ export type RetryDenial = (typeof RETRY_DENIALS)[number];
 /**
  * Denials after which nothing further can happen to this purchase.
  *
- * The distinction decides whether held stock is given back. A limit that has
- * been reached, a price that has moved and an authorization that no longer
- * holds are all permanent within this transaction: there is no legal path from
- * PAYMENT_FAILED to a fresh quote, a fresh approval or a fresh reservation, so
- * continuing to hold a unit for it would keep stock away from buyers who can
- * actually complete.
+ * The distinction decides whether held stock is given back. `FINANCIAL_FACTS_CHANGED`
+ * now covers two situations, and both end the workflow the same way: an old
+ * quote that lapsed with no reservation left to save it, and - the newer case -
+ * a stale quote whose replacement was attempted and itself refused, because the
+ * product is no longer sold, its currency changed, or today's policy blocks it
+ * outright. A retry gets exactly one chance to re-quote; when that chance is
+ * refused there is nothing left to hold stock for. `RETRY_LIMIT_REACHED` and an
+ * authorization that no longer holds are permanent for the same reason.
  *
  * Everything else is deliberately excluded. `ATTEMPT_IN_PROGRESS` means somebody
  * is mid-payment; `OUTCOME_UNRESOLVED` means we do not know what happened yet.
  * Releasing stock under either would be a guess, and the reservation's own
- * expiry already handles abandonment safely.
+ * expiry already handles abandonment safely. Nor does reaching
+ * `APPROVAL_REQUIRED` release anything - the purchase is not over, it is
+ * waiting on a person, exactly as a first purchase above the ceiling does.
  */
 const WORKFLOW_ENDING_DENIALS: readonly RetryDenial[] = [
   "RETRY_LIMIT_REACHED",
@@ -179,6 +183,14 @@ export const RETRY_REUSES_PROVIDER_ORDER = false;
  * The ELIGIBLE arm carries every fact the payment path will need, all of them
  * re-read during the check itself. Nothing downstream re-derives an amount or
  * re-reads a policy from a different moment in time.
+ *
+ * The REQUOTE_ELIGIBLE arm is deliberately thinner: an amount, a policy
+ * version and an approval binding cannot be named yet, because the one thing
+ * this gate has established is that the *old* ones no longer apply. What it
+ * has confirmed is that a retry is otherwise permitted and that the original
+ * stock hold is still `ACTIVE` and unexpired for this exact product and
+ * quantity - which is what makes re-quoting *this* transaction, rather than
+ * refusing it outright, the honest answer.
  */
 export type RetryEligibility =
   | {
@@ -197,6 +209,17 @@ export type RetryEligibility =
       readonly policyDecision: string;
       /** Set when a scoped human approval supplied the authority. */
       readonly approvalId: string | null;
+    }
+  | {
+      readonly kind: "REQUOTE_ELIGIBLE";
+      readonly transactionId: string;
+      readonly correlationId: string | null;
+      readonly attemptsUsed: number;
+      readonly nextAttemptNumber: number;
+      /** The still-held reservation's own facts - the only ones left to trust. */
+      readonly reservationId: string;
+      readonly productId: string;
+      readonly quantity: number;
     }
   | {
       readonly kind: "DENIED";
@@ -243,6 +266,24 @@ export type PaymentRetryResult =
       readonly reasons: readonly QuoteInvalidationReason[];
       /** True when held stock was released because nothing further can happen. */
       readonly reservationReleased: boolean;
+    }
+  | {
+      /**
+       * The stale quote was replaced and re-run through policy, and the fresh
+       * facts now require a person's approval before this retry may proceed.
+       *
+       * Not a denial: the purchase is not over, and held stock is left exactly
+       * where it was. It is also not `RETRY_STARTED`: no PaymentAttempt exists
+       * yet, and none will until a fresh, exactly-scoped approval is granted -
+       * the same rule Objective 8 applies to a first purchase, applied here to
+       * a retry that discovered the price had moved.
+       */
+      readonly kind: "APPROVAL_REQUIRED";
+      readonly transactionId: string;
+      readonly attemptsUsed: number;
+      readonly maxAttempts: number;
+      /** The fresh amount a person is now being asked to approve. */
+      readonly amount: MoneyDto;
     }
   | {
       /**

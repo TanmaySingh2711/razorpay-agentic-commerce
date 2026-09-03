@@ -118,11 +118,14 @@ function webhookDeps(): WebhookServiceDeps {
 }
 
 function retryDeps(): RetryServiceDeps {
+  const quote = { prisma: testDb(), clock, ttlSeconds: QUOTE_TTL_SECONDS };
   return {
     prisma: testDb(),
     clock,
     provider,
     reservation: { prisma: testDb(), clock, ttlSeconds: RESERVATION_TTL_SECONDS },
+    quote,
+    policy: { prisma: testDb(), clock, quote },
   };
 }
 

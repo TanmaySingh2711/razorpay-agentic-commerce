@@ -89,3 +89,32 @@ export type CommitResult =
       readonly refusal: CommitRefusal;
       readonly detail: Readonly<Record<string, string | number | boolean | null>>;
     };
+
+/**
+ * Why an existing hold could not be rebound to a fresh quote.
+ *
+ * One reason, because there is only one thing this operation checks: is there
+ * still a live, matching hold to rebind. It touches no stock counter and claims
+ * no new unit, so `INSUFFICIENT_STOCK` and the other claim-time refusals do not
+ * apply here.
+ */
+export const REQUOTE_REFUSALS = ["RESERVATION_NOT_HELD"] as const;
+
+export type RequoteRefusal = (typeof REQUOTE_REFUSALS)[number];
+
+/**
+ * The outcome of pointing an existing, still-`ACTIVE` reservation at a fresh
+ * quote - the controlled-retry path's answer to "the price moved, but the
+ * stock is still ours".
+ *
+ * Deliberately not `ReservationResult`: no stock counter moves, no `INSUFFICIENT_STOCK`
+ * is possible, and conflating the two would let a reader mistake a rebind for a
+ * fresh claim.
+ */
+export type RequoteReservationResult =
+  | { readonly kind: "REQUOTED"; readonly reservation: ReservationDto }
+  | {
+      readonly kind: "REFUSED";
+      readonly reservationId: string | null;
+      readonly refusal: RequoteRefusal;
+    };

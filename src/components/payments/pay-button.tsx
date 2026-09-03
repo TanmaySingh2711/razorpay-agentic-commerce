@@ -150,7 +150,14 @@ export function PayButton({
               message:
                 retried.data?.kind === "ORDER_NOT_READY"
                   ? "We could not prepare another payment just now. Please try again in a moment."
-                  : "This purchase cannot be paid again. Reload the page to see why.",
+                  : retried.data?.kind === "APPROVAL_REQUIRED"
+                    ? // The retry found the price had changed and re-quoted it,
+                      // but the new amount needs a person's approval before it
+                      // can be paid - the same rule a first purchase above the
+                      // spending ceiling already follows. Refreshing shows the
+                      // approve/reject prompt; this click cannot itself proceed.
+                      "The price for this purchase changed and now needs your approval. Refresh this page to approve or reject it."
+                    : "This purchase cannot be paid again. Reload the page to see why.",
             });
             return;
           }

@@ -252,6 +252,10 @@ function retryStatus(result: PaymentRetryResult): number {
     // Understood perfectly, and declined on its merits.
     case "DENIED":
       return 422;
+    // Not an error: the retry re-quoted successfully and is waiting on a
+    // person, exactly as a first purchase above the ceiling does.
+    case "APPROVAL_REQUIRED":
+      return 200;
     case "ORDER_NOT_READY":
       switch (result.reason) {
         case "REFUSED":

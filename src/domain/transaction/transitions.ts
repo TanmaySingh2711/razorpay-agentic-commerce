@@ -188,7 +188,8 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
   },
 
   AUTHORIZED: {
-    // Stock is held before money moves: no edge from here to a payment state.
+    // Stock is held before money moves: no edge from here to a payment state
+    // claims it for the first time.
     INVENTORY_RESERVED: {
       to: "INVENTORY_RESERVED",
       allowedActors: ["inventory_service"],
@@ -198,6 +199,29 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
       to: "BLOCKED",
       allowedActors: ["inventory_service", "transaction_service"],
       reasonCode: "INVENTORY_UNAVAILABLE",
+    },
+    /**
+     * The one exception to the rule above, and it does not weaken it.
+     *
+     * This edge exists for exactly one caller: a controlled retry whose
+     * original quote went stale after a failed payment. That retry re-quotes
+     * and re-runs policy against today's facts (see `PAYMENT_FAILED` below),
+     * which is what lands the transaction back here - AUTHORIZED - while the
+     * *original* stock hold, claimed before the first attempt, is still
+     * `ACTIVE` and has just been rebound to the fresh quote. Stock genuinely is
+     * held before this edge is taken; it was simply never released, so there is
+     * nothing left for `reserveInventory` to claim a second time.
+     *
+     * `retry` on `CreatePaymentOrderCommand` cannot be constructed by any HTTP
+     * boundary - only `@/services/payment/retry-service` builds one, and only
+     * after its own gate has independently confirmed a matching `ACTIVE`
+     * reservation exists - so this edge cannot be reached by an ordinary first
+     * authorization, which never carries that value.
+     */
+    PAYMENT_RETRY_REQUESTED: {
+      to: "PAYMENT_ORDER_CREATED",
+      allowedActors: ["transaction_service"],
+      reasonCode: "PAYMENT_RETRY_REQUESTED",
     },
     ...CANCELLABLE,
   },
@@ -305,8 +329,16 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
    * deliberately narrow:
    *
    *  - retry, by the transaction service only, reusing the existing
-   *    authorization and reservation - it never re-enters the AI path and never
-   *    re-derives the amount;
+   *    authorization and reservation when they still hold - it never re-enters
+   *    the AI path;
+   *  - re-quoting, when a retry's own authorization no longer holds because the
+   *    original quote went stale. This is not a silent reprice: it is the same
+   *    self-loop `QUOTE_CREATED` already has for "still quoting, but again",
+   *    reused here because a failed payment can sit for longer than a quote's
+   *    TTL, and the honest answer to a stale quote is a fresh one, re-run
+   *    through the full deterministic policy engine - never an edited amount.
+   *    Restricted to `quote_service`, exactly like the original edge: no
+   *    retry request can name a price, only ask for the current one;
    *  - a late verified capture from the provider, because money may genuinely
    *    have moved after a failure was recorded. Restricted to `payment_webhook`
    *    so only verified provider evidence can take it.
@@ -319,6 +351,11 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
       to: "PAYMENT_ORDER_CREATED",
       allowedActors: ["transaction_service"],
       reasonCode: "PAYMENT_RETRY_REQUESTED",
+    },
+    QUOTE_ISSUED: {
+      to: "QUOTE_CREATED",
+      allowedActors: ["quote_service"],
+      reasonCode: "QUOTE_REISSUED",
     },
     PAYMENT_CAPTURE_CONFIRMED: {
       to: "PAYMENT_CAPTURED",

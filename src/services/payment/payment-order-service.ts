@@ -228,9 +228,21 @@ export async function createPaymentOrder(
     return refused(transactionId, { refusal: "TRANSACTION_NOT_FOUND" });
   }
 
-  // The state a payment order may be created from. A retry starts from the
-  // failure it is retrying; an ordinary first order starts from the stock hold.
-  const requiredState = retry === undefined ? "INVENTORY_RESERVED" : "PAYMENT_FAILED";
+  // The state a payment order may be created from. An ordinary first order
+  // starts from the stock hold. A retry starts from the failure it is
+  // retrying - or, when its own quote had gone stale, from AUTHORIZED: the
+  // retry-service re-quotes and re-runs policy before calling here, which is
+  // what lands the transaction back at AUTHORIZED with its *original* hold
+  // still ACTIVE and already rebound to the fresh quote (see
+  // `src/domain/transaction/transitions.ts`, the `AUTHORIZED` block). Either
+  // starting state is only ever paired with `retry` by
+  // `@/services/payment/retry-service`, never by an ordinary first order.
+  const requiredState =
+    retry === undefined
+      ? "INVENTORY_RESERVED"
+      : transaction.status === "AUTHORIZED"
+        ? "AUTHORIZED"
+        : "PAYMENT_FAILED";
 
   // --- An order this transaction already has. ------------------------------
   //
@@ -265,6 +277,7 @@ export async function createPaymentOrder(
       transaction.correlationId,
       now,
       requiredState,
+      retry !== undefined,
     );
 
     // --- The durable claim. Still no provider call. ------------------------
@@ -429,9 +442,18 @@ async function checkPreconditions(
    * indistinguishable from a genuine policy refusal.
    */
   requiredState: TransactionState,
+  /**
+   * Whether the caller supplied a `RetryAuthorization` at all.
+   *
+   * Not derived from `requiredState` any more: a requoted retry's
+   * `requiredState` reads AUTHORIZED, the same value an ordinary first order
+   * would never carry `retry` alongside, so the two can only be told apart by
+   * what the caller actually passed. This is what `finalize()` uses to choose
+   * between `PAYMENT_ORDER_CREATED` and `PAYMENT_RETRY_REQUESTED` - a
+   * requoted retry must still record that a retry happened, not a first order.
+   */
+  isRetry: boolean,
 ): Promise<OrderContext> {
-  const isRetry = requiredState === "PAYMENT_FAILED";
-
   // --- The trusted quote, re-validated at the moment of use. ---------------
   const quote = await readActiveQuote(deps.prisma, transactionId, now);
   if (quote === null) {

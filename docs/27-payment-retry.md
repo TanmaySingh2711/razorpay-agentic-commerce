@@ -82,18 +82,24 @@ being limited.
 Every retry request runs the same read-only gate, in this order. The first
 refusal wins.
 
-| Denial                      | Meaning                                                                                                        |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `TRANSACTION_NOT_FOUND`     | No such transaction.                                                                                           |
-| `PAYMENT_ALREADY_CAPTURED`  | The provider already captured a payment — including a late capture for an earlier attempt.                     |
-| `TRANSACTION_STATE_INVALID` | Not at `PAYMENT_FAILED`; there is no failed payment to retry.                                                  |
-| `OUTCOME_UNRESOLVED`        | Some attempt is `RECONCILIATION_REQUIRED`. Resolved by receipt lookup, **never** by another order.             |
-| `ATTEMPT_IN_PROGRESS`       | An attempt is `CREATED`/`PENDING`/`VERIFIED`. Closes the double-click window the state check alone would miss. |
-| `RETRY_LIMIT_REACHED`       | Every permitted attempt has been used.                                                                         |
-| `NO_ACTIVE_QUOTE`           | Nothing to charge.                                                                                             |
-| `FINANCIAL_FACTS_CHANGED`   | The quote lapsed, or the price, currency, availability or product version moved.                               |
-| `RESERVATION_NOT_HELD`      | No live stock hold matching this quote, product and quantity.                                                  |
-| `NOT_AUTHORIZED`            | Re-running today's policy and today's approvals does not authorize this purchase.                              |
+| Denial                      | Meaning                                                                                                                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TRANSACTION_NOT_FOUND`     | No such transaction.                                                                                                                                                                                 |
+| `PAYMENT_ALREADY_CAPTURED`  | The provider already captured a payment — including a late capture for an earlier attempt.                                                                                                           |
+| `TRANSACTION_STATE_INVALID` | Not at `PAYMENT_FAILED` or (mid re-quote cycle) `AUTHORIZED`; there is no failed payment to retry.                                                                                                   |
+| `OUTCOME_UNRESOLVED`        | Some attempt is `RECONCILIATION_REQUIRED`. Resolved by receipt lookup, **never** by another order.                                                                                                   |
+| `ATTEMPT_IN_PROGRESS`       | An attempt is `CREATED`/`PENDING`/`VERIFIED`. Closes the double-click window the state check alone would miss.                                                                                       |
+| `RETRY_LIMIT_REACHED`       | Every permitted attempt has been used - checked before the quote is even read, so a stale quote can never buy a fourth attempt.                                                                      |
+| `NO_ACTIVE_QUOTE`           | Nothing to charge, and no reservation survives to re-quote against either.                                                                                                                           |
+| `FINANCIAL_FACTS_CHANGED`   | The quote lapsed with no reservation left to save it, **or** a re-quote was attempted and itself refused: the product is no longer sold, its currency changed, or today's policy blocks it outright. |
+| `RESERVATION_NOT_HELD`      | No live stock hold matching this quote, product and quantity.                                                                                                                                        |
+| `NOT_AUTHORIZED`            | Re-running today's policy and today's approvals does not authorize this purchase.                                                                                                                    |
+
+A gate result can also be `REQUOTE_ELIGIBLE` rather than a denial: the quote
+is stale, but the original stock hold is still `ACTIVE`, unexpired, and names
+this exact product and quantity. See "Re-quoting a stale quote" below - this is
+what `requestPaymentRetry` acts on to replace the quote before continuing,
+rather than refusing outright.
 
 The gate is **read-only**: it writes nothing, so the checkout page can consult
 it on every render to decide whether to offer a Retry button, and the request
@@ -110,14 +116,59 @@ Re-derived on every retry, through the existing boundaries:
   quote, this exact amount and currency, and the policy version in force;
 - the **stock hold**, which must be `ACTIVE`, unexpired, and match the quote.
 
-Deliberately **not** re-derived:
+Deliberately **not** re-derived, ever:
 
-- the **amount**. It comes from the persisted `PurchaseQuote` and nowhere else.
-- a **new quote**. There is no legal path from `PAYMENT_FAILED` back to quoting,
-  and inventing one would let a retry become a silent reprice. If the financial
-  facts moved, the retry is refused and the buyer starts a new purchase.
+- the **amount**, when a live quote already prices this purchase. It comes from
+  the persisted `PurchaseQuote` and nowhere else - a retry never has a field
+  for one, and nothing here computes one from scratch.
 - a **new reservation**. Stock is claimed only from `AUTHORIZED`. A hold that
-  lapsed cannot be re-taken without fresh authorization.
+  lapsed cannot be re-taken without fresh authorization, and a retry never
+  creates a second reservation for a hold that survived.
+
+### Re-quoting a stale quote
+
+A quote's TTL is ordinarily shorter than a reservation's, so the quote a
+payment failed under routinely goes stale before a person notices the failure
+and asks to retry - that is the ordinary shape of this scenario, not an edge
+case. When the gate finds the quote no longer valid but the _original_ stock
+hold is still `ACTIVE`, unexpired, and matches the exact product and quantity
+that hold was claimed for, a retry is exactly the deliberate human act that may
+ask for a fresh price. This is **not** a silent reprice: it is the same
+`QUOTE_CREATED` self-loop that already exists for "still quoting, but again",
+reused for the one caller who may take it from `PAYMENT_FAILED` -
+`@/services/quote/quote-service`'s `createTrustedQuote`, called with
+`replaceExisting: true`, using this transaction's own product id and quantity
+and no stated budget of its own to compare against (the shopper's original
+budget was already satisfied by the quote just superseded; what a re-quote
+checks is the product's own current facts, not a new preference).
+
+The sequence, all through existing, unmodified boundaries:
+
+1. `createTrustedQuote` supersedes the stale quote and freezes today's price.
+   If the product is no longer sold, its currency moved, or there is no longer
+   enough of it, this throws and the retry is refused
+   `FINANCIAL_FACTS_CHANGED` - the same rule an ordinary stale quote already
+   answers with, just discovered one step later.
+2. `evaluateQuotePolicy` re-runs the deterministic engine against the fresh
+   quote. `BLOCKED` refuses the retry the same way. `APPROVAL_REQUIRED` moves
+   the transaction there and stops - a person must approve the fresh amount
+   before this retry may go any further, exactly the rule a first purchase
+   above the ceiling already follows. Only `ALLOWED` continues.
+3. The still-held reservation is pointed at the fresh quote
+   (`requoteReservation`) - never re-claimed, never a second row. This step
+   runs whether the fresh verdict is `ALLOWED` or `APPROVAL_REQUIRED`, so that
+   once a person grants the approval the hold is already aligned with the
+   quote that approval named.
+4. `createPaymentOrder` is called exactly as an ordinary retry calls it. A
+   requoted retry reaches it from `AUTHORIZED` rather than `PAYMENT_FAILED` -
+   see the `AUTHORIZED` block in `src/domain/transaction/transitions.ts` for
+   why that edge does not weaken "stock is held before money moves": the hold
+   was never released, only rebound.
+
+Nothing above is reachable except from `@/services/payment/retry-service`,
+never from an ordinary first purchase, and the attempt limit is unaffected by
+any of it - re-quoting does not spend or reset an attempt; only a created
+`PaymentAttempt` does that.
 
 ## Stock, on refusal
 
@@ -248,6 +299,8 @@ refunds are not part of this system.
 | `payment_retry_denied`              | The gate refused. `reasonCode` is the denial.                                                                                                |
 | `payment_retry_limit_reached`       | The bound was hit. Its own record, because it is the refusal people come back to ask about.                                                  |
 | `payment_multiple_capture_detected` | Two attempts under one transaction were both captured.                                                                                       |
+| `quote_reissued`                    | A stale quote was replaced during a retry - the same event a `QUOTE_CREATED` self-loop already writes.                                       |
+| `inventory_reservation_requoted`    | The still-held reservation was pointed at the fresh quote a re-quote produced. No stock counter moves.                                       |
 
 Retry-created orders reuse `payment_order_created`; retry checkout reuses
 `payment_attempt_started`; released stock reuses `inventory_released`. No

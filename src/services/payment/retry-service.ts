@@ -1,14 +1,24 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { getPrismaClient } from "@/integrations/persistence/client";
-import { getReservationConfig } from "@/config/env";
+import { getReservationConfig, getQuoteConfig } from "@/config/env";
 import { systemClock, type Clock } from "@/lib/clock";
 import { createLogger } from "@/lib/logger";
 import { readActiveQuote } from "@/services/quote/quote-reader";
 import { recheckPolicyAuthorization } from "@/services/policy/authorization-recheck";
-import { releaseReservation } from "@/services/inventory/reservation-service";
+import {
+  releaseReservation,
+  requoteReservation,
+} from "@/services/inventory/reservation-service";
 import { recordAuditEvent } from "@/services/audit/audit-service";
 import { createPaymentOrder } from "@/services/payment/payment-order-service";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { createTrustedQuote } from "@/services/quote/quote-service";
+import { evaluateQuotePolicy } from "@/services/policy/policy-service";
+import {
+  QuoteProductChangedError,
+  QuoteCreationFailureError,
+} from "@/domain/quote/errors";
+import { toMoneyDto, moneyFromBigInt, type CurrencyCode } from "@/domain/money";
 import {
   MAX_PAYMENT_ATTEMPTS,
   endsWorkflow,
@@ -22,7 +32,11 @@ import {
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
 import type { ReservationServiceDeps } from "@/services/inventory/reservation-service";
 import type { PaymentOrderServiceDeps } from "@/services/payment/payment-order-service";
+import type { QuoteServiceDeps } from "@/services/quote/quote-service";
+import type { PolicyServiceDeps } from "@/services/policy/policy-service";
 import type { PaymentProvider } from "@/domain/payment/provider";
+import type { PaymentOrderResult } from "@/domain/payment/contracts";
+import type { TransactionState } from "@/domain/transaction/states";
 import type { JsonObject } from "@/lib/json";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -80,6 +94,28 @@ const LIVE_ATTEMPT_STATUSES = ["CREATED", "PENDING", "VERIFIED"] as const;
 const CAPTURED_STATES = ["PAYMENT_CAPTURED", "COMPLETED"] as const;
 
 /**
+ * The two states a retry may legally start from.
+ *
+ * `PAYMENT_FAILED` is the ordinary case. `AUTHORIZED` is the controlled-retry
+ * case: a stale quote was re-quoted and re-run through policy (see
+ * `requoteAndContinue` below), which is what lands the transaction back here
+ * with its *original* stock hold still `ACTIVE`, just rebound to the fresh
+ * quote. Both are equally "a retry, not a first purchase" - the second is
+ * simply one that needed a fresh price first.
+ */
+const RETRY_ENTRY_STATES: readonly TransactionState[] = ["PAYMENT_FAILED", "AUTHORIZED"];
+
+/** No stated budget: a retry re-quotes the same product and quantity, never a new preference. */
+const OPEN_REQUOTE_AUTHORITY = {
+  quantity: 1,
+  maxAmountMinor: null,
+  currency: null,
+  budgetScope: null,
+  hardRequirements: [],
+  category: null,
+} as const;
+
+/**
  * What the read-only gate needs, and nothing more.
  *
  * Split out because the gate has two callers with very different privileges.
@@ -103,6 +139,15 @@ export interface RetryServiceDeps extends RetryGateDeps {
    * point that boundary at the same database and clock as everything else.
    */
   readonly reservation: ReservationServiceDeps;
+  /**
+   * Used only when a stale quote must be replaced before a retry can proceed.
+   * A quote created here is bound by exactly the same TTL and the same
+   * disqualifying-change checks as any other quote in the system - a retry
+   * gets no more lenient a re-quote than a first purchase would.
+   */
+  readonly quote: QuoteServiceDeps;
+  /** Used only to re-run policy against the fresh quote a stale one was replaced with. */
+  readonly policy: PolicyServiceDeps;
 }
 
 export function defaultRetryGateDeps(): RetryGateDeps {
@@ -111,15 +156,23 @@ export function defaultRetryGateDeps(): RetryGateDeps {
 
 export function defaultRetryDeps(): RetryServiceDeps {
   const prisma = getPrismaClient();
+  const clock = systemClock;
+  const quote: QuoteServiceDeps = {
+    prisma,
+    clock,
+    ttlSeconds: getQuoteConfig().QUOTE_TTL_SECONDS,
+  };
   return {
     prisma,
-    clock: systemClock,
+    clock,
     provider: createRazorpayProvider(),
     reservation: {
       prisma,
-      clock: systemClock,
+      clock,
       ttlSeconds: getReservationConfig().RESERVATION_TTL_SECONDS,
     },
+    quote,
+    policy: { prisma, clock, quote },
   };
 }
 
@@ -188,7 +241,7 @@ export async function evaluateRetryEligibility(
       state: transaction.status,
     });
   }
-  if (transaction.status !== "PAYMENT_FAILED") {
+  if (!RETRY_ENTRY_STATES.includes(transaction.status)) {
     return denied(transactionId, "TRANSACTION_STATE_INVALID", attemptsUsed, {
       state: transaction.status,
     });
@@ -235,34 +288,16 @@ export async function evaluateRetryEligibility(
     });
   }
 
-  // --- The financial facts, re-read rather than remembered. ----------------
-  const quote = await readActiveQuote(deps.prisma, transactionId, now);
-  if (quote === null) {
-    return denied(transactionId, "NO_ACTIVE_QUOTE", attemptsUsed, {});
-  }
-  if (quote.usability.kind !== "VALID") {
-    // The price moved, the currency changed, the product version was bumped or
-    // the quote simply lapsed. This system will not silently reprice: the
-    // amount a person was shown is the only amount it is willing to charge, and
-    // there is no legal path from PAYMENT_FAILED back to quoting.
-    return denied(
-      transactionId,
-      "FINANCIAL_FACTS_CHANGED",
-      attemptsUsed,
-      { usability: quote.usability.kind, quoteId: quote.snapshot.quoteId },
-      quote.usability.kind === "INVALIDATED" ? quote.usability.reasons : [],
-    );
-  }
-  const snapshot = quote.snapshot;
-
-  // --- The stock hold. -----------------------------------------------------
+  // --- The stock hold, read once and used by both branches below. ----------
   //
-  // A retry cannot create one. `reserveInventory` only claims stock from
-  // AUTHORIZED, and there is no edge from PAYMENT_FAILED back to it - so the
-  // hold made before the first attempt either survived or the purchase is over.
-  // That is the deliberate design: re-reserving here would need a fresh
-  // authorization, and inventing one is exactly what this gate exists to
-  // prevent.
+  // `reserveInventory` only claims stock from AUTHORIZED, and there is no
+  // ordinary edge back to it from PAYMENT_FAILED - so the hold made before the
+  // first attempt either survived, or the purchase is over. That is still the
+  // rule; what has changed is what "survived" is allowed to mean. A hold that
+  // is still ACTIVE and unexpired for this exact product and quantity is real
+  // authority to keep holding stock, whether or not the *quote* that price was
+  // struck under still is - and a stale quote is exactly the thing this gate
+  // can now repair, rather than only being able to refuse.
   const reservation = await deps.prisma.inventoryReservation.findFirst({
     where: { transactionId, status: "ACTIVE" },
     select: {
@@ -273,16 +308,61 @@ export async function evaluateRetryEligibility(
       expiresAt: true,
     },
   });
+  const reservationHeld =
+    reservation !== null && reservation.expiresAt.getTime() > now.getTime();
+
+  const highestAttemptNumber = attempts.reduce(
+    (highest, attempt) => Math.max(highest, attempt.attemptNumber),
+    0,
+  );
+  const nextAttemptNumber = highestAttemptNumber + 1;
+
+  // --- The financial facts, re-read rather than remembered. ----------------
+  const quote = await readActiveQuote(deps.prisma, transactionId, now);
+  if (quote === null || quote.usability.kind !== "VALID") {
+    // The price moved, the currency changed, the product version was bumped or
+    // the quote simply lapsed. This system will not silently reprice on its
+    // own initiative - but when the *stock* is still genuinely held for this
+    // exact product and quantity, a human retry request is exactly the
+    // deliberate act that may ask for a fresh price. Report that instead of a
+    // terminal denial; `requestPaymentRetry` is what actually re-quotes.
+    if (reservationHeld && reservation !== null) {
+      return {
+        kind: "REQUOTE_ELIGIBLE",
+        transactionId,
+        correlationId,
+        attemptsUsed,
+        nextAttemptNumber,
+        reservationId: reservation.id,
+        productId: reservation.productId,
+        quantity: reservation.quantity,
+      };
+    }
+    return denied(
+      transactionId,
+      quote === null ? "NO_ACTIVE_QUOTE" : "FINANCIAL_FACTS_CHANGED",
+      attemptsUsed,
+      quote === null
+        ? {}
+        : { usability: quote.usability.kind, quoteId: quote.snapshot.quoteId },
+      quote !== null && quote.usability.kind === "INVALIDATED"
+        ? quote.usability.reasons
+        : [],
+    );
+  }
+  const snapshot = quote.snapshot;
+
+  // --- The stock hold, matched against the (still valid) quote. ------------
   if (
+    !reservationHeld ||
     reservation === null ||
-    reservation.expiresAt.getTime() <= now.getTime() ||
     reservation.purchaseQuoteId !== snapshot.quoteId ||
     reservation.productId !== snapshot.productId ||
     reservation.quantity !== snapshot.quantity
   ) {
     return denied(transactionId, "RESERVATION_NOT_HELD", attemptsUsed, {
       held: reservation !== null,
-      expired: reservation !== null && reservation.expiresAt.getTime() <= now.getTime(),
+      expired: reservation !== null && !reservationHeld,
     });
   }
 
@@ -295,7 +375,12 @@ export async function evaluateRetryEligibility(
     // policy version still in force. An approval bound to anything else cannot
     // authorize this retry, which is what stops a retry from being a way to
     // launder a changed amount past a decision a person already made.
-    { acceptedStates: ["PAYMENT_FAILED"], approvalMaySatisfy: true },
+    //
+    // Both entry states are accepted for the same reason RETRY_ENTRY_STATES
+    // is: AUTHORIZED here means a retry's own re-quote already landed the
+    // transaction back on today's policy, and continuing to accept only
+    // PAYMENT_FAILED would refuse a request this gate itself just made legal.
+    { acceptedStates: RETRY_ENTRY_STATES, approvalMaySatisfy: true },
   );
   if (recheck.kind !== "AUTHORIZED") {
     return denied(transactionId, "NOT_AUTHORIZED", attemptsUsed, {
@@ -310,11 +395,6 @@ export async function evaluateRetryEligibility(
     });
   }
 
-  const highestAttemptNumber = attempts.reduce(
-    (highest, attempt) => Math.max(highest, attempt.attemptNumber),
-    0,
-  );
-
   return {
     kind: "ELIGIBLE",
     transactionId,
@@ -323,7 +403,7 @@ export async function evaluateRetryEligibility(
     reservationId: reservation.id,
     // Derived from the persisted rows, so two concurrent requests compute the
     // same number and therefore race for the same claim key.
-    nextAttemptNumber: highestAttemptNumber + 1,
+    nextAttemptNumber,
     attemptsUsed,
     amountMinor: snapshot.totalAmountMinor,
     currency: snapshot.currency,
@@ -368,8 +448,12 @@ export async function readRetryStatus(
     attemptsUsed,
     maxAttempts: MAX_PAYMENT_ATTEMPTS,
     remaining: remainingAttempts(attemptsUsed),
-    available: eligibility.kind === "ELIGIBLE",
-    denial: eligibility.kind === "ELIGIBLE" ? null : eligibility.denial,
+    // REQUOTE_ELIGIBLE is still a retry a person may ask for right now - it
+    // just means the request itself will re-quote before it proceeds. The
+    // page offers the same button either way; only the server-side sequence
+    // that a click sets off differs.
+    available: eligibility.kind !== "DENIED",
+    denial: eligibility.kind === "DENIED" ? eligibility.denial : null,
     lastFailure: lastFailed?.failureCategory ?? null,
   };
 }
@@ -418,6 +502,270 @@ export async function requestPaymentRetry(
     return await recordDenial(deps, eligibility, correlationId, command.operationId);
   }
 
+  if (eligibility.kind === "REQUOTE_ELIGIBLE") {
+    return await requoteAndContinue(deps, eligibility, command.operationId);
+  }
+
+  return await authorizeAndCreateOrder(
+    deps,
+    {
+      transactionId,
+      correlationId,
+      attemptsUsed: eligibility.attemptsUsed,
+      nextAttemptNumber: eligibility.nextAttemptNumber,
+      quoteId: eligibility.quoteId,
+      reservationId: eligibility.reservationId,
+      amountMinor: eligibility.amountMinor,
+      currency: eligibility.currency,
+      policyVersion: eligibility.policyVersion,
+      policyDecision: eligibility.policyDecision,
+      approvalId: eligibility.approvalId,
+    },
+    command.operationId,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Re-quoting a stale quote, when the stock hold survived it
+// ---------------------------------------------------------------------------
+
+/**
+ * What `requestPaymentRetry` does once the gate reports `REQUOTE_ELIGIBLE`:
+ * replace the stale quote, re-run policy against it, and either continue
+ * straight to order creation or hand the buyer to a fresh approval.
+ *
+ * Every step below reuses an existing, unmodified boundary - `createTrustedQuote`,
+ * `evaluateQuotePolicy`, `requoteReservation`, `createPaymentOrder` - in exactly
+ * the sequence a first purchase already uses them, just compressed into one
+ * request instead of several human actions. Nothing here re-implements a
+ * financial control; it only re-triggers the ones that already exist, against
+ * today's facts.
+ */
+async function requoteAndContinue(
+  deps: RetryServiceDeps,
+  eligibility: RetryEligibility & { readonly kind: "REQUOTE_ELIGIBLE" },
+  operationId: string | undefined,
+): Promise<PaymentRetryResult> {
+  const {
+    transactionId,
+    correlationId,
+    attemptsUsed,
+    nextAttemptNumber,
+    productId,
+    quantity,
+  } = eligibility;
+  // One stable base per retry cycle, so a repeated click within the same cycle
+  // converges on the same quote and the same evaluation rather than each
+  // re-quoting again.
+  const cycleKey = `payment_retry_requote:${transactionId}:${String(attemptsUsed)}`;
+
+  let requoted;
+  try {
+    requoted = await createTrustedQuote(
+      {
+        transactionId,
+        productId,
+        quantity,
+        authority: { ...OPEN_REQUOTE_AUTHORITY, quantity },
+        idempotencyKey: cycleKey,
+        // The stale quote is still ACTIVE until this call supersedes it - a
+        // plain create would just hand back the very quote that failed the
+        // usability check a moment ago.
+        replaceExisting: true,
+      },
+      deps.quote,
+    );
+  } catch (error) {
+    if (error instanceof QuoteProductChangedError) {
+      // The product is no longer sold, its currency moved, or there is no
+      // longer enough of it - re-checked fresh, not assumed from the old
+      // quote. Nothing left to retry into; end the workflow honestly.
+      return await denyAfterRequoteFailure(deps, {
+        transactionId,
+        correlationId,
+        attemptsUsed,
+        detail: {},
+        reasons: error.reasons,
+      });
+    }
+    if (error instanceof QuoteCreationFailureError) {
+      // An infrastructure or state-machine failure while re-quoting - not a
+      // fact about the product, so it is not reported as one. Surfacing it
+      // lets the caller's own error handling decide, exactly as any other
+      // infrastructure failure on this path would.
+      throw error;
+    }
+    throw error;
+  }
+
+  const evaluation = await evaluateQuotePolicy(
+    { quoteId: requoted.snapshot.quoteId, operationId: cycleKey },
+    deps.policy,
+  );
+  if (evaluation.kind !== "EVALUATED") {
+    // The quote was just created and is not yet stale by construction; this
+    // arm exists only for the defensive case where it changed again in the
+    // instant between the two calls. Treated the same as any other
+    // requote failure: end the workflow.
+    return await denyAfterRequoteFailure(deps, {
+      transactionId,
+      correlationId,
+      attemptsUsed,
+      detail: { cause: evaluation.cause },
+      reasons: evaluation.reasons,
+    });
+  }
+
+  if (evaluation.decision.decision === "BLOCKED") {
+    return await denyAfterRequoteFailure(deps, {
+      transactionId,
+      correlationId,
+      attemptsUsed,
+      detail: { reasonCode: evaluation.decision.reasonCode },
+      reasons: [],
+    });
+  }
+
+  // Either ALLOWED or APPROVAL_REQUIRED from here: both mean the purchase is
+  // still alive, so the hold this transaction already has - still real stock -
+  // is told which quote now prices it before either answer is given. Rebinding
+  // regardless of which of the two it is is what lets a later plain retry,
+  // after a person grants the fresh approval, find the reservation already
+  // aligned with the quote that approval was scoped to - without this, the
+  // very next retry click would refuse RESERVATION_NOT_HELD against a hold
+  // still bound to the quote that was just superseded.
+  const rebound = await requoteReservation(
+    {
+      transactionId,
+      newQuoteId: requoted.snapshot.quoteId,
+      productId,
+      quantity,
+      correlationId,
+      operationId: cycleKey,
+    },
+    deps.reservation,
+  );
+  if (rebound.kind !== "REQUOTED") {
+    // The hold lapsed in the narrow window between the gate's read and this
+    // write. Nothing to release - it is already gone - and nothing further
+    // this retry can do.
+    return await denyAfterRequoteFailure(deps, {
+      transactionId,
+      correlationId,
+      attemptsUsed,
+      detail: {},
+      reasons: [],
+      denial: "RESERVATION_NOT_HELD",
+      alreadyReleased: true,
+    });
+  }
+
+  if (evaluation.decision.decision === "APPROVAL_REQUIRED") {
+    // Not a denial. The purchase is not over and the stock hold is left
+    // exactly where it is - a person must approve the fresh amount before
+    // this retry may go any further, the same rule a first purchase above
+    // the ceiling already follows.
+    return {
+      kind: "APPROVAL_REQUIRED",
+      transactionId,
+      attemptsUsed,
+      maxAttempts: MAX_PAYMENT_ATTEMPTS,
+      amount: toMoneyDto(
+        moneyFromBigInt(
+          requoted.snapshot.totalAmountMinor,
+          requoted.snapshot.currency as CurrencyCode,
+        ),
+      ),
+    };
+  }
+
+  return await authorizeAndCreateOrder(
+    deps,
+    {
+      transactionId,
+      correlationId,
+      attemptsUsed,
+      nextAttemptNumber,
+      quoteId: requoted.snapshot.quoteId,
+      reservationId: rebound.reservation.id,
+      amountMinor: requoted.snapshot.totalAmountMinor,
+      currency: requoted.snapshot.currency,
+      policyVersion: evaluation.decision.policyVersion,
+      policyDecision: evaluation.decision.decision,
+      approvalId: null,
+    },
+    operationId,
+  );
+}
+
+/** Ends the workflow when re-quoting itself could not produce a payable purchase. */
+async function denyAfterRequoteFailure(
+  deps: RetryServiceDeps,
+  params: {
+    readonly transactionId: string;
+    readonly correlationId: string | null;
+    readonly attemptsUsed: number;
+    readonly detail: Readonly<Record<string, string | number | boolean | null>>;
+    readonly reasons: readonly QuoteInvalidationReason[];
+    readonly denial?: RetryDenial;
+    /** True when the reservation is already known to be gone - nothing to release. */
+    readonly alreadyReleased?: boolean;
+  },
+): Promise<PaymentRetryResult> {
+  const denial = params.denial ?? "FINANCIAL_FACTS_CHANGED";
+  await audit(deps, {
+    transactionId: params.transactionId,
+    action: "payment_retry_denied",
+    result: "BLOCKED",
+    reasonCode: denial,
+    correlationId: params.correlationId,
+    operationKey: `payment_retry_denied:${params.transactionId}:${String(params.attemptsUsed)}:${denial}`,
+    trustedInputs: {
+      ...counters(params.attemptsUsed, undefined),
+      refusal: denial,
+      ...(params.reasons.length === 0 ? {} : { reasons: [...params.reasons] }),
+    },
+  });
+  const released =
+    params.alreadyReleased === true
+      ? false
+      : await releaseHeldStock(deps, params.transactionId);
+  return {
+    kind: "DENIED",
+    transactionId: params.transactionId,
+    denial,
+    attemptsUsed: params.attemptsUsed,
+    maxAttempts: MAX_PAYMENT_ATTEMPTS,
+    detail: params.detail,
+    reasons: params.reasons,
+    reservationReleased: released,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Authorizing and creating the order - shared by an ordinary retry and one
+// that just finished re-quoting
+// ---------------------------------------------------------------------------
+
+async function authorizeAndCreateOrder(
+  deps: RetryServiceDeps,
+  params: {
+    readonly transactionId: string;
+    readonly correlationId: string | null;
+    readonly attemptsUsed: number;
+    readonly nextAttemptNumber: number;
+    readonly quoteId: string;
+    readonly reservationId: string;
+    readonly amountMinor: bigint;
+    readonly currency: string;
+    readonly policyVersion: number | null;
+    readonly policyDecision: string;
+    readonly approvalId: string | null;
+  },
+  operationId: string | undefined,
+): Promise<PaymentRetryResult> {
+  const { transactionId } = params;
+
   // Fail closed, unlike every other record here. This one is written *before*
   // the provider call and is the only evidence that the gate re-ran the quote,
   // the policy, the approval binding and the stock hold. Swallowing its failure
@@ -430,19 +778,19 @@ export async function requestPaymentRetry(
     actor: RETRY_ACTOR,
     result: "SUCCESS",
     reasonCode: "PAYMENT_RETRY_AUTHORIZED",
-    correlationId,
-    operationKey: `payment_retry_authorized:${transactionId}:${String(eligibility.nextAttemptNumber)}`,
+    correlationId: params.correlationId,
+    operationKey: `payment_retry_authorized:${transactionId}:${String(params.nextAttemptNumber)}`,
     trustedInputs: {
-      ...counters(eligibility.attemptsUsed, command.operationId),
-      attemptNumber: eligibility.nextAttemptNumber,
-      quoteId: eligibility.quoteId,
-      reservationId: eligibility.reservationId,
-      amountMinor: eligibility.amountMinor.toString(),
-      currency: eligibility.currency,
-      policyVersion: eligibility.policyVersion,
-      policyDecision: eligibility.policyDecision,
+      ...counters(params.attemptsUsed, operationId),
+      attemptNumber: params.nextAttemptNumber,
+      quoteId: params.quoteId,
+      reservationId: params.reservationId,
+      amountMinor: params.amountMinor.toString(),
+      currency: params.currency,
+      policyVersion: params.policyVersion,
+      policyDecision: params.policyDecision,
       provider: "RAZORPAY",
-      ...(eligibility.approvalId === null ? {} : { approvalId: eligibility.approvalId }),
+      ...(params.approvalId === null ? {} : { approvalId: params.approvalId }),
     },
   });
 
@@ -452,8 +800,8 @@ export async function requestPaymentRetry(
   // - the durable claim, the receipt idempotency, the three-outcome provider
   // contract, the unresolved-outcome parking - is Objective 10's, and a second
   // implementation for retries would be a second chance to get it wrong.
-  const order = await createPaymentOrder(
-    { transactionId, retry: { attemptNumber: eligibility.nextAttemptNumber } },
+  const order: PaymentOrderResult = await createPaymentOrder(
+    { transactionId, retry: { attemptNumber: params.nextAttemptNumber } },
     orderDeps(deps),
   );
 
@@ -465,7 +813,7 @@ export async function requestPaymentRetry(
     return {
       kind: "ORDER_NOT_READY",
       transactionId,
-      attemptsUsed: eligibility.attemptsUsed,
+      attemptsUsed: params.attemptsUsed,
       maxAttempts: MAX_PAYMENT_ATTEMPTS,
       reason: order.kind,
       detail:
@@ -489,8 +837,8 @@ export async function requestPaymentRetry(
     kind: "RETRY_STARTED",
     transactionId,
     paymentAttemptId: order.order.paymentAttemptId,
-    attemptNumber: created?.attemptNumber ?? eligibility.nextAttemptNumber,
-    attemptsUsed: eligibility.attemptsUsed,
+    attemptNumber: created?.attemptNumber ?? params.nextAttemptNumber,
+    attemptsUsed: params.attemptsUsed,
     maxAttempts: MAX_PAYMENT_ATTEMPTS,
     amount: order.order.amount,
     transactionState: order.transactionState,

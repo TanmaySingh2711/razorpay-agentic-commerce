@@ -9,6 +9,7 @@ import { AppError, DomainRuleError, InfrastructureError } from "@/domain/errors"
 import type {
   CommitResult,
   ReleaseResult,
+  RequoteReservationResult,
   ReservationDto,
   ReservationRefusal,
   ReservationResult,
@@ -375,6 +376,88 @@ export async function releaseReservation(
       reservationId: command.reservationId,
       quantity: reservation.quantity,
     };
+  });
+}
+
+export interface RequoteReservationCommand {
+  readonly transactionId: string;
+  /** The fresh `PurchaseQuote` this hold is now standing against. */
+  readonly newQuoteId: string;
+  /** Must match the reservation's own columns; a mismatch refuses rather than rebinding the wrong hold. */
+  readonly productId: string;
+  readonly quantity: number;
+  readonly correlationId: string | null;
+  readonly operationId: string;
+}
+
+/**
+ * Points an existing, still-held reservation at a freshly re-quoted price.
+ *
+ * The controlled-retry path's answer to a stale quote: the unit is already set
+ * aside for this transaction, so a retry that re-quotes must not claim a second
+ * one - it only needs the hold to name the quote that now prices it. Nothing
+ * about the hold itself moves: not its quantity, not its product, not its
+ * expiry, and no stock counter is touched, because no stock changes hands here.
+ *
+ * The whole operation is one conditional UPDATE, in the same spirit as every
+ * other settle-or-refuse claim in this file: `WHERE status = 'ACTIVE' AND
+ * expiresAt > now AND productId = ... AND quantity = ...`. A hold that lapsed,
+ * was released, was already committed, or somehow names a different product or
+ * quantity than the caller expects matches nothing, and this refuses rather
+ * than rebinding the wrong reservation to the wrong price.
+ *
+ * Called only from the retry-service, and only after its own gate has already
+ * confirmed a matching `ACTIVE` reservation exists - this function re-checks
+ * that fact itself rather than trusting the caller's word for it, exactly as
+ * every other claim in this file re-verifies its own precondition at the
+ * instant of the write.
+ */
+export async function requoteReservation(
+  command: RequoteReservationCommand,
+  deps: ReservationServiceDeps = defaultReservationDeps(),
+): Promise<RequoteReservationResult> {
+  const now = deps.clock.now();
+
+  return deps.prisma.$transaction(async (tx) => {
+    const rebound = await tx.inventoryReservation.updateMany({
+      where: {
+        transactionId: command.transactionId,
+        status: "ACTIVE",
+        expiresAt: { gt: now },
+        productId: command.productId,
+        quantity: command.quantity,
+      },
+      data: { purchaseQuoteId: command.newQuoteId },
+    });
+    if (rebound.count !== 1) {
+      return {
+        kind: "REFUSED" as const,
+        reservationId: null,
+        refusal: "RESERVATION_NOT_HELD" as const,
+      };
+    }
+
+    const reservation = await tx.inventoryReservation.findFirstOrThrow({
+      where: { transactionId: command.transactionId, status: "ACTIVE" },
+    });
+
+    await writeInventoryEvent(tx, {
+      transactionId: command.transactionId,
+      eventType: "inventory_reservation_requoted",
+      result: "SUCCESS",
+      reasonCode: "RESERVATION_REQUOTED",
+      correlationId: command.correlationId,
+      operationKey: `reservation-requote:${command.transactionId}:${command.operationId}`,
+      metadata: {
+        reservationId: reservation.id,
+        quoteId: command.newQuoteId,
+        productId: command.productId,
+        quantity: command.quantity,
+        operationId: command.operationId,
+      },
+    });
+
+    return { kind: "REQUOTED" as const, reservation: toReservationDto(reservation) };
   });
 }
 

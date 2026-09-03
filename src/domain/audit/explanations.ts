@@ -256,6 +256,8 @@ export function explainAuditEvent(input: {
       return `Stock could not be held for this purchase${reasonTail}.`;
     case "inventory_reservation_expired":
       return `The hold on ${units(quantity)} lapsed and the stock returned to availability.`;
+    case "inventory_reservation_requoted":
+      return `The hold on ${units(quantity)} was carried over to a freshly re-quoted price.`;
     case "inventory_released":
       return `${units(quantity)} released back into availability.`;
     case "inventory_committed": {

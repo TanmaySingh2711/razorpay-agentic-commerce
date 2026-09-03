@@ -40,6 +40,8 @@ export const AUDIT_EVENT_TYPES = [
   "inventory_reserved",
   "inventory_reservation_failed",
   "inventory_reservation_expired",
+  /** A controlled retry's still-active hold was rebound to a freshly re-quoted price. */
+  "inventory_reservation_requoted",
   "inventory_committed",
   "inventory_released",
   "payment_order_created",
