@@ -208,9 +208,64 @@ nothing matches and sold stock cannot be handed back into availability.
 `commitReservation` is the only operation in the system that decrements real
 stock, and it refuses unless the transaction is in `PAYMENT_CAPTURED` or
 `COMPLETED`. Nothing in Objectives 1–8 can put a transaction into either state,
-which is the point: the operation exists for the payment workflow to call later
-and is unusable until that workflow can honestly prove capture. It is called by
-nothing today — no route, no tool, no service.
+which is the point: the operation exists for the payment workflow to call, and
+was unusable until that workflow could honestly prove capture. Objective 8
+wrote the primitive; the payment webhook is the caller that actually reaches
+it, and that reconciliation is described next.
+
+### Finalization: capture, commit and completion are one atomic step
+
+The **browser callback** (`verifyCheckoutCallback`) can only ever move a
+transaction to `PAYMENT_VERIFIED`. It proves a signature is authentic, not that
+money moved, so it never commits a reservation and never completes a
+transaction — regardless of how many times it is called, or what it is told.
+
+Only the **authoritative Razorpay `payment.captured` webhook** can finalize a
+purchase, because only the party holding the money may say it arrived. When
+that webhook's capture reconciliation applies `PAYMENT_CAPTURE_CONFIRMED` and
+the transaction reaches `PAYMENT_CAPTURED`, the same database transaction —
+before it commits — goes on to:
+
+1. find the transaction's `ACTIVE` reservation and commit it through
+   `commitReservationWithin` (the transaction-aware primitive
+   `commitReservation` is built on), permanently decrementing on-hand stock;
+2. request `TRANSACTION_COMPLETED` through the state machine, moving the
+   transaction to `COMPLETED`.
+
+Both happen or neither does: they run inside the exact database transaction
+that reconciled the capture, so a process crash between them is not a
+reachable outcome. A captured payment is either still mid-reconciliation
+(rolled back, nothing changed) or already fully settled — there is no
+persisted state in between for anything outside that transaction to observe.
+
+**Duplicates and replays cannot commit or complete twice.** A redelivered
+webhook converges on the `WebhookEvent` unique constraint before finalization
+is ever reached. A capture for a transaction the state machine judges already
+accounted for — already `PAYMENT_CAPTURED` or `COMPLETED` — never produces the
+`APPLIED` outcome finalization is gated on, so a duplicate delivery, a stale
+replay, or the losing half of a double-capture anomaly (Objective 14) never
+re-commits an already-committed reservation or re-requests an
+already-satisfied completion.
+
+**A late, genuine capture can still finalize safely.** A capture that arrives
+after an earlier attempt was recorded failed reconciles through the
+late-capture edge (Objective 14); as long as the reservation the retry
+workflow left `ACTIVE` through the failure is still there, this same
+finalization commits it and completes the transaction, exactly as the
+ordinary path does.
+
+**If no `ACTIVE` reservation is left to commit** — the one case where a
+permanently denied retry has already released the hold before a late capture
+arrives — finalization refuses rather than lies: it does not complete the
+transaction, and does not report a sale that has no stock behind it. The
+transaction is deliberately left at `PAYMENT_CAPTURED` for a human to
+reconcile. The capture itself is still recorded, because the money genuinely
+moved; only the fulfilment side is left open.
+
+**The expiry sweeper cannot undo any of this.** `releaseLapsedReservations`
+matches only `status: "ACTIVE"` reservations, exactly like `releaseReservation`
+above — a `COMMITTED` reservation is simply not a row either query can ever
+select, sweeper included, whether it lapsed a second ago or a year ago.
 
 ### What counts as a retry
 
@@ -263,5 +318,6 @@ optional, defaulted TTLs.
 ## What Objective 8 deliberately did not do
 
 No Razorpay SDK, orders, checkout, signature verification, webhooks, real
-payment capture or retry. No audit UI. `commitReservation` exists but is called
-by nothing.
+payment capture or retry. No audit UI. `commitReservation` was written here but
+called by nothing at the time; the payment webhook's capture reconciliation is
+the caller, described above under "Finalization".

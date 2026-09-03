@@ -10,7 +10,10 @@ import {
   type WebhookServiceDeps,
 } from "@/services/payment/webhook-service";
 import { createPaymentOrder } from "@/services/payment/payment-order-service";
-import { reserveInventory } from "@/services/inventory/reservation-service";
+import {
+  releaseLapsedReservations,
+  reserveInventory,
+} from "@/services/inventory/reservation-service";
 import { evaluateQuotePolicy } from "@/services/policy/policy-service";
 import { createTrustedQuote } from "@/services/quote/quote-service";
 import { applyTransactionEvent } from "@/services/transaction/transition-service";
@@ -126,7 +129,7 @@ function checkoutDeps(): CheckoutServiceDeps {
 }
 
 function webhookDeps(): WebhookServiceDeps {
-  return { prisma: testDb(), provider };
+  return { prisma: testDb(), provider, clock };
 }
 
 interface Arranged {
@@ -315,9 +318,13 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
 
       expect(result).toMatchObject({
         kind: "RECONCILED",
-        transactionState: "PAYMENT_CAPTURED",
+        // Capture reconciliation is atomic all the way to completion: the same
+        // database transaction that proves the money moved also commits the
+        // reservation and finishes the purchase, so PAYMENT_CAPTURED is never a
+        // state this call leaves behind for a later request to observe.
+        transactionState: "COMPLETED",
       });
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
 
       // The arrival is recorded as an observation in its own right, before the
       // conclusion drawn from it, so the trail shows both.
@@ -342,12 +349,12 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
 
       expect(result).toMatchObject({
         kind: "RECONCILED",
-        transactionState: "PAYMENT_CAPTURED",
+        transactionState: "COMPLETED",
       });
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
     });
 
-    it("C. stays captured when the same capture is redelivered", async () => {
+    it("C. stays completed when the same capture is redelivered", async () => {
       const { transactionId, providerOrderId } = await arrangeVerified();
       const body = eventBody({ event: "payment.captured", orderId: providerOrderId });
       const eventId = uid("evt");
@@ -358,7 +365,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       const second = await deliver(body, eventId);
 
       expect(second).toMatchObject({ kind: "DUPLICATE" });
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
       // No second transition, and no second audit row for the capture.
       expect(await transitionsOf(transactionId)).toHaveLength(after.length);
       expect(
@@ -366,7 +373,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       ).toHaveLength(1);
     });
 
-    it("D. stays captured when a stale failure arrives afterwards", async () => {
+    it("D. stays completed when a stale failure arrives afterwards", async () => {
       // The single most dangerous ordering: a failure event delayed behind a
       // capture. Money moved; a late 'failed' must not unwind that.
       const { transactionId, providerOrderId } = await arrangeVerified();
@@ -388,13 +395,13 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
         uid("evt"),
       );
 
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
 
       // The attempt must agree with the transaction it belongs to. An earlier
       // version of this service wrote the attempt from the event rather than
       // from the transition, leaving attempt=FAILED under a transaction that
-      // said PAYMENT_CAPTURED - a financial record contradicting itself, which
-      // the transaction-state assertion above cannot catch on its own.
+      // said COMPLETED - a financial record contradicting itself, which the
+      // transaction-state assertion above cannot catch on its own.
       const attempt = await attemptOf(transactionId);
       expect(attempt.status).toBe("CAPTURED");
       expect(attempt.failureCode).toBeNull();
@@ -404,7 +411,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       expect(stale.kind).toBe("RECONCILED");
       if (stale.kind !== "RECONCILED") return;
       expect(stale.alreadyAccountedFor).toBe(true);
-      expect(stale.transactionState).toBe("PAYMENT_CAPTURED");
+      expect(stale.transactionState).toBe("COMPLETED");
 
       // And it reads as what happened, not as what it reported. Recording a
       // `payment_failed` here would make the trail say the payment failed.
@@ -438,12 +445,22 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
 
       expect(late).toMatchObject({
         kind: "RECONCILED",
-        transactionState: "PAYMENT_CAPTURED",
+        transactionState: "COMPLETED",
       });
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
-      // The history records how it got there, rather than overwriting it.
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
+      // The history records how it got there, rather than overwriting it -
+      // through the late-capture edge, then all the way to completion.
       const reasons = (await transitionsOf(transactionId)).map((t) => t.reasonCode);
       expect(reasons).toContain("LATE_CAPTURE_RECONCILED");
+      expect(reasons).toContain("TRANSACTION_COMPLETED");
+
+      // The reservation the retry workflow left ACTIVE through the failure is
+      // committed by the same reconciliation, not left behind for the expiry
+      // sweeper to find and release.
+      const reservation = await testDb().inventoryReservation.findFirstOrThrow({
+        where: { transactionId },
+      });
+      expect(reservation.status).toBe("COMMITTED");
     });
 
     it("F. a browser callback arriving after capture cannot regress the state", async () => {
@@ -456,7 +473,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
           )
         ).kind,
       ).toBe("RECONCILED");
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
 
       // The browser finally comes back with a genuine, correctly signed callback.
       const callback = await verifyCheckoutCallback(
@@ -470,12 +487,14 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       );
 
       expect(callback.kind).toBe("PAYMENT_VERIFIED");
-      // Authentic, and it moves nothing: capture already accounted for it.
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      // Authentic, and it moves nothing: capture already accounted for it, all
+      // the way to completion. Callback verification alone never finalizes a
+      // purchase - it only ever converges on whatever the webhook already did.
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
       // And the answer says so. Reporting PAYMENT_VERIFIED as the transaction's
       // state here would be a lie to the browser about where the money got to.
       if (callback.kind !== "PAYMENT_VERIFIED") return;
-      expect(callback.transactionState).toBe("PAYMENT_CAPTURED");
+      expect(callback.transactionState).toBe("COMPLETED");
       expect(callback.replayed).toBe(true);
     });
   });
@@ -499,7 +518,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       const race = (prisma: typeof clientA) =>
         processWebhook(
           { rawBody: body, signature: signWebhook(body), providerEventId: eventId },
-          { prisma, provider },
+          { prisma, provider, clock },
         );
 
       let first: Awaited<ReturnType<typeof race>>;
@@ -513,7 +532,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
 
       const kinds = [first.kind, second.kind].sort();
       expect(kinds).toEqual(["DUPLICATE", "RECONCILED"]);
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
       expect(
         (await auditOf(transactionId)).filter((e) => e.action === "payment_captured"),
       ).toHaveLength(1);
@@ -581,7 +600,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       // The provider retries, and this time it lands.
       const retried = await deliver(body, eventId);
       expect(retried).toMatchObject({ kind: "RECONCILED" });
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
     });
   });
 
@@ -717,7 +736,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
         webhookDeps(),
       );
       expect(genuine.status).toBe(200);
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
 
       const forged = await handleRazorpayWebhook(
         new Request("https://staging.test/api/webhooks/razorpay", {
@@ -733,7 +752,7 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       );
       expect(forged.status).toBe(401);
       // The forgery changed nothing, and left no receipt behind.
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
     });
 
     it("tells an unauthenticated caller nothing about why it failed", async () => {
@@ -770,50 +789,117 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
   });
 
   // -------------------------------------------------------------------------
-  // The boundary this objective must not cross.
+  // The gap this objective closes: capture, without completion, was a real
+  // reachable state a paid reservation could be released out from under.
   // -------------------------------------------------------------------------
 
-  describe("capture is not completion", () => {
-    it("stops at PAYMENT_CAPTURED, without completing or committing stock", async () => {
+  describe("capture completes the purchase", () => {
+    /** Reached through the reservation, not `Transaction.productId` - that
+     * column is only set by the agent flow, and this transaction was arranged
+     * through the payment boundaries. */
+    async function stockOf(
+      transactionId: string,
+    ): Promise<{ inventory: number; reservedQuantity: number }> {
+      const held = await testDb().inventoryReservation.findFirstOrThrow({
+        where: { transactionId },
+        select: { productId: true },
+      });
+      return await testDb().product.findUniqueOrThrow({
+        where: { id: held.productId },
+        select: { inventory: true, reservedQuantity: true },
+      });
+    }
+
+    it("commits the reservation and reaches COMPLETED, in one reconciliation", async () => {
       const { transactionId, providerOrderId } = await arrangeVerified();
-      // Reached through the reservation, not through Transaction.productId -
-      // that column is only set by the agent flow, and this transaction was
-      // arranged through the payment boundaries.
-      const stockOf = async (): Promise<{
-        inventory: number;
-        reservedQuantity: number;
-      }> => {
-        const held = await testDb().inventoryReservation.findFirstOrThrow({
-          where: { transactionId },
-          select: { productId: true },
-        });
-        return await testDb().product.findUniqueOrThrow({
-          where: { id: held.productId },
-          select: { inventory: true, reservedQuantity: true },
-        });
-      };
-      const before = await stockOf();
+      const before = await stockOf(transactionId);
 
       await deliver(
         eventBody({ event: "payment.captured", orderId: providerOrderId }),
         uid("evt"),
       );
 
-      expect(await statusOf(transactionId)).toBe("PAYMENT_CAPTURED");
       const row = await testDb().transaction.findUniqueOrThrow({
         where: { id: transactionId },
         select: { status: true, completedAt: true },
       });
-      expect(row.status).not.toBe("COMPLETED");
-      expect(row.completedAt).toBeNull();
+      expect(row.status).toBe("COMPLETED");
+      expect(row.completedAt).not.toBeNull();
 
-      // Stock stays reserved, not sold. Fulfilment is a later objective.
-      expect(await stockOf()).toEqual(before);
+      // Stock is sold, not merely held: the unit left the warehouse.
+      const after = await stockOf(transactionId);
+      expect(after.inventory).toBe(before.inventory - 1);
+      expect(after.reservedQuantity).toBe(before.reservedQuantity - 1);
+
+      // A captured payment never leaves its reservation ACTIVE - the exact
+      // gap that let the expiry sweeper release stock someone had already
+      // paid for.
       const reservation = await testDb().inventoryReservation.findFirstOrThrow({
         where: { transactionId },
       });
-      expect(reservation.status).toBe("ACTIVE");
-      expect(reservation.committedAt).toBeNull();
+      expect(reservation.status).toBe("COMMITTED");
+      expect(reservation.status).not.toBe("ACTIVE");
+      expect(reservation.committedAt).not.toBeNull();
+    });
+
+    it("never releases the reservation it just committed, however late the sweeper looks", async () => {
+      // The sweeper only ever matches status ACTIVE, so a COMMITTED reservation
+      // is structurally unreachable to it - proved directly here rather than
+      // trusted from reading the query.
+      const { transactionId, providerOrderId } = await arrangeVerified();
+      await deliver(
+        eventBody({ event: "payment.captured", orderId: providerOrderId }),
+        uid("evt"),
+      );
+      const reservation = await testDb().inventoryReservation.findFirstOrThrow({
+        where: { transactionId },
+      });
+      expect(reservation.status).toBe("COMMITTED");
+
+      // Its hold, if it still had one, would have lapsed long ago.
+      clock.advanceMs((RESERVATION_TTL_SECONDS + 3600) * 1000);
+      const freed = await releaseLapsedReservations(
+        testDb(),
+        reservation.productId,
+        clock.now(),
+      );
+
+      expect(freed).toBe(0);
+      const after = await testDb().inventoryReservation.findUniqueOrThrow({
+        where: { id: reservation.id },
+      });
+      expect(after.status).toBe("COMMITTED");
+      expect(after.releasedAt).toBeNull();
+    });
+
+    it("finalizes in the order the transaction actually happened", async () => {
+      const { transactionId, providerOrderId } = await arrangeVerified();
+      await deliver(
+        eventBody({ event: "payment.captured", orderId: providerOrderId }),
+        uid("evt"),
+      );
+
+      // The transition history is the authoritative sequence, and it must read
+      // capture, then completion - never the reverse, and never interleaved
+      // with something else.
+      const transitions = await transitionsOf(transactionId);
+      const reasons = transitions.map((t) => t.reasonCode);
+      const capturedAt = reasons.indexOf("PAYMENT_CAPTURE_CONFIRMED");
+      const completedAt = reasons.indexOf("TRANSACTION_COMPLETED");
+      expect(capturedAt).toBeGreaterThanOrEqual(0);
+      expect(completedAt).toBeGreaterThan(capturedAt);
+      expect(transitions[completedAt]?.toStatus).toBe("COMPLETED");
+      expect(transitions[completedAt]?.fromStatus).toBe("PAYMENT_CAPTURED");
+
+      // The audit trail agrees: captured, committed, completed, in that order.
+      const trail = await auditOf(transactionId);
+      const actions = trail.map((e) => e.action);
+      const capturedIdx = actions.indexOf("payment_captured");
+      const committedIdx = actions.indexOf("inventory_committed");
+      const finishedIdx = actions.indexOf("transaction_completed");
+      expect(capturedIdx).toBeGreaterThanOrEqual(0);
+      expect(committedIdx).toBeGreaterThan(capturedIdx);
+      expect(finishedIdx).toBeGreaterThan(committedIdx);
     });
 
     it("writes no secret into the audit trail", async () => {

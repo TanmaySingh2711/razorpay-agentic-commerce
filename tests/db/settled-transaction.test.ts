@@ -23,10 +23,7 @@ import { createTrustedQuote } from "@/services/quote/quote-service";
 import { applyTransactionEvent } from "@/services/transaction/transition-service";
 import { createTransaction } from "@/services/transaction/creation-service";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
-import {
-  InvalidTransitionError,
-  TerminalStateViolationError,
-} from "@/domain/transaction/errors";
+import { TerminalStateViolationError } from "@/domain/transaction/errors";
 import { fixedClock, type MutableClock } from "@/lib/clock";
 import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
@@ -59,11 +56,21 @@ import {
  * refusal that names the state rather than in a second order, a second attempt,
  * a second charge, or a second decrement of stock.
  *
- * Two settled states are covered, because the system genuinely has two:
- * `PAYMENT_CAPTURED`, where the provider has confirmed the money, and
- * `COMPLETED`, the terminal state. They are asserted separately rather than
- * treated as one "success" - collapsing them is the mistake the whole payment
- * design exists to avoid.
+ * A captured payment and a completed transaction used to be two states this
+ * suite tested separately: the provider had confirmed the money
+ * (`PAYMENT_CAPTURED`), and, as a distinct later step, the reservation was
+ * committed and the transaction marked `COMPLETED`. That gap - a real,
+ * persisted state in which money had moved but the reservation it paid for was
+ * still ACTIVE, reachable to the expiry sweeper - was the defect this suite's
+ * own fixtures once had to construct by hand to be testable at all. Capture
+ * reconciliation is now atomic all the way through: committing the
+ * reservation and completing the transaction happen in the same database
+ * transaction as the capture that proves the money arrived, so a webhook
+ * delivery that captures a payment leaves `PAYMENT_CAPTURED` as a state
+ * nothing outside that transaction ever observes. Every fixture below reaches
+ * `COMPLETED` directly, and the guarantees this suite proves - no second
+ * order, no second charge, no second decrement of stock, no second completion
+ * - are proved against that terminal state.
  *
  * Everything is driven through the real service boundaries against real
  * PostgreSQL. The provider's network is faked; its signature check is not.
@@ -107,7 +114,7 @@ function checkoutDeps(): CheckoutServiceDeps {
 }
 
 function webhookDeps(): WebhookServiceDeps {
-  return { prisma: testDb(), provider };
+  return { prisma: testDb(), provider, clock };
 }
 
 function retryDeps(): RetryServiceDeps {
@@ -153,7 +160,16 @@ interface Settled {
   readonly paymentId: string;
 }
 
-/** Drives one purchase through every real boundary until the money has landed. */
+/**
+ * Drives one purchase through every real boundary until it settles.
+ *
+ * "Until the money has landed" and "until the purchase settles" are one and
+ * the same event now: the webhook that reconciles the capture also commits
+ * the reservation and completes the transaction, atomically. This fixture
+ * therefore returns a transaction already at `COMPLETED`, with its reservation
+ * already `COMMITTED` - there is no intermediate, separately observable state
+ * for a second fixture to build on top of.
+ */
 async function arrangeCaptured(): Promise<Settled> {
   const product = await testDb().product.create({
     data: {
@@ -239,7 +255,7 @@ async function arrangeCaptured(): Promise<Settled> {
     webhookDeps(),
   );
   expect(captured.kind).toBe("RECONCILED");
-  expect(await statusOf(transaction.id)).toBe("PAYMENT_CAPTURED");
+  expect(await statusOf(transaction.id)).toBe("COMPLETED");
 
   return {
     transactionId: transaction.id,
@@ -262,32 +278,6 @@ async function deliver(rawBody: string) {
     },
     webhookDeps(),
   );
-}
-
-/** Takes a captured purchase the rest of the way to the terminal state. */
-async function arrangeCompleted(): Promise<Settled> {
-  const settled = await arrangeCaptured();
-  const committed = await commitReservation(settled.reservationId, {
-    prisma: testDb(),
-    clock,
-    ttlSeconds: RESERVATION_TTL_SECONDS,
-  });
-  expect(committed.kind).toBe("COMMITTED");
-
-  expect(
-    (
-      await applyTransactionEvent(
-        {
-          transactionId: settled.transactionId,
-          event: "TRANSACTION_COMPLETED" as TransactionEvent,
-          actor: "transaction_service",
-        },
-        { prisma: testDb() },
-      )
-    ).kind,
-  ).toBe("APPLIED");
-  expect(await statusOf(settled.transactionId)).toBe("COMPLETED");
-  return settled;
 }
 
 /** Everything that would have to change for a second charge to have happened. */
@@ -333,7 +323,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
     await disconnectTestDb();
   });
 
-  describe("once the money has been captured", () => {
+  describe("once a purchase has settled", () => {
     it("refuses a second payment order, and asks the provider for nothing", async () => {
       const settled = await arrangeCaptured();
       const before = await moneyFootprint(settled.transactionId);
@@ -344,7 +334,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
         { prisma: testDb(), clock, provider },
       );
 
-      // Not a replay of the existing order either: a captured transaction is
+      // Not a replay of the existing order either: a completed transaction is
       // past the point where "your order is ready, go pay" is a true sentence.
       expect(second.kind).toBe("REFUSED");
       expect(provider.createRequests.length).toBe(callsBefore);
@@ -380,111 +370,16 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
         retryDeps(),
       );
 
+      // The same denial fires for PAYMENT_CAPTURED and COMPLETED alike - both
+      // are states in which the money has been taken, and a caller asking to
+      // pay again must be refused for that reason specifically.
       expect(retry.kind).toBe("DENIED");
       if (retry.kind === "DENIED") expect(retry.denial).toBe("PAYMENT_ALREADY_CAPTURED");
       expect(await moneyFootprint(settled.transactionId)).toEqual(before);
     });
 
-    it("cannot be walked backwards into paying again by a state event", async () => {
-      // The service guards are one layer; the state machine is the other. Even
-      // a caller that reached the transition service directly cannot re-open a
-      // captured purchase for payment.
-      const settled = await arrangeCaptured();
-
-      // Each is refused loudly rather than reported as a soft outcome: an
-      // invalid step against a paid transaction is a defect in the caller, and
-      // a return value could be ignored where an exception cannot.
-      for (const event of [
-        "PAYMENT_INITIATED",
-        "PAYMENT_ORDER_CREATED",
-        "INVENTORY_RESERVED",
-      ] as TransactionEvent[]) {
-        await expect(
-          applyTransactionEvent(
-            { transactionId: settled.transactionId, event, actor: "payment_provider" },
-            { prisma: testDb() },
-          ),
-          event,
-        ).rejects.toBeInstanceOf(InvalidTransitionError);
-      }
-      expect(await statusOf(settled.transactionId)).toBe("PAYMENT_CAPTURED");
-    });
-
-    it("sells the stock exactly once, however often the commit is replayed", async () => {
-      const settled = await arrangeCaptured();
-      const stockBefore = await testDb().product.findUniqueOrThrow({
-        where: { id: settled.productId },
-        select: { inventory: true, reservedQuantity: true },
-      });
-
-      const first = await commitReservation(settled.reservationId, {
-        prisma: testDb(),
-        clock,
-        ttlSeconds: RESERVATION_TTL_SECONDS,
-      });
-      expect(first.kind).toBe("COMMITTED");
-
-      const afterFirst = await testDb().product.findUniqueOrThrow({
-        where: { id: settled.productId },
-        select: { inventory: true, reservedQuantity: true },
-      });
-      expect(afterFirst.inventory).toBe(stockBefore.inventory - 1);
-
-      // Three replays, concurrently. The conditional UPDATE from ACTIVE is what
-      // authorises the decrement, so only the first can find a claim to spend.
-      const replays = await Promise.all(
-        [0, 1, 2].map(() =>
-          commitReservation(settled.reservationId, {
-            prisma: testDb(),
-            clock,
-            ttlSeconds: RESERVATION_TTL_SECONDS,
-          }),
-        ),
-      );
-      expect(replays.every((result) => result.kind !== "COMMITTED")).toBe(true);
-
-      const afterReplays = await testDb().product.findUniqueOrThrow({
-        where: { id: settled.productId },
-        select: { inventory: true, reservedQuantity: true },
-      });
-      expect(afterReplays).toEqual(afterFirst);
-    });
-
-    it("will not give committed stock back", async () => {
-      // Releasing a sold unit would return it to the shelf while the buyer
-      // still owns it, which is the overselling failure arriving late.
-      const settled = await arrangeCaptured();
-      expect(
-        (
-          await commitReservation(settled.reservationId, {
-            prisma: testDb(),
-            clock,
-            ttlSeconds: RESERVATION_TTL_SECONDS,
-          })
-        ).kind,
-      ).toBe("COMMITTED");
-
-      const stock = await testDb().product.findUniqueOrThrow({
-        where: { id: settled.productId },
-        select: { inventory: true, reservedQuantity: true },
-      });
-      const released = await releaseReservation(
-        { reservationId: settled.reservationId, reasonCode: "EXPIRED" },
-        { prisma: testDb(), clock, ttlSeconds: RESERVATION_TTL_SECONDS },
-      );
-      expect(released.kind).not.toBe("RELEASED");
-      expect(
-        await testDb().product.findUniqueOrThrow({
-          where: { id: settled.productId },
-          select: { inventory: true, reservedQuantity: true },
-        }),
-      ).toEqual(stock);
-    });
-  });
-
-  describe("once the transaction is complete", () => {
     it("cannot be completed a second time", async () => {
-      const settled = await arrangeCompleted();
+      const settled = await arrangeCaptured();
       const before = await moneyFootprint(settled.transactionId);
 
       // Refused as a terminal-state violation specifically, not as a generic
@@ -504,32 +399,91 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
       expect(await moneyFootprint(settled.transactionId)).toEqual(before);
     });
 
-    it("refuses a payment order, a checkout session and a retry alike", async () => {
-      const settled = await arrangeCompleted();
-      const before = await moneyFootprint(settled.transactionId);
-      const callsBefore = provider.createRequests.length;
+    it("cannot be walked backwards into paying again by any state event", async () => {
+      // The service guards are one layer; the state machine is the other. Even
+      // a caller that reached the transition service directly cannot re-open a
+      // finished purchase for payment - COMPLETED is terminal against every
+      // event, not only the one that just moved it there.
+      const settled = await arrangeCaptured();
 
-      const order = await createPaymentOrder(
-        { transactionId: settled.transactionId },
-        { prisma: testDb(), clock, provider },
-      );
-      const checkout = await startCheckout(
-        { transactionId: settled.transactionId },
-        checkoutDeps(),
-      );
-      const retry = await requestPaymentRetry(
-        { transactionId: settled.transactionId, operationId: uid("op") },
-        retryDeps(),
-      );
+      // Each is refused loudly rather than reported as a soft outcome: an
+      // invalid step against a finished transaction is a defect in the caller,
+      // and a return value could be ignored where an exception cannot.
+      for (const event of [
+        "PAYMENT_INITIATED",
+        "PAYMENT_ORDER_CREATED",
+        "INVENTORY_RESERVED",
+      ] as TransactionEvent[]) {
+        await expect(
+          applyTransactionEvent(
+            { transactionId: settled.transactionId, event, actor: "payment_provider" },
+            { prisma: testDb() },
+          ),
+          event,
+        ).rejects.toBeInstanceOf(TerminalStateViolationError);
+      }
+      expect(await statusOf(settled.transactionId)).toBe("COMPLETED");
+    });
 
-      expect(order.kind).toBe("REFUSED");
-      expect(checkout).toMatchObject({
-        kind: "REFUSED",
-        refusal: "TRANSACTION_STATE_INVALID",
+    it("does not commit the reservation twice, however often the commit is replayed", async () => {
+      // Finalization already committed this reservation once, atomically with
+      // the capture that authorized it. Nothing later - a redelivered webhook,
+      // an operator script, a race - may spend the same claim again.
+      const settled = await arrangeCaptured();
+      const stockBefore = await testDb().product.findUniqueOrThrow({
+        where: { id: settled.productId },
+        select: { inventory: true, reservedQuantity: true },
       });
-      expect(retry.kind).toBe("DENIED");
-      expect(provider.createRequests.length).toBe(callsBefore);
-      expect(await moneyFootprint(settled.transactionId)).toEqual(before);
+      const reservation = await testDb().inventoryReservation.findUniqueOrThrow({
+        where: { id: settled.reservationId },
+      });
+      expect(reservation.status).toBe("COMMITTED");
+
+      // Three replays, concurrently. The conditional UPDATE from ACTIVE is what
+      // authorises the decrement, so none of them can find a claim to spend.
+      const replays = await Promise.all(
+        [0, 1, 2].map(() =>
+          commitReservation(settled.reservationId, {
+            prisma: testDb(),
+            clock,
+            ttlSeconds: RESERVATION_TTL_SECONDS,
+          }),
+        ),
+      );
+      expect(replays.every((result) => result.kind === "REFUSED")).toBe(true);
+      expect(
+        replays.every(
+          (result) => result.kind === "REFUSED" && result.refusal === "NOT_ACTIVE",
+        ),
+      ).toBe(true);
+
+      const stockAfter = await testDb().product.findUniqueOrThrow({
+        where: { id: settled.productId },
+        select: { inventory: true, reservedQuantity: true },
+      });
+      expect(stockAfter).toEqual(stockBefore);
+    });
+
+    it("will not give committed stock back", async () => {
+      // Releasing a sold unit would return it to the shelf while the buyer
+      // still owns it, which is the overselling failure arriving late.
+      const settled = await arrangeCaptured();
+
+      const stock = await testDb().product.findUniqueOrThrow({
+        where: { id: settled.productId },
+        select: { inventory: true, reservedQuantity: true },
+      });
+      const released = await releaseReservation(
+        { reservationId: settled.reservationId, reasonCode: "EXPIRED" },
+        { prisma: testDb(), clock, ttlSeconds: RESERVATION_TTL_SECONDS },
+      );
+      expect(released.kind).not.toBe("RELEASED");
+      expect(
+        await testDb().product.findUniqueOrThrow({
+          where: { id: settled.productId },
+          select: { inventory: true, reservedQuantity: true },
+        }),
+      ).toEqual(stock);
     });
 
     it("absorbs a redelivery of the very capture that settled it", async () => {
@@ -537,7 +491,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
       // provider event id so the event-level dedupe cannot be what saves us.
       // Providers do this routinely, and a terminal transaction must take it
       // without moving.
-      const settled = await arrangeCompleted();
+      const settled = await arrangeCaptured();
       const before = await moneyFootprint(settled.transactionId);
 
       const late = await deliver(
@@ -552,7 +506,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
     it("refuses a different payment claimed against the order it already settled", async () => {
       // Not a redelivery: a second payment id for an order that is already
       // paid. Binding it would attach a stranger's payment to this purchase.
-      const settled = await arrangeCompleted();
+      const settled = await arrangeCaptured();
       const before = await moneyFootprint(settled.transactionId);
 
       const other = await deliver(
@@ -565,7 +519,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
     });
 
     it("keeps exactly one payment attempt and one reservation to its name", async () => {
-      const settled = await arrangeCompleted();
+      const settled = await arrangeCaptured();
       const footprint = await moneyFootprint(settled.transactionId);
       expect(footprint.attempts).toBe(1);
       expect(footprint.reservations).toBe(1);

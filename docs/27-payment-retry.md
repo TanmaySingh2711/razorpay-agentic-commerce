@@ -216,9 +216,15 @@ Without it a genuine capture for attempt #1 would be held for reconciliation
 while the buyer was still being invited to pay again. It is restricted to
 `payment_webhook`: only the party that holds the money may say it arrived.
 
-When a late capture lands, the transaction reaches `PAYMENT_CAPTURED`, the
-pending retry attempt is left untouched, further retries are denied
-`PAYMENT_ALREADY_CAPTURED`, and `startCheckout` refuses.
+When a late capture lands, the transaction reaches `PAYMENT_CAPTURED` and, in
+the same reconciliation, finalizes straight through to `COMPLETED`: the
+reservation the retry workflow left `ACTIVE` through the failure is committed
+alongside it (the mechanics are in 22 — Human approval and inventory
+reservation, under "Finalization"). If that reservation is no longer `ACTIVE`
+— only reachable once every retry has been exhausted and the hold released —
+the transaction is left at `PAYMENT_CAPTURED` rather than falsely reported
+complete. Either way, the pending retry attempt is left untouched, further
+retries are denied `PAYMENT_ALREADY_CAPTURED`, and `startCheckout` refuses.
 
 **If two different attempts are both captured**, the webhook service detects it
 explicitly — the ordinary machinery would hide it, because the state machine
@@ -226,8 +232,11 @@ correctly judges the second capture already accounted for. Both attempts are
 recorded `CAPTURED` (the provider took both; a ledger that said otherwise would
 be the worse error), a `payment_multiple_capture_detected` audit record is
 written with both attempt ids, and the `WebhookEvent` carries
-`errorCategory = MULTIPLE_CAPTURE`. The transaction state does not move a second
-time, no inventory is committed, and nothing is refunded automatically —
+`errorCategory = MULTIPLE_CAPTURE`. The transaction state does not move a
+second time: the genuine first capture already finalized it to `COMPLETED`,
+and the rival capture — never reaching the `APPLIED` outcome finalization is
+gated on — cannot re-commit the reservation or re-request completion. No
+inventory is committed a second time, and nothing is refunded automatically —
 refunds are not part of this system.
 
 ## Audit vocabulary
@@ -246,5 +255,11 @@ duplicate event types were introduced where an equivalent already existed.
 
 ## What Objective 14 still does not do
 
-`PAYMENT_CAPTURED` is not `COMPLETED`. Inventory is never committed here,
-nothing is fulfilled, and no refund is ever issued. Those remain later work.
+Retry itself never commits inventory or completes a transaction — that
+authority never lived here. What has changed since this file was written is
+what happens elsewhere: the authoritative Razorpay capture webhook now
+finalizes a captured payment to `COMPLETED` in the same reconciliation that
+confirms the capture, including for a capture this file's own late-capture and
+retry paths lead to (see 22 — Human approval and inventory reservation, under
+"Finalization"). Refunds are still not part of this system, and no code path
+attempts one.

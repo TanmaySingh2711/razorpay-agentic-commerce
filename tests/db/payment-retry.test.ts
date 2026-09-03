@@ -148,7 +148,7 @@ function checkoutDeps(): CheckoutServiceDeps {
 }
 
 function webhookDeps(): WebhookServiceDeps {
-  return { prisma: testDb(), provider };
+  return { prisma: testDb(), provider, clock };
 }
 
 function retryDeps(prisma: PrismaClient = testDb()): RetryServiceDeps {
@@ -512,7 +512,7 @@ describe.skipIf(!databaseConfigured)(
         );
         expect(captured.kind).toBe("RECONCILED");
 
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
 
         const attempts = await attemptsOf(arranged.transactionId);
         expect(attempts.map((a) => [a.attemptNumber, a.status])).toEqual([
@@ -589,7 +589,7 @@ describe.skipIf(!databaseConfigured)(
           [2, "FAILED"],
           [3, "CAPTURED"],
         ]);
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
 
         // No fourth attempt is reachable, and the refusal names the right reason:
         // the money arrived, which outranks the count.
@@ -1020,7 +1020,10 @@ describe.skipIf(!databaseConfigured)(
         const late = await capturePayment(arranged.providerOrderId, paymentId);
         expect(late.kind).toBe("RECONCILED");
 
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        // The late capture is reconciled all the way through: it is genuine
+        // evidence that money moved, and its reservation must not be left
+        // ACTIVE for the retry workflow's own hold to shadow it.
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
         const attempts = await attemptsOf(arranged.transactionId);
         expect(attempts[0]?.status).toBe("CAPTURED");
         // The pending retry is untouched. A late event for attempt #1 must never
@@ -1029,12 +1032,17 @@ describe.skipIf(!databaseConfigured)(
         expect(attempts[1]?.status).toBe("CREATED");
         expect(attempts[1]?.providerPaymentId).toBeNull();
 
-        // The lifecycle says what happened rather than hiding it.
+        // The lifecycle says what happened rather than hiding it: the late
+        // edge, then completion.
         const transitions = await testDb().transactionStateTransition.findMany({
           where: { transactionId: arranged.transactionId },
           orderBy: { sequence: "asc" },
         });
-        expect(transitions.at(-1)?.reasonCode).toBe("LATE_CAPTURE_RECONCILED");
+        expect(transitions.map((t) => t.reasonCode)).toContain("LATE_CAPTURE_RECONCILED");
+        expect(transitions.at(-1)?.reasonCode).toBe("TRANSACTION_COMPLETED");
+
+        const reservation = await reservationOf(arranged.transactionId);
+        expect(reservation.status).toBe("COMMITTED");
       });
 
       it("closes the retry window and the pending checkout", async () => {
@@ -1074,7 +1082,7 @@ describe.skipIf(!databaseConfigured)(
         const stale = await failPayment(second.providerOrderId, "pay_StaleFail03");
         expect(stale.kind).toBe("RECONCILED");
 
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
         const attempts = await attemptsOf(arranged.transactionId);
         expect(attempts[0]?.status).toBe("CAPTURED");
         // Held, not applied: the attempt is not stamped FAILED on the strength of
@@ -1099,7 +1107,9 @@ describe.skipIf(!databaseConfigured)(
         const second = await retryAndExpectStarted(arranged.transactionId);
         await startCheckout({ transactionId: arranged.transactionId }, checkoutDeps());
         await capturePayment(second.providerOrderId, "pay_Double02");
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        // The genuine capture reconciles all the way to completion before the
+        // second, rival capture for attempt #1 ever arrives.
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
 
         const late = await capturePayment(arranged.providerOrderId, firstPaymentId);
         expect(late.kind).toBe("RECONCILED");
@@ -1144,20 +1154,29 @@ describe.skipIf(!databaseConfigured)(
       it("still fulfils exactly once: one state, one hold, no stock sold twice", async () => {
         const arranged = await bothCaptured();
 
-        expect(await statusOf(arranged.transactionId)).toBe("PAYMENT_CAPTURED");
+        // Two payments were captured, but the purchase itself settles once:
+        // one PAYMENT_CAPTURED transition, from the genuine first capture, and
+        // one committed reservation, never two.
+        expect(await statusOf(arranged.transactionId)).toBe("COMPLETED");
         const transitions = await testDb().transactionStateTransition.findMany({
           where: { transactionId: arranged.transactionId, toStatus: "PAYMENT_CAPTURED" },
         });
         expect(transitions).toHaveLength(1);
+        const completions = await testDb().transactionStateTransition.findMany({
+          where: { transactionId: arranged.transactionId, toStatus: "COMPLETED" },
+        });
+        expect(completions).toHaveLength(1);
 
         const reservation = await reservationOf(arranged.transactionId);
-        expect(reservation.status).toBe("ACTIVE");
-        expect(reservation.committedAt).toBeNull();
+        expect(reservation.status).toBe("COMMITTED");
+        expect(reservation.committedAt).not.toBeNull();
         const product = await testDb().product.findUniqueOrThrow({
           where: { id: arranged.productId },
         });
-        expect(product.inventory).toBe(5);
-        expect(product.reservedQuantity).toBe(1);
+        // On-hand stock fell by exactly the one unit this purchase held, once -
+        // not twice for two captured payments, and no hold is left standing.
+        expect(product.inventory).toBe(4);
+        expect(product.reservedQuantity).toBe(0);
       });
     });
 

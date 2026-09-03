@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
 import { getPrismaClient } from "@/integrations/persistence/client";
+import { systemClock, type Clock } from "@/lib/clock";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
 import { recordAuditEvent } from "@/services/audit/audit-service";
 import { classifyPaymentFailure, describePaymentFailure } from "@/domain/payment/failure";
 import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
+import { commitReservationWithin } from "@/services/inventory/reservation-service";
 import {
   isSupportedWebhookEvent,
   razorpayWebhookSchema,
@@ -65,6 +67,17 @@ const log = createLogger({ category: "payment" });
  */
 const WEBHOOK_ACTOR = "payment_webhook" as const;
 
+/**
+ * The actor that completes a purchase once its money has landed.
+ *
+ * Not `payment_webhook`: the webhook's authority is limited to reporting what
+ * the provider observed, and `TRANSACTION_COMPLETED` is not a provider event -
+ * it is this system's own conclusion that nothing remains to do. The state
+ * machine grants that transition to `transaction_service` alone, so this is
+ * the actor finalization requests it under.
+ */
+const FINALIZATION_ACTOR = "transaction_service" as const;
+
 /** Bounds the body we will hash and parse, so a huge POST cannot be a lever. */
 export const MAX_WEBHOOK_BODY_BYTES = 64 * 1024;
 
@@ -73,10 +86,15 @@ const UNIQUE_VIOLATION = "P2002";
 export interface WebhookServiceDeps {
   readonly prisma: PrismaClient;
   readonly provider: PaymentProvider;
+  readonly clock: Clock;
 }
 
 export function defaultWebhookDeps(): WebhookServiceDeps {
-  return { prisma: getPrismaClient(), provider: createRazorpayProvider() };
+  return {
+    prisma: getPrismaClient(),
+    provider: createRazorpayProvider(),
+    clock: systemClock,
+  };
 }
 
 /** Exactly what arrived, before any of it has been believed. */
@@ -297,6 +315,91 @@ async function recordDuplicate(
   } catch {
     // Annotation is not the control. Swallowed on purpose.
   }
+}
+
+/**
+ * Whether a just-captured payment was carried the rest of the way to
+ * COMPLETED, in the same database transaction as the capture itself.
+ */
+type FinalizationOutcome =
+  | { readonly kind: "COMPLETED" }
+  | { readonly kind: "NO_ACTIVE_RESERVATION" }
+  | { readonly kind: "RESERVATION_NOT_COMMITTABLE"; readonly detail: string };
+
+/**
+ * Carries a freshly captured payment to completion: commits the reservation
+ * it authorized and moves the transaction PAYMENT_CAPTURED -> COMPLETED.
+ *
+ * Called only immediately after this same database transaction moved the
+ * transaction into PAYMENT_CAPTURED, and it runs inside that same transaction
+ * client - never its own. That is the whole point: a captured payment whose
+ * reservation commits but whose completion write then fails (or the reverse)
+ * is a financial record that contradicts itself, exactly the gap this
+ * function exists to close. Both happen, or the capture itself rolls back
+ * with them, and the provider's retry finds the same work still to do.
+ *
+ * Refusing to finalize is not an error. A reservation can legitimately be gone
+ * by the time a late capture arrives - a permanently denied retry releases its
+ * hold - and money captured against stock nobody is holding for it must not be
+ * reported as a completed sale. The transaction is left at PAYMENT_CAPTURED for
+ * a human to reconcile, and the refusal is logged rather than thrown, because
+ * the capture itself was genuine and must still be recorded.
+ */
+async function finalizeCapturedPayment(
+  tx: TransactionCapableClient,
+  params: {
+    readonly transactionId: string;
+    readonly correlationId: string | null;
+    readonly providerEventId: string;
+    readonly now: Date;
+  },
+): Promise<FinalizationOutcome> {
+  const reservation = await tx.inventoryReservation.findFirst({
+    where: { transactionId: params.transactionId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (reservation === null) {
+    log.error("a captured payment has no active reservation left to commit", {
+      transactionId: params.transactionId,
+      providerEventId: params.providerEventId,
+    });
+    return { kind: "NO_ACTIVE_RESERVATION" };
+  }
+
+  const committed = await commitReservationWithin(tx, reservation.id, params.now);
+  if (committed.kind !== "COMMITTED") {
+    log.error("a captured payment's reservation could not be committed", {
+      transactionId: params.transactionId,
+      providerEventId: params.providerEventId,
+      reservationId: reservation.id,
+      refusal: committed.refusal,
+    });
+    return { kind: "RESERVATION_NOT_COMMITTABLE", detail: committed.refusal };
+  }
+
+  await applyTransactionEventWithin(tx, {
+    transactionId: params.transactionId,
+    event: "TRANSACTION_COMPLETED",
+    actor: FINALIZATION_ACTOR,
+    // The delivery id is this logical operation's identity, same as the
+    // capture transition beside it - a redelivery that somehow reached this
+    // point again converges instead of writing a second completion.
+    idempotencyKey: `capture_finalized:${params.providerEventId}`,
+    details: { reservationId: reservation.id },
+  });
+
+  await recordAuditEvent(tx, {
+    transactionId: params.transactionId,
+    action: "transaction_completed",
+    actor: FINALIZATION_ACTOR,
+    result: "SUCCESS",
+    reasonCode: "TRANSACTION_COMPLETED",
+    correlationId: params.correlationId,
+    operationKey: `transaction_completed:${params.providerEventId}`,
+    trustedInputs: {},
+  });
+
+  return { kind: "COMPLETED" };
 }
 
 /**
@@ -601,6 +704,32 @@ export async function processWebhook(
         },
       });
 
+      /**
+       * The reconciliation this whole file exists for: a captured payment
+       * completes the purchase it paid for, in the transaction that proved it.
+       *
+       * Gated on `applied`, never merely on `captured`: `doubleCapture` is
+       * structurally impossible here when `applied` is true (a transition can
+       * only apply from a state that had not yet seen this transaction's
+       * capture, so no rival attempt can already be CAPTURED), and every other
+       * `captured` outcome - a duplicate, a stale replay, an already-accounted
+       * -for late event - names a transaction that either finalized on an
+       * earlier delivery or never legally captured on this one.
+       */
+      let finalTransactionState: string =
+        outcome.kind === "APPLIED" ? outcome.to : attempt.transactionStatus;
+      if (applied && captured) {
+        const finalization = await finalizeCapturedPayment(tx, {
+          transactionId: attempt.transactionId,
+          correlationId: attempt.correlationId,
+          providerEventId,
+          now: deps.clock.now(),
+        });
+        if (finalization.kind === "COMPLETED") {
+          finalTransactionState = "COMPLETED";
+        }
+      }
+
       if (doubleCapture) {
         /**
          * The anomaly, recorded as its own blocked fact.
@@ -659,8 +788,7 @@ export async function processWebhook(
         providerEventId,
         transactionId: attempt.transactionId,
         eventType,
-        transactionState:
-          outcome.kind === "APPLIED" ? outcome.to : attempt.transactionStatus,
+        transactionState: finalTransactionState,
         alreadyAccountedFor: outcome.kind !== "APPLIED",
         anomaly: doubleCapture ? "MULTIPLE_CAPTURE" : null,
       };

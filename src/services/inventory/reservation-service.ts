@@ -382,93 +382,120 @@ export async function releaseReservation(
  * Turns a claim into a sale, permanently.
  *
  * The only operation in the system that decrements real stock, and the only one
- * whose precondition is evidence of money. It is written now so the payment
- * workflow has something correct to call, and it is deliberately called by
- * nothing yet: no route, no tool, no service. A browser cannot reach it and
- * Gemini has no tool for it.
+ * whose precondition is evidence of money.
  *
  * Exactly-once is structural. The conditional UPDATE from ACTIVE is what
  * authorizes the decrement, so a replayed commit decrements nothing.
+ *
+ * This is a thin wrapper around {@link commitReservationWithin}, opening its
+ * own transaction. Call that one directly instead when the commit must share a
+ * database transaction with something else - the payment webhook's capture
+ * reconciliation does exactly that, so committing the reservation and
+ * completing the transaction either both happen or neither does.
  */
 export async function commitReservation(
   reservationId: string,
   deps: ReservationServiceDeps = defaultReservationDeps(),
 ): Promise<CommitResult> {
   const now = deps.clock.now();
+  return deps.prisma.$transaction((tx) =>
+    commitReservationWithin(tx, reservationId, now),
+  );
+}
 
-  return deps.prisma.$transaction(async (tx) => {
-    const reservation = await tx.inventoryReservation.findUnique({
-      where: { id: reservationId },
-      include: {
-        transaction: { select: { status: true, correlationId: true } },
-      },
-    });
-    if (reservation === null) {
-      return {
-        kind: "REFUSED" as const,
-        reservationId,
-        refusal: "NOT_FOUND",
-        detail: {},
-      };
-    }
-    if (!CAPTURED_STATES.includes(reservation.transaction.status)) {
-      // No captured payment, no sale. Checked before the conditional update so
-      // an unproven commit cannot even burn the claim.
-      return {
-        kind: "REFUSED" as const,
-        reservationId,
-        refusal: "PAYMENT_NOT_CAPTURED",
-        detail: { state: reservation.transaction.status },
-      };
-    }
-
-    const committed = await tx.inventoryReservation.updateMany({
-      where: { id: reservationId, status: "ACTIVE" },
-      data: { status: "COMMITTED", committedAt: now },
-    });
-    if (committed.count !== 1) {
-      return {
-        kind: "REFUSED" as const,
-        reservationId,
-        refusal: "NOT_ACTIVE",
-        detail: { status: reservation.status },
-      };
-    }
-
-    // On-hand stock falls and the hold is lifted together: the unit left the
-    // warehouse, so it is no longer reserved, it is gone.
-    const product = await tx.product.update({
-      where: { id: reservation.productId },
-      data: {
-        inventory: { decrement: reservation.quantity },
-        reservedQuantity: { decrement: reservation.quantity },
-      },
-      select: { inventory: true },
-    });
-
-    await writeInventoryEvent(tx, {
-      transactionId: reservation.transactionId,
-      eventType: "inventory_committed",
-      result: "SUCCESS",
-      reasonCode: "INVENTORY_COMMITTED",
-      correlationId: reservation.transaction.correlationId,
-      operationKey: `reservation-commit:${reservationId}`,
-      metadata: {
-        reservationId,
-        productId: reservation.productId,
-        quantity: reservation.quantity,
-        remainingInventory: product.inventory,
-        committedAt: now.toISOString(),
-      },
-    });
-
+/**
+ * `commitReservation`'s body, lent to a transaction the caller already opened.
+ *
+ * Exists for one reason: a captured payment must commit its reservation and
+ * complete the transaction in the SAME database transaction as the capture
+ * reconciliation that proved the money moved. Committing the reservation on
+ * its own and completing the transaction as a separate write is exactly the
+ * split that let a captured payment leave its reservation ACTIVE forever if
+ * the process died between the two - a sold unit the expiry sweeper would
+ * later hand back to someone else. Lending the state machine's own body to a
+ * caller's transaction is the same pattern `applyTransactionEventWithin` uses
+ * beside `applyTransactionEvent`, applied here to the same problem.
+ *
+ * The caller owns rollback: a refusal here does not throw, and it is the
+ * caller's job to decide - typically by simply not proceeding to completion -
+ * what a refusal means for the rest of its transaction.
+ */
+export async function commitReservationWithin(
+  tx: TransactionCapableClient,
+  reservationId: string,
+  now: Date,
+): Promise<CommitResult> {
+  const reservation = await tx.inventoryReservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      transaction: { select: { status: true, correlationId: true } },
+    },
+  });
+  if (reservation === null) {
     return {
-      kind: "COMMITTED" as const,
+      kind: "REFUSED" as const,
       reservationId,
+      refusal: "NOT_FOUND",
+      detail: {},
+    };
+  }
+  if (!CAPTURED_STATES.includes(reservation.transaction.status)) {
+    // No captured payment, no sale. Checked before the conditional update so
+    // an unproven commit cannot even burn the claim.
+    return {
+      kind: "REFUSED" as const,
+      reservationId,
+      refusal: "PAYMENT_NOT_CAPTURED",
+      detail: { state: reservation.transaction.status },
+    };
+  }
+
+  const committed = await tx.inventoryReservation.updateMany({
+    where: { id: reservationId, status: "ACTIVE" },
+    data: { status: "COMMITTED", committedAt: now },
+  });
+  if (committed.count !== 1) {
+    return {
+      kind: "REFUSED" as const,
+      reservationId,
+      refusal: "NOT_ACTIVE",
+      detail: { status: reservation.status },
+    };
+  }
+
+  // On-hand stock falls and the hold is lifted together: the unit left the
+  // warehouse, so it is no longer reserved, it is gone.
+  const product = await tx.product.update({
+    where: { id: reservation.productId },
+    data: {
+      inventory: { decrement: reservation.quantity },
+      reservedQuantity: { decrement: reservation.quantity },
+    },
+    select: { inventory: true },
+  });
+
+  await writeInventoryEvent(tx, {
+    transactionId: reservation.transactionId,
+    eventType: "inventory_committed",
+    result: "SUCCESS",
+    reasonCode: "INVENTORY_COMMITTED",
+    correlationId: reservation.transaction.correlationId,
+    operationKey: `reservation-commit:${reservationId}`,
+    metadata: {
+      reservationId,
+      productId: reservation.productId,
       quantity: reservation.quantity,
       remainingInventory: product.inventory,
-    };
+      committedAt: now.toISOString(),
+    },
   });
+
+  return {
+    kind: "COMMITTED" as const,
+    reservationId,
+    quantity: reservation.quantity,
+    remainingInventory: product.inventory,
+  };
 }
 
 /** Reservable stock for a product, right now. Read-only; used by callers and tests. */

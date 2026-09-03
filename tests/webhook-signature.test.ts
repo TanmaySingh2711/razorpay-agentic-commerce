@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
 import { processWebhook } from "@/services/payment/webhook-service";
+import { systemClock } from "@/lib/clock";
 import { fakePaymentProvider } from "./support/fake-payment-provider";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -146,7 +147,7 @@ describe("nothing is trusted before authentication", () => {
   it("never touches the database when the signature is missing", async () => {
     const result = await processWebhook(
       { rawBody: BODY, signature: null, providerEventId: "evt_1" },
-      { prisma: forbiddenPrisma, provider: rejecting },
+      { prisma: forbiddenPrisma, provider: rejecting, clock: systemClock },
     );
     expect(result).toEqual({ kind: "REJECTED", rejection: "SIGNATURE_MISSING" });
   });
@@ -154,7 +155,7 @@ describe("nothing is trusted before authentication", () => {
   it("never touches the database when the signature is wrong", async () => {
     const result = await processWebhook(
       { rawBody: BODY, signature: "a".repeat(64), providerEventId: "evt_1" },
-      { prisma: forbiddenPrisma, provider: rejecting },
+      { prisma: forbiddenPrisma, provider: rejecting, clock: systemClock },
     );
     expect(result).toEqual({ kind: "REJECTED", rejection: "SIGNATURE_INVALID" });
   });
@@ -164,7 +165,7 @@ describe("nothing is trusted before authentication", () => {
     const huge = "x".repeat(200_000);
     const result = await processWebhook(
       { rawBody: huge, signature: "a".repeat(64), providerEventId: "evt_1" },
-      { prisma: forbiddenPrisma, provider: rejecting },
+      { prisma: forbiddenPrisma, provider: rejecting, clock: systemClock },
     );
     expect(result).toEqual({ kind: "REJECTED", rejection: "BODY_TOO_LARGE" });
   });
@@ -175,7 +176,7 @@ describe("nothing is trusted before authentication", () => {
     const accepting = fakePaymentProvider({ onVerifyWebhook: () => true });
     const result = await processWebhook(
       { rawBody: BODY, signature: "a".repeat(64), providerEventId: null },
-      { prisma: forbiddenPrisma, provider: accepting },
+      { prisma: forbiddenPrisma, provider: accepting, clock: systemClock },
     );
     expect(result).toEqual({ kind: "REJECTED", rejection: "EVENT_ID_MISSING" });
   });
@@ -185,7 +186,7 @@ describe("nothing is trusted before authentication", () => {
     for (const rawBody of ["not json at all", "{}", '{"event":"payment.captured"}']) {
       const result = await processWebhook(
         { rawBody, signature: "a".repeat(64), providerEventId: "evt_1" },
-        { prisma: forbiddenPrisma, provider: accepting },
+        { prisma: forbiddenPrisma, provider: accepting, clock: systemClock },
       );
       expect(result, rawBody).toEqual({ kind: "REJECTED", rejection: "BODY_MALFORMED" });
     }
@@ -196,7 +197,7 @@ describe("nothing is trusted before authentication", () => {
     const awkward = '{"event":"payment.captured",  "spacing":"preserved\\u00e9"}';
     await processWebhook(
       { rawBody: awkward, signature: "a".repeat(64), providerEventId: "evt_1" },
-      { prisma: forbiddenPrisma, provider: accepting },
+      { prisma: forbiddenPrisma, provider: accepting, clock: systemClock },
     );
     expect(accepting.webhookInputs).toHaveLength(1);
     expect(accepting.webhookInputs[0]?.rawBody).toBe(awkward);
