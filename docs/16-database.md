@@ -10,10 +10,24 @@ workflow, and the test isolation strategy.
 | Decision | Value                       | Why                                                                                                       |
 | -------- | --------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Database | **PostgreSQL**              | Real transactional semantics, CHECK constraints, enums, BIGINT — every one of which this design leans on. |
-| Hosting  | **Prisma Postgres**         | Managed, with separate pooled and direct endpoints.                                                       |
-| ORM      | **Prisma 7.10.0**           | Current stable GA.                                                                                        |
+| ORM      | **Prisma 7.10.0**           | Current stable GA. Prisma is the ORM everywhere, whatever the database is hosted on.                      |
 | Driver   | `@prisma/adapter-pg` + `pg` | Prisma 7 requires a driver adapter.                                                                       |
 | Runtime  | Node.js 24 LTS              | Prisma 7.10 engines allow `>=24.0`.                                                                       |
+
+### Where each database lives
+
+Three PostgreSQL databases, deliberately separate, all reached through Prisma:
+
+| Environment                 | Database                                                              | Reached by                                          |
+| --------------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| Local development           | **Docker PostgreSQL** (`docker-compose.yml`), `razorpay_agentic_dev`  | `npm run dev`, `db:migrate`, `db:seed`, `db:studio` |
+| Automated tests             | **Docker PostgreSQL**, `razorpay_agentic_test`, schema `agentic_test` | `TEST_DIRECT_URL`, `db:test:*`                      |
+| Vercel production / staging | **Neon PostgreSQL**                                                   | `DATABASE_URL`, and the `db:*:staging` commands     |
+
+Nothing in the application is specific to Neon: it is a PostgreSQL server with
+separate pooled and direct endpoints, which is all the connection architecture
+below assumes. Local development and the test suite never reach it — see
+[09 — Configuration](./09-configuration.md).
 
 ### Why 7.10.0 and not "latest"
 
@@ -26,13 +40,19 @@ is expected and should not be acted on until Prisma 8 reaches GA.
 
 ## Two connections, two jobs
 
-Prisma Postgres issues two connection strings that share credentials and differ
-only by hostname. They are not interchangeable:
+The hosted database offers two endpoints that share credentials and differ only
+by hostname. They are not interchangeable:
 
-| Variable       | Host                  | Used by                               | Why                                                                                   |
-| -------------- | --------------------- | ------------------------------------- | ------------------------------------------------------------------------------------- |
-| `DATABASE_URL` | `pooled.db.prisma.io` | Application runtime                   | Reuses a small connection set, so serverless invocations cannot exhaust PostgreSQL.   |
-| `DIRECT_URL`   | `db.prisma.io`        | Migrations, seed, verification, tests | Connection poolers generally cannot run DDL, and admin work needs session continuity. |
+| Variable       | Endpoint                             | Used by                               | Why                                                                                   |
+| -------------- | ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | **pooled** (Neon: `…-pooler.…`)      | Application runtime                   | Reuses a small connection set, so serverless invocations cannot exhaust PostgreSQL.   |
+| `DIRECT_URL`   | **direct** (the same host, unpooled) | Migrations, seed, verification, tests | Connection poolers generally cannot run DDL, and admin work needs session continuity. |
+
+`npm run db:verify:staging` enforces the first row rather than trusting it: it
+refuses a `DATABASE_URL` whose hostname does not name a pooler. Which hostnames
+count is decided by [`scripts/pooled-endpoint.ts`](../scripts/pooled-endpoint.ts),
+which matches the naming conventions rather than one vendor's, so a provider
+change does not need a code change.
 
 The failure modes are asymmetric, which is what makes getting this wrong
 dangerous: a pooled URL used for migrations fails loudly, but a direct URL used
@@ -226,14 +246,16 @@ never status history, payment attempts, approvals, or relationships.
 | `audit_event_operation_key`                | Objective 7: a unique `operationKey` on `AuditEvent`, so repeating one logical policy evaluation converges on the record that already exists instead of authorizing twice. NULL is exempt, so events with no operation identity are unaffected. See [21](./21-policy-engine.md).                                                                                       |
 | `approval_gate_and_inventory_reservation`  | Objective 8: `Product.reservedQuantity` with CHECK constraints so a single conditional UPDATE can prevent overselling; `InventoryReservation.purchaseQuoteId` binding stock to the exact quote; partial unique indexes permitting one ACTIVE reservation and one PENDING approval per transaction. See [22](./22-approval-and-inventory.md).                           |
 | `payment_order_receipt_and_reconciliation` | Objective 10: `PaymentAttempt.receipt`, unique and CHECK-constrained to Razorpay's 40-character ASCII limit, because the receipt is the provider's idempotency key for order creation; and a `RECONCILIATION_REQUIRED` status, so "the provider call left an unresolved outcome" is a queryable fact rather than an absence. See [24](./24-payment-order-creation.md). |
+| `payment_failure_classification`           | Objective 14: a safe, closed `PaymentFailureCategory` on `PaymentAttempt` plus the provider's own source, step, reason code and failure timestamp. Additive and entirely nullable, so a deployment running the previous code is unaffected. See [27](./27-payment-retry.md).                                                                                           |
 
 ## Migration workflow
 
 ```
 npm run db:migrate:create -- --name <name>   # plan a migration, do NOT apply
 #   review prisma/migrations/<ts>_<name>/migration.sql
-npm run db:migrate:deploy                    # apply it (uses DIRECT_URL)
-npm run db:status                            # applied? any drift?
+npm run db:migrate:deploy                    # apply it locally (uses DIRECT_URL)
+npm run db:status                            # applied locally? any drift?
+npm run db:migrate:staging                   # apply it to the hosted database
 npm run db:verify:staging                    # does the live DB match the design?
 ```
 
@@ -241,12 +263,13 @@ npm run db:verify:staging                    # does the live DB match the design
 schema history. Migration files are committed and reviewed. Prisma 7 no longer
 runs `generate` or `seed` automatically after a migration — run them explicitly.
 
-Two migrations exist. The second (Objective 3) adds a nullable
-`idempotencyKey` to `transaction_state_transition` plus a unique
-`(transactionId, idempotencyKey)` index - additive only, no data rewritten.
+Eight migrations exist, and every one after the first is additive: a new
+nullable column, a new index, a new enum value or a new partial unique index.
+Nothing has ever rewritten or dropped existing data.
 
 The initial migration was reviewed before application: 12 tables, 12 enums, 20
-indexes, 16 foreign keys, zero destructive statements.
+indexes, 16 foreign keys, zero destructive statements. All eight are applied to
+the hosted Neon database, confirmed by `npm run db:status:staging`.
 
 ## Seed workflow
 
@@ -272,14 +295,16 @@ or audit events are seeded; those must be produced by the real flow.
 ## Test isolation
 
 Database tests run against a dedicated **`agentic_test` PostgreSQL schema** in
-the same database, created and migrated by `npm run db:test:setup`.
+the local Docker PostgreSQL, created and migrated by `npm run db:test:setup`.
 
 - **Not SQLite.** Tests must exercise PostgreSQL semantics — CHECK constraints,
   enums, BIGINT, RESTRICT — because that is what production runs. SQLite would
   silently accept things PostgreSQL rejects, so the tests would prove nothing.
 - **Not the demo data.** The schema is dropped and recreated on each setup;
   `public` is never touched.
-- **Not a second paid database.** A schema costs nothing.
+- **Not the hosted database.** The suite truncates its tables between tests, so
+  it runs on a disposable local container and reaches it through
+  `TEST_DIRECT_URL`, which has no fallback to the application's connection.
 - **Same migrations.** The test schema is built from the same migration files,
   so it cannot drift from production.
 
@@ -290,8 +315,8 @@ still passes with zero credentials.
 ### The interlock in front of destructive cleanup
 
 The suite empties its tables between tests with a single
-`TRUNCATE ... RESTART IDENTITY CASCADE` — twelve `deleteMany` round trips to a
-hosted database dominated the runtime. That statement is also the most
+`TRUNCATE ... RESTART IDENTITY CASCADE` — twelve `deleteMany` round trips
+dominated the runtime. That statement is also the most
 destructive thing in the repository: pointed at the wrong schema it would erase
 a real transaction history in one call, and `CASCADE` would follow the foreign
 keys outward while doing it.

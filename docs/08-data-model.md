@@ -6,12 +6,12 @@ than a redesign.
 
 ## Locked persistence architecture
 
-| Decision     | Value                                                               |
-| ------------ | ------------------------------------------------------------------- |
-| Database     | **PostgreSQL**, authoritative for everything                        |
-| Data access  | **Prisma ORM**, typed, server-only                                  |
-| Hosting      | Prisma Postgres is the planned provider; any PostgreSQL works       |
-| Environments | Development and deployment share the **same** database architecture |
+| Decision     | Value                                                                     |
+| ------------ | ------------------------------------------------------------------------- |
+| Database     | **PostgreSQL**, authoritative for everything                              |
+| Data access  | **Prisma ORM**, typed, server-only                                        |
+| Hosting      | Docker PostgreSQL locally, Neon PostgreSQL deployed; any PostgreSQL works |
+| Environments | Development and deployment share the **same** database architecture       |
 
 There is **no SQLite tier and no planned late migration**. A "SQLite now,
 PostgreSQL later" split would mean developing against different transaction,

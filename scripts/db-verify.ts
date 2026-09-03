@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { config as loadEnv } from "dotenv";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { POOLED_HOSTNAME_CONVENTIONS, isPooledHostname } from "./pooled-endpoint";
 
 loadEnv({ path: ".env.local", quiet: true });
 
@@ -16,7 +17,9 @@ loadEnv({ path: ".env.local", quiet: true });
  * matters after a hand-edited migration adds constraints Prisma cannot express.
  *
  * Never prints a connection string or a password: only the hostname, which is
- * what distinguishes pooled from direct.
+ * what distinguishes pooled from direct. Which hostnames count as pooled is
+ * decided by ./pooled-endpoint, because each provider names that endpoint
+ * differently and the verifier should not be tied to one of them.
  */
 const EXPECTED_TABLES = [
   "approval_request",
@@ -94,7 +97,7 @@ async function main(): Promise<void> {
 
     const missing = EXPECTED_TABLES.filter((name) => !tableNames.includes(name));
     const pooledHost = new URL(pooledUrl).hostname;
-    const isPooledHost = pooledHost.startsWith("pooled.");
+    const isPooledHost = isPooledHostname(pooledHost);
     const pooledProbe = await probeEndpoint(pooledUrl);
 
     console.log("Database verification");
@@ -123,12 +126,14 @@ async function main(): Promise<void> {
       );
     }
     if (!isPooledHost) {
-      problems.push("DATABASE_URL does not point at the pooled endpoint");
+      problems.push(
+        `DATABASE_URL does not point at a pooled endpoint - ${POOLED_HOSTNAME_CONVENTIONS}`,
+      );
     }
     if (!pooledProbe.ok) {
       problems.push(
         "the pooled runtime connection (DATABASE_URL) is unreachable - copy the pooled " +
-          "connection string from the Prisma Console into .env.local",
+          "connection string from the database provider's console into .env.local",
       );
     }
 

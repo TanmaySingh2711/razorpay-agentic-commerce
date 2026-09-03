@@ -272,9 +272,16 @@ The agent asks the model for **structured reason codes** — `WITHIN_BUDGET`,
 It never asks for private reasoning, never stores chain-of-thought, never logs
 it and never returns it.
 
-Gemini 3 models carry internal reasoning across turns behind
-`previous_interaction_id`. The adapter treats that as an opaque
-`providerStateRef`: never inspected, never interpreted, never persisted, never
+Gemini 3 models carry internal reasoning across turns, and the adapter has to
+hand it back for a tool conversation to continue at all — the API rejects a
+continuation whose `thought` steps were dropped. Because interactions are
+created with `store: false`, there is no stored conversation to reference and no
+`id` on the response to reference it with; the adapter therefore replays the
+transcript, and that transcript is what `providerStateRef` carries.
+
+It is opaque by type, not by convention: `AiProviderStateRef` is a branded,
+empty type, so nothing above the adapter can read a field off it without a
+deliberate cast. Never inspected, never interpreted, never persisted, never
 logged, discarded when the request ends. It exists in memory for the life of one
 request and nowhere else.
 
@@ -305,9 +312,22 @@ touched by `npm test`. A test whose result depends on what a model chose to say
 cannot prove a safety property, so responses are scripted precisely — including
 hostile ones a real model would rarely produce on demand.
 
-One live call exists, isolated in `npm run gemini:smoke`. It proves credentials,
-model id, API surface and schema-constrained output, prints no key, retries
-transient failures, and exits cleanly when the free tier is exhausted.
+Two live scripts exist, both outside `npm test` and both read-only.
+
+`npm run gemini:smoke` makes one call. It proves credentials, model id, API
+surface and schema-constrained output, prints no key, retries transient
+failures, and exits cleanly when the free tier is exhausted.
+
+`npm run agent:smoke` runs the whole agent against the real model and the real
+hosted catalog: intent extraction, the catalog tool loop with real products
+going back as tool results, and the final selection validated by the same Zod
+schema the service uses. It exists because everything a fake provider does is
+well-formed by construction, so no deterministic test can catch a disagreement
+between the schema we send Gemini and the one we then enforce - or, as it turned
+out, a continuation the API refuses. A staged pass reports the exact stage,
+validator issue and raw payload on failure; an end-to-end pass then proves the
+composed path. It creates no transaction, quote, approval, reservation or
+payment, because the agent has no capability that could.
 
 ## The Objective 6 handoff
 

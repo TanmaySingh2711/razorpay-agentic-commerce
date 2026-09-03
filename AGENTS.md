@@ -17,7 +17,7 @@ Automated verification runs entirely on this machine. It must stay that way.
   with `npm run db:test:setup`. There is no fallback to `DIRECT_URL`, because the
   suite truncates its schema between tests and that fallback would aim it at
   staging; `tests/db/test-database-url.ts` fails the run instead.
-- **Never point automated tests at the hosted Prisma Postgres.** The suite reads
+- **Never point automated tests at the hosted Neon database.** The suite reads
   `TEST_DIRECT_URL` only.
 - **Database commands: plain name = local, `:staging` = cloud.** `db:migrate`,
   `db:migrate:deploy`, `db:status`, `db:seed` and `db:studio` all target the

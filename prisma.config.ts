@@ -8,8 +8,8 @@ import { defineConfig } from "prisma/config";
  * reads it from here. That is what lets this project route the two connections
  * correctly:
  *
- *   - CLI / migrations  -> DIRECT_URL   (db.prisma.io, unpooled)
- *   - application runtime -> DATABASE_URL (pooled.db.prisma.io, pooled)
+ *   - CLI / migrations    -> DIRECT_URL   (the unpooled endpoint)
+ *   - application runtime -> DATABASE_URL (the pooled endpoint)
  *
  * The split matters because connection poolers generally cannot run DDL, so a
  * migration issued over the pooled endpoint can fail or behave surprisingly.

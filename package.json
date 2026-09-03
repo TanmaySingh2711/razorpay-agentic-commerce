@@ -35,6 +35,7 @@
     "postinstall": "prisma generate",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "gemini:smoke": "tsx scripts/gemini-smoke.ts",
+    "agent:smoke": "tsx scripts/buyer-agent-smoke.ts",
     "razorpay:smoke": "tsx scripts/razorpay-smoke.ts",
     "checkout:smoke": "tsx scripts/checkout-smoke-setup.ts"
   },

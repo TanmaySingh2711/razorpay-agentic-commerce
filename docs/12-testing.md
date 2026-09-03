@@ -76,8 +76,11 @@ The schema lives in the local Docker PostgreSQL described by
 it is roughly a fortyfold difference: the same five suites took **616s** against
 the hosted database and **15s** locally, because every fixture makes dozens of
 sequential round trips and a hosted database charges network latency for each
-one. The image is pinned to PostgreSQL 17 to match staging, so the semantics
-under test are identical.
+one. The image is pinned to PostgreSQL 17, so the tests run against real
+PostgreSQL semantics rather than a substitute. The hosted Neon database now
+reports 18.x, one major version ahead; nothing this schema uses differs between
+the two, and `npm run db:verify:staging` re-asserts every constraint against the
+hosted database itself.
 
 `TEST_DIRECT_URL` is required and has **no fallback to `DIRECT_URL`**. The
 suite empties its schema with `TRUNCATE ... CASCADE` between tests, and the
@@ -118,8 +121,10 @@ provider with real credentials and still look green.
 `tests/support/no-network.ts` is loaded as a Vitest setup file in every worker
 and replaces global `fetch` with one that refuses anything but loopback, naming
 the URL it stopped. Real Test Mode validation stays where it belongs: the
-separate `razorpay:smoke`, `gemini:smoke` and `checkout:smoke` scripts, run
-deliberately.
+separate `razorpay:smoke`, `gemini:smoke`, `agent:smoke` and `checkout:smoke`
+scripts, run deliberately. `agent:smoke` is the read-only Buyer Agent one: real
+Gemini, real hosted catalog, no writes of any kind. See
+[19](./19-buyer-agent.md).
 
 ## Two projects, one suite
 

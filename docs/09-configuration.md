@@ -111,12 +111,12 @@ inlined into a client bundle.
 
 ## Files
 
-| File                     | Tracked | Contents                                                                      |
-| ------------------------ | ------- | ----------------------------------------------------------------------------- |
-| `.env.example`           | **yes** | Names, documentation, placeholders. No real values.                           |
-| `.env.local`             | **no**  | Real values, hosted database. Read by staging tooling and the smoke scripts.  |
-| `.env.development.local` | **no**  | Local development overrides. Outranks `.env.local` for `npm run dev`.         |
-| `.env`, `.env.*`         | **no**  | Git-ignored via `.env` / `.env.*` with an explicit `!.env.example` exception. |
+| File                     | Tracked | Contents                                                                          |
+| ------------------------ | ------- | --------------------------------------------------------------------------------- |
+| `.env.example`           | **yes** | Names, documentation, placeholders. No real values.                               |
+| `.env.local`             | **no**  | Real values, hosted Neon database. Read by staging tooling and the smoke scripts. |
+| `.env.development.local` | **no**  | Local development overrides. Outranks `.env.local` for `npm run dev`.             |
+| `.env`, `.env.*`         | **no**  | Git-ignored via `.env` / `.env.*` with an explicit `!.env.example` exception.     |
 
 ## Three databases, and which command reaches which
 
@@ -135,8 +135,8 @@ is never edited to switch between them. Both are git-ignored.
 | ------------------------- | -------------------------------------------- | ---------------------------------------------------- | ---------- |
 | `npm run dev`             | `DATABASE_URL` from `.env.development.local` | local `razorpay_agentic_dev`                         | no         |
 | Automated tests           | `TEST_DIRECT_URL`                            | local `razorpay_agentic_test`, schema `agentic_test` | yes        |
-| Vercel / staging          | `DATABASE_URL` from Vercel's own settings    | hosted Prisma Postgres                               | no         |
-| `db:*:staging`, `*:smoke` | `DATABASE_URL` from `.env.local`             | hosted Prisma Postgres                               | no         |
+| Vercel / staging          | `DATABASE_URL` from Vercel's own settings    | hosted Neon PostgreSQL                               | no         |
+| `db:*:staging`, `*:smoke` | `DATABASE_URL` from `.env.local`             | hosted Neon PostgreSQL                               | no         |
 
 Development and test are separate **databases**, not two schemas in one, so the
 suite's `TRUNCATE ... CASCADE` cannot reach development data across the database
@@ -163,7 +163,7 @@ work. Reaching the hosted database requires saying so.
 | Command                                                                                                | Target                        |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------- |
 | `db:migrate`, `db:migrate:create`, `db:migrate:deploy`, `db:status`, `db:seed`, `db:studio`            | local `razorpay_agentic_dev`  |
-| `db:migrate:staging`, `db:status:staging`, `db:seed:staging`, `db:studio:staging`, `db:verify:staging` | hosted Prisma Postgres        |
+| `db:migrate:staging`, `db:status:staging`, `db:seed:staging`, `db:studio:staging`, `db:verify:staging` | hosted Neon PostgreSQL        |
 | `db:test:*`                                                                                            | local `razorpay_agentic_test` |
 | `db:dev:*`                                                                                             | local `razorpay_agentic_dev`  |
 

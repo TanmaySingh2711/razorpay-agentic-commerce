@@ -6,6 +6,7 @@ import type {
   AiGenerationRequest,
   AiGenerationResponse,
   AiProvider,
+  AiProviderStateRef,
   AiToolResponseRequest,
 } from "@/integrations/llm/provider";
 
@@ -69,7 +70,10 @@ export function createFakeAiProvider(options: FakeProviderOptions): FakeAiProvid
         name: call.name,
         arguments: call.args as never,
       })),
-      providerStateRef: `interaction-${String(index)}`,
+      // Opaque to everything above the adapter, so a fake has to say so too.
+      // The recognisable value is deliberate: a test asserts it never appears
+      // in a decision, which is how "provider state does not leak" is checked.
+      providerStateRef: `interaction-${String(index)}` as unknown as AiProviderStateRef,
     };
   };
 

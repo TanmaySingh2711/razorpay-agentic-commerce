@@ -51,15 +51,31 @@ npm run dev          # http://localhost:3000
 
 **No API key or secret is required to boot.** The application starts, builds and
 runs its foundation tests against an entirely empty environment — asserted by a
-test. Copy [`.env.example`](./.env.example) to `.env.local` and fill in
-`DATABASE_URL` / `DIRECT_URL` to enable the database layer.
+test.
+
+The database layer runs entirely on your own machine. Nothing here needs a
+hosted database, an account or a credential:
 
 ```bash
-npm run db:migrate:deploy   # apply the schema
-npm run db:seed             # idempotent demo catalog
-npm run db:verify           # confirm the live DB matches the design
+npm run db:test:up          # start the local Docker PostgreSQL
+npm run db:dev:setup        # create, migrate and seed razorpay_agentic_dev
 npm run db:test:setup       # prepare the isolated test schema
 ```
+
+Which database each command reaches is decided by the command's own name:
+plain `db:*` names target the local development database, `db:test:*` the
+disposable test one, and only the explicit `db:*:staging` commands reach the
+hosted database — see [docs/09](./docs/09-configuration.md).
+
+| Environment       | Database                                 |
+| ----------------- | ---------------------------------------- |
+| Local development | Docker PostgreSQL (`docker-compose.yml`) |
+| Automated tests   | Docker PostgreSQL, disposable schema     |
+| Vercel deployment | Neon PostgreSQL                          |
+| ORM everywhere    | Prisma                                   |
+
+Copy [`.env.example`](./.env.example) to `.env.local` only when you need to
+reach the hosted database or the external providers.
 
 ## Scripts
 
@@ -88,15 +104,15 @@ is where the rule above stops being prose and becomes enforced code.
 A **modular monolith** — one Next.js application, one deployable unit, one
 database, with hard internal module boundaries. Explicitly not microservices.
 
-| Layer              | Choice                                                            |
-| ------------------ | ----------------------------------------------------------------- |
-| App                | Next.js 16 (App Router), React 19                                 |
-| Language           | TypeScript 5, strict                                              |
-| Runtime            | Node.js 24 LTS, npm                                               |
-| Database           | PostgreSQL (authoritative), Prisma ORM — **from Objective 2**     |
-| AI                 | External provider behind an AI Provider Adapter — later objective |
-| Payments           | Razorpay behind a Payment Provider Interface — later objective    |
-| Validation / tests | Zod, Vitest, ESLint, Prettier                                     |
+| Layer              | Choice                                                                    |
+| ------------------ | ------------------------------------------------------------------------- |
+| App                | Next.js 16 (App Router), React 19                                         |
+| Language           | TypeScript 5, strict                                                      |
+| Runtime            | Node.js 24 LTS, npm                                                       |
+| Database           | PostgreSQL (authoritative) via Prisma ORM — Docker locally, Neon deployed |
+| AI                 | External provider behind an AI Provider Adapter — later objective         |
+| Payments           | Razorpay behind a Payment Provider Interface — later objective            |
+| Validation / tests | Zod, Vitest, ESLint, Prettier                                             |
 
 No agent framework, no AI SDK, no payment SDK, no state-management library.
 Each arrives with the objective that needs it.

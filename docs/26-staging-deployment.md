@@ -27,7 +27,7 @@ not configured.
 | Platform     | Vercel, deploying automatically from `main`                             |
 | Framework    | Next.js App Router                                                      |
 | Node runtime | Node.js 24                                                              |
-| Database     | PostgreSQL (Prisma Postgres) through Prisma ORM                         |
+| Database     | Neon PostgreSQL through Prisma ORM, over Neon's pooled endpoint         |
 | AI provider  | Google Gemini, `gemini-3.6-flash`, through the provider-neutral adapter |
 | Payments     | Razorpay **Test Mode**, through the payment-provider adapter            |
 
@@ -83,12 +83,14 @@ reason to retry.
 ## Migrations
 
 The deployed runtime never runs migrations. Schema changes are applied from a
-trusted environment over the **direct** connection, because connection poolers
-generally cannot run DDL:
+trusted environment over Neon's **direct** (unpooled) connection, because
+connection poolers generally cannot run DDL. The commands say `:staging` out
+loud, because the plain names target the local development database:
 
 ```
-npm run db:status          # read-only: is the database up to date?
-npm run db:migrate:deploy  # apply committed migrations
+npm run db:status:staging   # read-only: is the hosted database up to date?
+npm run db:migrate:staging  # apply committed migrations to Neon
+npm run db:verify:staging   # does the live schema still match the design?
 ```
 
 `db push` is never a substitute for migration history, and the staging database

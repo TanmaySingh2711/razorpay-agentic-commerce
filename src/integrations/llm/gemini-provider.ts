@@ -13,6 +13,7 @@ import type {
   AiGenerationRequest,
   AiGenerationResponse,
   AiProvider,
+  AiProviderStateRef,
   AiToolCall,
   AiToolDeclaration,
   AiToolResponseRequest,
@@ -34,10 +35,7 @@ import type {
  *  - `tools: [{ type: "function", name, description, parameters }]` for tool
  *    declarations, with calls arriving as `function_call` steps and results
  *    going back as `function_result` input.
- *  - `previous_interaction_id` to continue a tool conversation. Gemini 3 models
- *    carry their own reasoning metadata across that handle, which is precisely
- *    why we never unwrap it: the reasoning stays with the provider and this
- *    process only ever holds an opaque id, for the life of one request.
+ *  - a **replayed transcript** to continue a tool conversation. See below.
  *
  * Two deliberate settings:
  *
@@ -48,6 +46,34 @@ import type {
  *    would silently multiply every attempt our own bounded policy makes, and
  *    the combined behaviour would be untestable. Retry lives in one place, in
  *    the agent service, where it is deterministic.
+ *
+ * ## How a tool conversation is continued
+ *
+ * `store: false` and `previous_interaction_id` are mutually exclusive, and the
+ * API says so by omission rather than by complaint: an unstored interaction
+ * comes back with **no `id` field at all**, because there is nothing on the
+ * provider's side to point at. This adapter used to read `interaction.id`
+ * anyway, get `undefined`, quietly send the next turn with no
+ * `previous_interaction_id`, and so present a bare `function_result` as the
+ * opening move of a brand-new conversation. The API rejected that with a 400 -
+ * "please ensure that function response turn comes immediately after a function
+ * call turn" - which the error translator, correctly for a 4xx, reported as
+ * `AI_PROVIDER_INVALID_RESPONSE`. Every tool-using run failed; only the
+ * single-turn intent extraction worked, which is why the deployed agent could
+ * read a request and never answer one.
+ *
+ * So continuation replays the conversation instead of referencing it: the next
+ * call's `input` is everything already exchanged - the shopper's message, the
+ * model's own steps from each turn, and our function results - followed by the
+ * new results. The model's `thought` steps are replayed **verbatim, including
+ * their signatures**, which Gemini 3 requires: dropping them is a 400, and
+ * rewriting them would be forging the model's own reasoning record.
+ *
+ * That transcript is what `providerStateRef` carries. It stays inside this
+ * closure's return value for the life of one request, is typed as opaque so
+ * nothing above can read it, and is never logged or persisted - the same
+ * guarantee the id was supposed to give, kept by construction rather than by
+ * the value happening to be short.
  */
 assertServerOnly("src/integrations/llm/gemini-provider.ts");
 
@@ -69,9 +95,44 @@ interface GeminiStepLike {
 }
 
 interface GeminiInteractionLike {
-  readonly id?: string;
   readonly output_text?: string;
   readonly steps?: readonly GeminiStepLike[];
+}
+
+/**
+ * The conversation so far, in the provider's own input vocabulary.
+ *
+ * Deliberately not typed field by field. These items are the provider's own
+ * step objects going straight back where they came from; describing their
+ * insides here would invite code that reads them, and a `thought` signature is
+ * exactly the thing nothing outside this file may touch.
+ */
+interface GeminiTranscript {
+  readonly kind: "gemini-transcript";
+  readonly items: readonly unknown[];
+}
+
+function isTranscript(
+  value: AiProviderStateRef,
+): value is AiProviderStateRef & GeminiTranscript {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "gemini-transcript"
+  );
+}
+
+/** The items already exchanged, plus whatever the model just produced. */
+function extendTranscript(
+  priorItems: readonly unknown[],
+  interaction: GeminiInteractionLike,
+): AiProviderStateRef {
+  const transcript: GeminiTranscript = {
+    kind: "gemini-transcript",
+    items: [...priorItems, ...(interaction.steps ?? [])],
+  };
+  // The one cast that produces the opaque handle. Nothing above unwraps it.
+  return transcript as unknown as AiProviderStateRef;
 }
 
 function toGeminiTools(
@@ -186,10 +247,13 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
     retries: { strategy: "none" } as const,
   };
 
-  const toResponse = (interaction: GeminiInteractionLike): AiGenerationResponse => ({
+  const toResponse = (
+    interaction: GeminiInteractionLike,
+    priorItems: readonly unknown[],
+  ): AiGenerationResponse => ({
     text: typeof interaction.output_text === "string" ? interaction.output_text : null,
     toolCalls: readToolCalls(interaction),
-    providerStateRef: typeof interaction.id === "string" ? interaction.id : null,
+    providerStateRef: extendTranscript(priorItems, interaction),
   });
 
   return {
@@ -197,6 +261,10 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
     modelId: options.modelId,
 
     async generate(request: AiGenerationRequest): Promise<AiGenerationResponse> {
+      // The same message in the item form a continuation has to replay it as.
+      // Turn one still sends the plain string the API accepts for a first
+      // message; the item form is what the transcript carries afterwards.
+      const inputItems = [{ type: "text" as const, text: request.userMessage }];
       try {
         const interaction = await client.interactions.create(
           {
@@ -219,7 +287,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
           },
           requestOptions,
         );
-        return toResponse(interaction as GeminiInteractionLike);
+        return toResponse(interaction as GeminiInteractionLike, inputItems);
       } catch (error) {
         throw translateProviderError(error, request.correlationId);
       }
@@ -228,22 +296,42 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
     async continueWithToolResults(
       request: AiToolResponseRequest,
     ): Promise<AiGenerationResponse> {
+      // Everything already exchanged, then our answers to the calls the model
+      // just made. A function result that does not follow its own function call
+      // in the same input is a 400, so the prior turns are not optional -
+      // which is why their absence is refused here rather than sent. A request
+      // we know the API will reject is quota spent to produce a worse error
+      // message, and losing the transcript is a defect in this process, not
+      // something the provider did.
+      if (!isTranscript(request.providerStateRef)) {
+        throw new AiProviderInvalidResponseError(
+          "a tool continuation was attempted without the preceding turn",
+          { correlationId: request.correlationId, provider: "gemini" },
+        );
+      }
+      const priorItems = request.providerStateRef.items;
+      const inputItems = [
+        ...priorItems,
+        ...request.toolResults.map((result) => ({
+          type: "function_result" as const,
+          name: result.name,
+          call_id: result.callId,
+          ...(result.isError === true ? { is_error: true } : {}),
+          result: [{ type: "text" as const, text: JSON.stringify(result.content) }],
+        })),
+      ];
       try {
         const interaction = await client.interactions.create(
           {
             model: options.modelId,
-            ...(request.providerStateRef === null
-              ? {}
-              : { previous_interaction_id: request.providerStateRef }),
             system_instruction: request.systemInstruction,
             store: false,
-            input: request.toolResults.map((result) => ({
-              type: "function_result" as const,
-              name: result.name,
-              call_id: result.callId,
-              ...(result.isError === true ? { is_error: true } : {}),
-              result: [{ type: "text" as const, text: JSON.stringify(result.content) }],
-            })),
+            // The SDK types `input` as its own step union. Every item here is
+            // either a text item or one of those very steps handed straight
+            // back, so the cast asserts a round trip rather than inventing a
+            // shape - and typing the transcript as the union would put the
+            // provider's step types back into a file that must not read them.
+            input: inputItems as never,
             ...(request.responseSchema === undefined
               ? {}
               : {
@@ -259,7 +347,7 @@ export function createGeminiProvider(options: GeminiProviderOptions): AiProvider
           },
           requestOptions,
         );
-        return toResponse(interaction as GeminiInteractionLike);
+        return toResponse(interaction as GeminiInteractionLike, inputItems);
       } catch (error) {
         throw translateProviderError(error, request.correlationId);
       }

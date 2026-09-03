@@ -14,6 +14,10 @@ import {
   assertNotDisposableTestDatabase,
   assertRemoteHost,
 } from "../scripts/database-target-guard";
+import {
+  POOLED_HOSTNAME_CONVENTIONS,
+  isPooledHostname,
+} from "../scripts/pooled-endpoint";
 
 /**
  * The verification infrastructure, tested like anything else.
@@ -279,5 +283,63 @@ describe("nothing may aim at the disposable test database", () => {
         "npm run db:migrate:staging",
       ),
     ).not.toThrow();
+  });
+});
+
+describe("which endpoint DATABASE_URL is allowed to be", () => {
+  /**
+   * The staging verifier insists the application's runtime URL is the pooled
+   * endpoint. That check was written against one provider's naming convention
+   * and silently became wrong when staging moved to Neon: a correctly pooled
+   * host was reported as "NOT a pooled host" and the verification failed on a
+   * configuration that was right. What follows pins both halves - the pooled
+   * conventions that must be accepted, and the direct endpoints that must still
+   * be refused, because a verifier that accepted everything would be worse than
+   * the one that was wrong.
+   *
+   * Every hostname here is fabricated in the shape each provider publishes.
+   */
+
+  it("accepts a hostname whose leading label is the pooling marker", () => {
+    expect(isPooledHostname("pooled.db.example-cloud.test")).toBe(true);
+  });
+
+  it("accepts the Neon pooled hostname, where the marker is a suffix", () => {
+    // The case that regressed: the pooling marker is at the end of the first
+    // label, not the start of the hostname.
+    expect(isPooledHostname("ep-quiet-sun-123456-pooler.ap-south-1.aws.neon.tech")).toBe(
+      true,
+    );
+  });
+
+  it("accepts a pooler that is its own label", () => {
+    expect(isPooledHostname("aws-0-ap-south-1.pooler.example-cloud.test")).toBe(true);
+  });
+
+  it("refuses a genuinely unpooled hostname", () => {
+    // Each of these is the *direct* endpoint of a provider whose pooled
+    // endpoint is accepted above. Confusing the two is exactly the mistake the
+    // verifier exists to catch.
+    expect(isPooledHostname("ep-quiet-sun-123456.ap-south-1.aws.neon.tech")).toBe(false);
+    expect(isPooledHostname("db.example-cloud.test")).toBe(false);
+    expect(isPooledHostname("localhost")).toBe(false);
+  });
+
+  it("matches whole name parts, not any substring", () => {
+    // A substring search would call this pooled on the strength of "pool"
+    // appearing inside an ordinary word.
+    expect(isPooledHostname("liverpool.example.test")).toBe(false);
+    expect(isPooledHostname("carpooling-db.example.test")).toBe(false);
+  });
+
+  it("is unaffected by the case a hostname is written in", () => {
+    expect(isPooledHostname("EP-Quiet-Sun-123456-POOLER.aws.neon.tech")).toBe(true);
+  });
+
+  it("names every accepted convention when it refuses one", () => {
+    // The old message pointed at one vendor's console, which is unhelpful
+    // advice when staging is on a different provider.
+    expect(POOLED_HOSTNAME_CONVENTIONS).toMatch(/pooled/);
+    expect(POOLED_HOSTNAME_CONVENTIONS).toMatch(/pooler/);
   });
 });

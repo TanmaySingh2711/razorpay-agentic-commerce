@@ -314,7 +314,7 @@ today; the rest is the design later objectives must build to.
 | **Prohibited**           | Being imported by a React component, a UI module, or anything in `app/` other than through a service. Running in a client bundle. Leaking a Prisma model type into the domain core.                                                                       |
 | **Security**             | **Server-only, always.** A pooled connection serves runtime requests; a direct connection is used for migrations, because poolers generally cannot run DDL. Money columns are always an integer plus an explicit currency — see [08](./08-data-model.md). |
 | **Called by**            | Services only.                                                                                                                                                                                                                                            |
-| **To verify**            | Pooling and connection-limit specifics of the chosen hosted provider are to be confirmed during Objective 2.                                                                                                                                              |
+| **To verify**            | Confirmed in Objective 2 and re-confirmed after the move to Neon: the runtime uses Neon's pooled endpoint, and `npm run db:verify:staging` refuses a `DATABASE_URL` that does not name a pooler.                                                          |
 
 ---
 

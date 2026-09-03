@@ -37,6 +37,25 @@ export interface AiToolCall {
   readonly arguments: JsonObject;
 }
 
+declare const providerStateBrand: unique symbol;
+
+/**
+ * Whatever an adapter needs to continue a multi-turn conversation.
+ *
+ * Branded and otherwise empty, so nothing above the adapter can read a field
+ * off it without a deliberate cast. That is the point: the shape differs
+ * completely between providers - a stored-conversation id for one, a replayed
+ * transcript for another - and the agent has no business knowing which. It
+ * receives one of these from a turn and hands the same value back on the next,
+ * and it must never inspect, interpret, persist or log it, because for a
+ * reasoning model the value can carry the model's own internal reasoning.
+ *
+ * It was previously typed `string | null`, which quietly assumed every provider
+ * could hand back a short opaque id. Gemini's Interactions API does not when
+ * `store: false`, and the type was what made that assumption invisible.
+ */
+export type AiProviderStateRef = { readonly [providerStateBrand]: unknown } | null;
+
 /** Our answer to one tool call. */
 export interface AiToolResult {
   readonly callId: string;
@@ -64,21 +83,21 @@ export interface AiGenerationRequest {
  * then validate) or it asked to call tools. Both can be present; the agent
  * handles tool calls first.
  *
- * `providerStateRef` is an opaque handle for multi-turn continuation. It is
- * deliberately typed as an opaque string and documented as such: the agent must
- * never inspect it, interpret it, persist it, or log it. Whatever the provider
- * keeps behind it — including any internal reasoning metadata — stays inside
- * the provider and inside this process's memory for the life of one request.
+ * `providerStateRef` is the opaque continuation state described above. The
+ * agent must never inspect it, interpret it, persist it, or log it. Whatever
+ * the provider keeps behind it — including any internal reasoning metadata —
+ * stays inside the adapter and inside this process's memory for the life of one
+ * request.
  */
 export interface AiGenerationResponse {
   readonly text: string | null;
   readonly toolCalls: readonly AiToolCall[];
-  readonly providerStateRef: string | null;
+  readonly providerStateRef: AiProviderStateRef;
 }
 
 /** A continuation turn: our tool results going back for the model's next move. */
 export interface AiToolResponseRequest {
-  readonly providerStateRef: string | null;
+  readonly providerStateRef: AiProviderStateRef;
   readonly systemInstruction: string;
   readonly toolResults: readonly AiToolResult[];
   readonly responseSchema?: JsonObject;

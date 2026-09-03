@@ -26,7 +26,7 @@ re-opened.
 | Runtime         | **Node.js 24 LTS** (`engines` in `package.json`, `.nvmrc`).                                                                                     |
 | Package manager | npm.                                                                                                                                            |
 | Database        | **PostgreSQL**, authoritative. No SQLite tier, and no planned late migration - development and deployment share the same database architecture. |
-| Data access     | **Prisma ORM**, server-only. Prisma Postgres is the planned hosted provider.                                                                    |
+| Data access     | **Prisma ORM**, server-only. Local development and tests use Docker PostgreSQL; the deployment uses Neon PostgreSQL.                            |
 | AI              | Google Gemini behind a dedicated **AI Provider Adapter**. The domain never sees a Gemini response object.                                       |
 | Payments        | Razorpay behind a dedicated **Payment Provider Interface**. The domain never sees a Razorpay SDK object.                                        |
 

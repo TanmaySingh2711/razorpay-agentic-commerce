@@ -6,7 +6,7 @@
 # database the suite was written against.
 #
 # WHAT THIS IS NOT: it is not the application's database. Vercel and staging
-# keep using the hosted Prisma Postgres named by DATABASE_URL and DIRECT_URL,
+# keep using the hosted Neon PostgreSQL named by DATABASE_URL and DIRECT_URL,
 # which this file neither reads nor affects. The suite reaches this container
 # through TEST_DIRECT_URL alone, and tests/db/test-database-url.ts refuses to
 # run if that variable is missing or points at the application's server.
@@ -18,9 +18,14 @@
 # Real secrets live in .env.local, which is git-ignored. Nothing in this file
 # may ever be reused for a database that holds real data.
 #
-# The image is pinned to PostgreSQL 17 to match the hosted database's major
-# version, so a CHECK constraint, an enum, a BIGINT or a unique-index conflict
-# behaves here exactly as it does in staging. Verified: staging reports 17.2.
+# The image is pinned to PostgreSQL 17, so a CHECK constraint, an enum, a
+# BIGINT or a unique-index conflict behaves here the way this project's schema
+# depends on. The pin was originally chosen to match the hosted database's major
+# version; since the move to Neon the hosted server reports 18.x, so the two now
+# differ by a major version. Nothing this schema uses changed between 17 and 18,
+# and every constraint is re-asserted against the hosted database by
+# `npm run db:verify:staging` - but the pin should be raised to 18 the next time
+# the local database is rebuilt, so the parity argument holds again.
 
 services:
   postgres:
