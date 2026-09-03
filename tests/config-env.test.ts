@@ -3,7 +3,6 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   getGeminiConfig,
-  getAppSecretConfig,
   getDatabaseConfig,
   getRazorpayConfig,
   getRazorpayCredentials,
@@ -34,7 +33,6 @@ describe("provider configuration", () => {
     expect(() => getGeminiConfig(EMPTY_ENV)).toThrow(ConfigurationError);
     expect(() => getRazorpayConfig(EMPTY_ENV)).toThrow(ConfigurationError);
     expect(() => getDatabaseConfig(EMPTY_ENV)).toThrow(ConfigurationError);
-    expect(() => getAppSecretConfig(EMPTY_ENV)).toThrow(ConfigurationError);
   });
 
   it("accepts a pooled PostgreSQL URL alone, and a direct URL when migrations need one", () => {
@@ -48,15 +46,6 @@ describe("provider configuration", () => {
       DIRECT_URL: "postgresql://user@host:5432/db",
     });
     expect(withDirect.DIRECT_URL).toBe("postgresql://user@host:5432/db");
-  });
-
-  it("rejects an application secret too short to sign anything safely", () => {
-    expect(() => getAppSecretConfig({ APP_SECRET: "tooshort" })).toThrow(
-      ConfigurationError,
-    );
-    expect(getAppSecretConfig({ APP_SECRET: "a".repeat(32) }).APP_SECRET).toHaveLength(
-      32,
-    );
   });
 
   it("names every missing Razorpay variable so the fix is obvious", () => {

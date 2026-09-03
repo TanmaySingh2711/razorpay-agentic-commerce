@@ -21,6 +21,18 @@ loadEnv({ path: ".env.local", quiet: true });
  * decided by ./pooled-endpoint, because each provider names that endpoint
  * differently and the verifier should not be tied to one of them.
  */
+/**
+ * Prisma's own migration ledger.
+ *
+ * Deliberately absent from `EXPECTED_TABLES` below: that list is the domain
+ * schema this application designed, and the ledger is bookkeeping Prisma
+ * creates for itself. It is counted separately rather than ignored, because a
+ * table present in the database and named in no list is exactly the sort of
+ * drift this script exists to surface.
+ */
+const MIGRATION_LEDGER_TABLE = "_prisma_migrations";
+
+/** The domain tables, and only those. See MIGRATION_LEDGER_TABLE above. */
 const EXPECTED_TABLES = [
   "approval_request",
   "audit_event",
@@ -95,7 +107,16 @@ async function main(): Promise<void> {
     const [applied] = await prisma.$queryRaw<Array<{ n: bigint }>>`
       SELECT count(*) AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL`;
 
+    // Every table found is accounted for in exactly one of three groups, so
+    // the totals add up in the output instead of leaving the reader to guess
+    // why the database holds one more table than the design names.
     const missing = EXPECTED_TABLES.filter((name) => !tableNames.includes(name));
+    const ledgerPresent = tableNames.includes(MIGRATION_LEDGER_TABLE);
+    const unexpected = tableNames.filter(
+      (name) =>
+        name !== MIGRATION_LEDGER_TABLE &&
+        !(EXPECTED_TABLES as readonly string[]).includes(name),
+    );
     const pooledHost = new URL(pooledUrl).hostname;
     const isPooledHost = isPooledHostname(pooledHost);
     const pooledProbe = await probeEndpoint(pooledUrl);
@@ -110,7 +131,13 @@ async function main(): Promise<void> {
     );
     console.log(`  migrations applied    : ${String(applied?.n ?? 0n)}`);
     console.log(
-      `  tables                : ${String(tableNames.length)} (expected ${String(EXPECTED_TABLES.length)})`,
+      `  domain tables         : ${String(EXPECTED_TABLES.length - missing.length)} of ${String(EXPECTED_TABLES.length)} present`,
+    );
+    console.log(
+      `  migration ledger      : ${MIGRATION_LEDGER_TABLE} ${ledgerPresent ? "present" : "MISSING"}`,
+    );
+    console.log(
+      `  unexpected tables     : ${unexpected.length === 0 ? "none" : unexpected.join(", ")}`,
     );
     console.log(`  CHECK constraints     : ${String(checks?.n ?? 0n)}`);
     console.log(`  FKs ON DELETE RESTRICT: ${String(restrictFks?.n ?? 0n)}`);

@@ -205,7 +205,7 @@ describe("the instructions leak nothing", () => {
       "GEMINI_API_KEY",
       "DATABASE_URL",
       "DIRECT_URL",
-      "APP_SECRET",
+      "APP_URL",
       "RAZORPAY",
       "process.env",
       "postgres://",

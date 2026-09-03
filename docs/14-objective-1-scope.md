@@ -45,7 +45,7 @@
 Locked decisions were folded in without rebuilding anything: Node 24 LTS,
 modular monolith stated explicitly, PostgreSQL + Prisma as the persistence
 architecture, AI Provider Adapter and Payment Provider Interface as named
-boundaries, `DIRECT_URL` and `APP_SECRET` added to the config boundary, and the
+boundaries, `DIRECT_URL` added to the config boundary, and the
 state model extended to 17 states covering quote, reservation, payment
 verification and expiry.
 

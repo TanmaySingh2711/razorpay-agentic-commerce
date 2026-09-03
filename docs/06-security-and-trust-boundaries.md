@@ -117,7 +117,7 @@ a far stronger claim than any origin header.
 ### Secrets
 
 Server-only, always. `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-`GEMINI_API_KEY`, `APP_SECRET`, `DATABASE_URL` and `DIRECT_URL` are read only through
+`GEMINI_API_KEY`, `DATABASE_URL` and `DIRECT_URL` are read only through
 [`src/config/env.ts`](../src/config/env.ts), only inside the adapter that needs
 them. No secret is ever prefixed `NEXT_PUBLIC_`. Configuration errors report
 variable **names**, never values — enforced by a test. Redaction (below) is the

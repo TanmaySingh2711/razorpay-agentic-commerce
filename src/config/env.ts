@@ -167,11 +167,6 @@ const reservationEnvSchema = z.object({
   RESERVATION_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(600),
 });
 
-/** Server-side application secret, for future session and CSRF signing. */
-const appSecretEnvSchema = z.object({
-  APP_SECRET: z.string().min(32),
-});
-
 export type RuntimeConfig = Readonly<z.infer<typeof runtimeEnvSchema>>;
 export type GeminiConfig = Readonly<z.infer<typeof geminiEnvSchema>>;
 export type RazorpayCredentials = Readonly<z.infer<typeof razorpayCredentialsSchema>>;
@@ -182,7 +177,6 @@ export type CatalogConfig = Readonly<z.infer<typeof catalogEnvSchema>>;
 export type QuoteConfig = Readonly<z.infer<typeof quoteEnvSchema>>;
 export type ApprovalConfig = Readonly<z.infer<typeof approvalEnvSchema>>;
 export type ReservationConfig = Readonly<z.infer<typeof reservationEnvSchema>>;
-export type AppSecretConfig = Readonly<z.infer<typeof appSecretEnvSchema>>;
 
 /**
  * Describes one failed variable without ever quoting its value.
@@ -324,18 +318,8 @@ export function getReservationConfig(
   return Object.freeze(parseSection(reservationEnvSchema, "reservation", source));
 }
 
-/** Application secret. Called only by the session/CSRF layer, server-side. */
-export function getAppSecretConfig(source: EnvSource = currentEnv()): AppSecretConfig {
-  return Object.freeze(parseSection(appSecretEnvSchema, "application secret", source));
-}
-
 export type OptionalConfigSection =
-  | "gemini"
-  | "razorpay"
-  | "razorpayCredentials"
-  | "razorpayWebhook"
-  | "database"
-  | "appSecret";
+  "gemini" | "razorpay" | "razorpayCredentials" | "razorpayWebhook" | "database";
 
 const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
   gemini: geminiEnvSchema,
@@ -343,7 +327,6 @@ const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
   razorpayCredentials: razorpayCredentialsSchema,
   razorpayWebhook: razorpayWebhookSchema,
   database: databaseEnvSchema,
-  appSecret: appSecretEnvSchema,
 };
 
 /** Reports whether a later-objective section is configured, without throwing. */

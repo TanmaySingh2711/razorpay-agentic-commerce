@@ -6,6 +6,10 @@ import {
 } from "./db/test-database-url";
 import { NetworkAccessInTestError } from "./support/no-network";
 import {
+  DisposableSchemaGuardError,
+  describeMarkerFailure,
+} from "./db/test-database-guard";
+import {
   DISPOSABLE_TEST_DATABASE,
   DisposableTestDatabaseTargetError,
   LocalStagingTargetError,
@@ -341,5 +345,102 @@ describe("which endpoint DATABASE_URL is allowed to be", () => {
     // advice when staging is on a different provider.
     expect(POOLED_HOSTNAME_CONVENTIONS).toMatch(/pooled/);
     expect(POOLED_HOSTNAME_CONVENTIONS).toMatch(/pooler/);
+  });
+});
+
+describe("why the disposable-schema guard refused", () => {
+  /**
+   * The guard fails closed whatever went wrong, and that is not in question
+   * here. What is in question is what the reader is told afterwards.
+   *
+   * Observed for real: Docker Desktop stopped part-way through a run, and 331
+   * database tests failed with "the disposable-schema marker could not be read
+   * (Invalid `prisma.$queryRawUnsafe()` invocation:)" - a sentence about the
+   * disposable schema, for a problem that was nothing to do with it. Prisma
+   * leaves the useful half of that message empty when the query never reached a
+   * server, so the text pointed at the guard rather than at the stopped
+   * container. The natural conclusion from reading it is that the safety
+   * interlock is broken, which is the last thing anyone should be talked into
+   * distrusting.
+   *
+   * The two error shapes below are copied from the real driver: a refused TCP
+   * connection on a dead port, and a genuine `42P01` from a live PostgreSQL
+   * that has no such table.
+   */
+
+  /** What the pg driver adapter produces when nothing is listening. */
+  const unreachable = Object.assign(
+    new Error("\nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\n"),
+    { name: "PrismaClientKnownRequestError", code: "ECONNREFUSED" },
+  );
+
+  /** What a live PostgreSQL produces for a missing table. */
+  const missingTable = Object.assign(
+    new Error(
+      "\nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. " +
+        'Code: `42P01`. Message: `relation "agentic_test.disposable_schema_marker" does not exist`',
+    ),
+    {
+      name: "PrismaClientKnownRequestError",
+      code: "P2010",
+      meta: {
+        driverAdapterError: {
+          name: "DriverAdapterError",
+          cause: {
+            originalCode: "42P01",
+            kind: "TableDoesNotExist",
+            table: "agentic_test.disposable_schema_marker",
+          },
+        },
+      },
+    },
+  );
+
+  it("names the stopped database, not the schema, when nothing answered", () => {
+    const reason = describeMarkerFailure(unreachable);
+    expect(reason).toMatch(/could not be reached/i);
+    expect(reason).toContain("npm run db:test:up");
+    // The misleading half must be gone: this is not a statement about whether
+    // the schema is disposable, because that was never determined.
+    expect(reason).not.toMatch(/queryRawUnsafe/);
+  });
+
+  it("names the unbuilt schema when the database answered and had no marker", () => {
+    const reason = describeMarkerFailure(missingTable);
+    expect(reason).toContain("npm run db:test:setup");
+    expect(reason).toMatch(/no marker table/i);
+    expect(reason).not.toMatch(/could not be reached/i);
+  });
+
+  it("tells the two apart by the driver's own cause, not by message text", () => {
+    // Both messages open with the identical Prisma preamble, so any check that
+    // read the text would classify them the same way.
+    expect(unreachable.message.startsWith("\nInvalid `prisma.")).toBe(true);
+    expect(missingTable.message.startsWith("\nInvalid `prisma.")).toBe(true);
+    expect(describeMarkerFailure(unreachable)).not.toBe(
+      describeMarkerFailure(missingTable),
+    );
+  });
+
+  it("falls back to the original detail for anything it does not recognise", () => {
+    // An unfamiliar database error must still be reported, not swallowed into
+    // a confident but wrong diagnosis.
+    const other = Object.assign(new Error("permission denied for schema"), {
+      meta: {
+        driverAdapterError: {
+          cause: { originalCode: "42501", kind: "SomethingElse" },
+        },
+      },
+    });
+    expect(describeMarkerFailure(other)).toContain("permission denied for schema");
+  });
+
+  it("still refuses, whichever cause it names", () => {
+    // The diagnosis changed; the verdict did not. Every path here is a refusal.
+    for (const error of [unreachable, missingTable]) {
+      expect(() => {
+        throw new DisposableSchemaGuardError(describeMarkerFailure(error));
+      }).toThrow(/Refusing to run destructive test cleanup/);
+    }
   });
 });

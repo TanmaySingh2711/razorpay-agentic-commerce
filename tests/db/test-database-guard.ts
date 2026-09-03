@@ -76,6 +76,53 @@ function quoted(table: string): string {
   return `"${TEST_SCHEMA}"."${table}"`;
 }
 
+/**
+ * Says why the marker could not be read, in terms of what to do about it.
+ *
+ * Two entirely different situations arrive here, and Prisma describes them
+ * almost identically - a bare "Invalid `prisma.$queryRawUnsafe()` invocation:"
+ * with the useful part missing. Observed when Docker Desktop stopped mid-run:
+ * every database test failed with a sentence that pointed at the disposable
+ * schema, when the actual problem was that nothing was listening on the port.
+ * Reading it, the obvious next move is to distrust the guard - the one thing
+ * standing between a stray run and a real database.
+ *
+ * The two are distinguishable, just not from the message. A query that reached
+ * PostgreSQL and was refused by it carries a driver-adapter cause naming the
+ * SQL state; a query that never got there has none, and only a connection-level
+ * `code` such as `ECONNREFUSED`.
+ *
+ * This changes no decision. The guard still refuses in every case, and refusal
+ * is still the only outcome; it changes what the reader is told to do.
+ */
+export function describeMarkerFailure(error: unknown): string {
+  const cause = (
+    error as {
+      meta?: {
+        driverAdapterError?: { cause?: { kind?: string; originalCode?: string } };
+      };
+    }
+  ).meta?.driverAdapterError?.cause;
+
+  if (cause === undefined) {
+    return (
+      "the test database could not be reached, so the disposable-schema marker " +
+      "could not be read. Start it with `npm run db:test:up` and prepare the " +
+      "schema with `npm run db:test:setup`"
+    );
+  }
+
+  if (cause.kind === "TableDoesNotExist" || cause.originalCode === "42P01") {
+    return (
+      `the "${TEST_SCHEMA}" schema has no marker table, so it was not built by ` +
+      "`npm run db:test:setup` - run that before the database tests"
+    );
+  }
+
+  const detail = error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "";
+  return `the disposable-schema marker could not be read (${detail})`;
+}
+
 async function verify(client: PrismaClient): Promise<readonly string[]> {
   // Cheap first refusal. Necessary, never sufficient.
   if (process.env["NODE_ENV"] === "production") {
@@ -106,13 +153,10 @@ async function verify(client: PrismaClient): Promise<readonly string[]> {
       `SELECT marker FROM ${quoted(TEST_SCHEMA_MARKER_TABLE)}`,
     );
   } catch (error) {
-    // Most often: the marker table does not exist, i.e. this schema was not
-    // built by db:test:setup. Also covers an unreachable database. Either way
-    // the schema's identity is unproven, so nothing may be deleted.
-    const detail = error instanceof Error ? error.message : "unknown error";
-    throw new DisposableSchemaGuardError(
-      `the disposable-schema marker could not be read (${detail})`,
-    );
+    // The schema's identity is unproven, so nothing may be deleted - but *why*
+    // it is unproven decides what the reader should do next, and the two causes
+    // are not distinguishable from Prisma's own message. See below.
+    throw new DisposableSchemaGuardError(describeMarkerFailure(error));
   }
 
   if (markers.length !== 1) {

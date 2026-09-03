@@ -60,9 +60,11 @@ export function freshTestClient(): PrismaClient {
 /**
  * Empties the test schema between tests.
  *
- * A single TRUNCATE rather than twelve `deleteMany` calls: this suite runs
- * against a hosted database, so each statement is a network round trip, and the
- * per-test teardown dominated the suite's runtime.
+ * A single TRUNCATE rather than twelve `deleteMany` calls: twelve statements of
+ * per-test teardown dominated the suite's runtime, and the difference was
+ * dramatic back when this ran against a hosted database charging network
+ * latency for each one. It is still the right shape now that the suite runs
+ * against local Docker PostgreSQL.
  *
  * It is also the most destructive statement in the repository, so it is gated.
  * `assertDisposableTestSchema` must first prove - against the live database -

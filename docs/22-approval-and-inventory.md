@@ -257,8 +257,8 @@ holding stock for an amount nobody authorized.
 4. Partial unique index: one PENDING approval per transaction.
 
 **No new secret was required.** A high-entropy random token with a stored digest
-needs no key, so `APP_SECRET` is untouched and no environment variable was
-added beyond two optional, defaulted TTLs.
+needs no signing key at all, so no environment variable was added beyond two
+optional, defaulted TTLs.
 
 ## What Objective 8 deliberately did not do
 

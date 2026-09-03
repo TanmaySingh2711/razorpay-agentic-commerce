@@ -173,15 +173,21 @@ describe("a late capture arriving after a retry has begun", () => {
 
 describe("a stale failure cannot undo a capture", () => {
   for (const state of ["PAYMENT_CAPTURED", "COMPLETED"] as const) {
-    it(`is a no-op in ${state}`, () => {
+    it(`is held for reconciliation in ${state}, never applied`, () => {
       const decision = resolveTransition({
         currentState: state,
         event: "PAYMENT_FAILED",
         actor: "payment_webhook",
       });
-      // COMPLETED is terminal and PAYMENT_CAPTURED has no failure edge; either
-      // way nothing moves, and neither answer is APPLY.
-      expect(decision.kind).not.toBe("APPLY");
+
+      // Not a no-op, which is what this test used to claim. A provider saying
+      // "failed" about money we have already been told arrived is a genuine
+      // contradiction between two authentic events, and dropping it silently
+      // would lose the one signal that something needs a human. The machine
+      // parks it instead - and the difference between "ignored" and "parked
+      // for reconciliation" is invisible to an assertion that only rules out
+      // APPLY.
+      expect(decision.kind).toBe("LATE_EVENT_RECONCILIATION_CANDIDATE");
     });
   }
 

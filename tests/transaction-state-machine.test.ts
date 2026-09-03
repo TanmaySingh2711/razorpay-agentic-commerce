@@ -19,6 +19,7 @@ import {
 import {
   permittedEventsFrom,
   resolveTransition,
+  type TransitionDecisionKind,
 } from "@/domain/transaction/state-machine";
 
 /**
@@ -351,31 +352,85 @@ describe("terminal state protection", () => {
 });
 
 describe("nonsense transitions are impossible", () => {
-  const nonsense: ReadonlyArray<[TransactionState, TransactionEvent]> = [
-    ["INTENT_RECEIVED", "PAYMENT_CAPTURE_CONFIRMED"],
-    ["INTENT_RECEIVED", "TRANSACTION_COMPLETED"],
-    ["PRODUCT_SELECTED", "TRANSACTION_COMPLETED"],
-    ["PRODUCT_SELECTED", "POLICY_ALLOWED"],
-    ["BLOCKED", "PAYMENT_STARTED"],
-    ["COMPLETED", "POLICY_ALLOWED"],
-    ["CANCELLED", "PAYMENT_ORDER_CREATED"],
+  /**
+   * Each case names *how* it is refused, not merely that it is not applied.
+   *
+   * "Not APPLY" is three different answers wearing one coat, and the difference
+   * between them is the whole behaviour: `INVALID/terminal_state` means the
+   * purchase is over, `INVALID/event_not_permitted_from_state` means a control
+   * was skipped, and `IDEMPOTENT_NO_OP` means the machine decided the event was
+   * harmless. A refusal quietly becoming a no-op is precisely the regression
+   * that matters here and the one a negative assertion cannot see - so the
+   * expected kind, and its reason, are part of the table.
+   */
+  const nonsense: ReadonlyArray<
+    readonly [TransactionState, TransactionEvent, TransitionDecisionKind, string | null]
+  > = [
+    // An external capture this early is not nonsense at all: the machine parks
+    // it for reconciliation rather than refusing it, because a real payment may
+    // have happened and must never be dropped. Asserted so that the day it
+    // starts being refused outright, somebody has to say so out loud.
+    [
+      "INTENT_RECEIVED",
+      "PAYMENT_CAPTURE_CONFIRMED",
+      "LATE_EVENT_RECONCILIATION_CANDIDATE",
+      null,
+    ],
+    [
+      "INTENT_RECEIVED",
+      "TRANSACTION_COMPLETED",
+      "INVALID",
+      "event_not_permitted_from_state",
+    ],
+    [
+      "PRODUCT_SELECTED",
+      "TRANSACTION_COMPLETED",
+      "INVALID",
+      "event_not_permitted_from_state",
+    ],
+    ["PRODUCT_SELECTED", "POLICY_ALLOWED", "INVALID", "event_not_permitted_from_state"],
+    ["BLOCKED", "PAYMENT_STARTED", "INVALID", "terminal_state"],
+    ["COMPLETED", "POLICY_ALLOWED", "INVALID", "terminal_state"],
+    ["CANCELLED", "PAYMENT_ORDER_CREATED", "INVALID", "terminal_state"],
     // Skipping the reservation is the check-then-charge race.
-    ["AUTHORIZED", "PAYMENT_ORDER_CREATED"],
+    ["AUTHORIZED", "PAYMENT_ORDER_CREATED", "INVALID", "event_not_permitted_from_state"],
     // Skipping verification would quote an unverified price.
-    ["PRODUCT_SELECTED", "QUOTE_ISSUED"],
+    ["PRODUCT_SELECTED", "QUOTE_ISSUED", "INVALID", "event_not_permitted_from_state"],
   ];
 
-  it.each(nonsense.map(([s, e]) => [`${s} + ${e}`, s, e] as const))(
-    "%s is refused",
-    (_label, state, event) => {
+  it.each(
+    nonsense.map(
+      ([state, event, kind, reason]) =>
+        [`${state} + ${event} -> ${kind}`, state, event, kind, reason] as const,
+    ),
+  )("%s", (_label, state, event, expectedKind, expectedReason) => {
+    const decision = resolveTransition({
+      currentState: state,
+      event,
+      actor: "transaction_service",
+    });
+
+    expect(decision.kind).toBe(expectedKind);
+    if (expectedReason !== null) {
+      expect(decision.kind === "INVALID" ? decision.reason : null).toBe(expectedReason);
+    }
+  });
+
+  it("refuses every one of them for a reason the machine can name", () => {
+    // No refusal may be silent: whatever kind it carries, it must also carry an
+    // explanation, because that string is what reaches the audit trail.
+    for (const [state, event] of nonsense) {
       const decision = resolveTransition({
         currentState: state,
         event,
         actor: "transaction_service",
       });
       expect(decision.kind).not.toBe("APPLY");
-    },
-  );
+      expect("explanation" in decision ? decision.explanation.length : 0).toBeGreaterThan(
+        10,
+      );
+    }
+  });
 });
 
 describe("late external event classification", () => {
@@ -423,11 +478,15 @@ describe("late external event classification", () => {
   });
 
   it("never silently moves a transaction backwards on a late event", () => {
+    // A verified callback arriving after completion is absorbed as a no-op,
+    // not refused and not applied. Asserted exactly: "not APPLY" would equally
+    // accept the machine reclassifying this as an INVALID hard error, which
+    // would turn an ordinary late browser callback into a failed request.
     const decision = resolveTransition({
       currentState: "COMPLETED",
       event: "PAYMENT_CALLBACK_VERIFIED",
       actor: "payment_provider",
     });
-    expect(decision.kind).not.toBe("APPLY");
+    expect(decision.kind).toBe("IDEMPOTENT_NO_OP");
   });
 });

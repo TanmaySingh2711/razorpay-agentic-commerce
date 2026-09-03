@@ -501,33 +501,51 @@ describe("adversarial human input", () => {
       // Whatever the model does with this, the outcome is bounded by the same
       // registry and the same validation. Here the model plays along and asks
       // for the tool the attacker wanted; it does not exist.
-      const decision = await runBuyerAgent(
-        { message: attack },
-        deps(
-          [
-            {
-              text: intentJson({
-                requestType: "BROWSE",
-                budget: null,
-                needsClarification: false,
-              }),
-            },
-            { toolCalls: [{ name: "run_sql", args: { sql: "DROP TABLE product" } }] },
-            {
-              text: selectionJson({
-                outcome: "NO_MATCH",
-                selectedProductId: null,
-                reasonCodes: [],
-                noMatchReasonCodes: [],
-                summary: "I can only help you shop.",
-              }),
-            },
-          ],
-          [IN_BUDGET],
-        ),
+      const d = deps(
+        [
+          {
+            text: intentJson({
+              requestType: "BROWSE",
+              budget: null,
+              needsClarification: false,
+            }),
+          },
+          { toolCalls: [{ name: "run_sql", args: { sql: "DROP TABLE product" } }] },
+          {
+            text: selectionJson({
+              outcome: "NO_MATCH",
+              selectedProductId: null,
+              reasonCodes: [],
+              noMatchReasonCodes: [],
+              summary: "I can only help you shop.",
+            }),
+          },
+        ],
+        [IN_BUDGET],
       );
+
+      const decision = await runBuyerAgent({ message: attack }, d);
+
       expect(decision.kind).toBe("NO_MATCH");
       expect(JSON.stringify(decision)).not.toContain("GEMINI_API_KEY");
+
+      // The decision alone proves nothing here: it is the third scripted turn,
+      // and the fake would have returned it whatever became of the tool call.
+      // What has to be true is that `run_sql` was *refused* - so the refusal
+      // itself is asserted, by reading what the agent actually sent back to the
+      // model. A dispatcher that quietly executed the call would return data
+      // here instead, and this test would fail where the outcome check could
+      // not.
+      const continuation = d.provider.requests.find(
+        (request): request is Extract<typeof request, { toolResults: unknown }> =>
+          "toolResults" in request,
+      );
+      expect(continuation).toBeDefined();
+      const result = continuation?.toolResults[0];
+      expect(result?.name).toBe("run_sql");
+      expect(result?.isError).toBe(true);
+      // A refusal, not a result set: nothing the tool would have produced.
+      expect(JSON.stringify(result?.content)).not.toContain("product");
     });
   }
 });

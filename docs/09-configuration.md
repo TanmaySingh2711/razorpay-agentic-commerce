@@ -55,12 +55,10 @@ repository today.**
 | `RAZORPAY_WEBHOOK_SECRET` | Webhook verification                                                                                                          | yes             |
 | `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                                                | yes             |
 | `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled                              | yes             |
-| `APP_SECRET`              | Session and CSRF signing. Minimum 32 characters                                                                               | yes             |
 
 `getGeminiConfig()`, `getRazorpayConfig()`, `getRazorpayCredentials()`,
-`getDatabaseConfig()`, `getCatalogConfig()` and
-`getAppSecretConfig()` throw a `ConfigurationError` when their variables are
-missing.
+`getDatabaseConfig()` and `getCatalogConfig()` throw a `ConfigurationError`
+when their variables are missing.
 
 `getRazorpayCredentials()` is the narrower of the two Razorpay accessors: it
 validates `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` alone, which is everything

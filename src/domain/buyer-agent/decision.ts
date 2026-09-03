@@ -129,6 +129,48 @@ export type BuyerAgentDecision =
 
 export type BuyerAgentDecisionKind = BuyerAgentDecision["kind"];
 
+/** Bounds stated once, so the validator and the provider cannot disagree. */
+export const MAX_SELECTED_PRODUCT_ID_LENGTH = 64;
+export const MAX_SELECTION_QUANTITY = 100;
+export const MAX_DECISION_REASON_CODES = 8;
+export const MAX_NO_MATCH_REASON_CODES = 6;
+export const MAX_SUMMARY_LENGTH = 300;
+
+/**
+ * The clarification question's own limit, even though it currently equals the
+ * summary's.
+ *
+ * They are different fields answering to different rules - one is a sentence
+ * shown beside a product, the other is a question put to a shopper - and a
+ * shared constant would mean that shortening the summary silently shortened the
+ * question too. The intent schema states the same bound for its own
+ * clarification question; both are 300 today, and neither is 300 *because* the
+ * other is.
+ */
+export const MAX_SELECTION_CLARIFICATION_LENGTH = 300;
+
+/**
+ * A field that is absent means the same as a field that is null.
+ *
+ * The provider schema below marks `selectedProductId`, `quantity` and
+ * `clarificationQuestion` optional, because none of them is meaningful for
+ * every outcome - a `NO_MATCH` has no product and a `SELECT` has no question.
+ * A model given that schema does the correct thing and omits them. This
+ * validator used to demand them anyway (`.nullable()` accepts `null`, but still
+ * requires the key), so a perfectly compliant answer was rejected as
+ * `AI_PROVIDER_INVALID_RESPONSE`.
+ *
+ * Normalising absence to `null` here is not a relaxation: every value the
+ * schema accepted before is still accepted, every bound still applies, and
+ * downstream code keeps its single `=== null` comparison rather than learning
+ * about two flavours of missing. The same normalisation already exists for the
+ * intent schema, for the same reason and after the same live failure.
+ */
+const absentAsNull = <T extends z.ZodTypeAny>(inner: T) =>
+  inner
+    .nullish()
+    .transform((value): z.output<T> | null => (value ?? null) as z.output<T> | null);
+
 /**
  * What the model is allowed to propose after it has seen catalog results.
  *
@@ -140,17 +182,27 @@ export type BuyerAgentDecisionKind = BuyerAgentDecision["kind"];
  */
 export const modelSelectionSchema = z.object({
   outcome: z.enum(["SELECT", "NO_MATCH", "CLARIFY"]),
-  selectedProductId: z.string().max(64).nullable(),
-  quantity: z.number().int().min(1).max(100).nullable(),
-  reasonCodes: z.array(z.enum(DECISION_REASON_CODES)).max(8),
-  noMatchReasonCodes: z.array(z.enum(NO_MATCH_REASON_CODES)).max(6),
-  clarificationQuestion: z.string().max(300).nullable(),
-  summary: z.string().min(1).max(300),
+  selectedProductId: absentAsNull(z.string().max(MAX_SELECTED_PRODUCT_ID_LENGTH)),
+  quantity: absentAsNull(z.number().int().min(1).max(MAX_SELECTION_QUANTITY)),
+  reasonCodes: z.array(z.enum(DECISION_REASON_CODES)).max(MAX_DECISION_REASON_CODES),
+  noMatchReasonCodes: z
+    .array(z.enum(NO_MATCH_REASON_CODES))
+    .max(MAX_NO_MATCH_REASON_CODES),
+  clarificationQuestion: absentAsNull(z.string().max(MAX_SELECTION_CLARIFICATION_LENGTH)),
+  summary: z.string().min(1).max(MAX_SUMMARY_LENGTH),
 });
 
 export type ModelSelection = z.infer<typeof modelSelectionSchema>;
 
-/** The provider-facing schema for the selection step. See intent.ts for why. */
+/**
+ * The provider-facing schema for the selection step. See intent.ts for why.
+ *
+ * Every bound the validator enforces is declared here as well. A model that is
+ * never told a limit has no way to respect it, and the resulting refusal is our
+ * own contract's fault rather than the model's - which is precisely how an
+ * over-long clarification question once became a live failure. The parity test
+ * in `tests/model-schema-parity.test.ts` is what keeps the two in step.
+ */
 export const SELECTION_RESPONSE_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -158,21 +210,35 @@ export const SELECTION_RESPONSE_JSON_SCHEMA = {
     selectedProductId: {
       type: "string",
       nullable: true,
+      maxLength: MAX_SELECTED_PRODUCT_ID_LENGTH,
       description:
         "The id of a product returned by a catalog tool in THIS conversation. Never invent one.",
     },
-    quantity: { type: "integer", nullable: true },
+    quantity: {
+      type: "integer",
+      nullable: true,
+      minimum: 1,
+      maximum: MAX_SELECTION_QUANTITY,
+    },
     reasonCodes: {
       type: "array",
+      maxItems: MAX_DECISION_REASON_CODES,
       items: { type: "string", enum: [...DECISION_REASON_CODES] },
     },
     noMatchReasonCodes: {
       type: "array",
+      maxItems: MAX_NO_MATCH_REASON_CODES,
       items: { type: "string", enum: [...NO_MATCH_REASON_CODES] },
     },
-    clarificationQuestion: { type: "string", nullable: true },
+    clarificationQuestion: {
+      type: "string",
+      nullable: true,
+      maxLength: MAX_SELECTION_CLARIFICATION_LENGTH,
+    },
     summary: {
       type: "string",
+      minLength: 1,
+      maxLength: MAX_SUMMARY_LENGTH,
       description:
         "One short sentence for the shopper. Never internal reasoning, never a price you calculated.",
     },
