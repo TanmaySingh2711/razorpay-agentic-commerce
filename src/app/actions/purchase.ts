@@ -187,6 +187,21 @@ async function decide(
   if (!id.success) return { kind: "ERROR", message: "Unknown purchase." };
 
   try {
+    // Read the buyer *before* minting anything.
+    //
+    // The token is returned in plaintext exactly once and is never stored, so
+    // every step between minting it and spending it is a step that can strand
+    // it: the approval row is left PENDING, the plaintext is gone, and this
+    // purchase cannot be approved again until the window expires. This lookup
+    // used to sit in that gap, which meant a transaction that had been deleted
+    // - or one round trip that failed - cost the buyer the approval. Nothing
+    // here needs the approval to exist, so nothing here belongs after it.
+    const buyer = await getPrismaClient().transaction.findUnique({
+      where: { id: id.data },
+      select: { buyerProfileId: true },
+    });
+    if (buyer === null) return { kind: "ERROR", message: "Unknown purchase." };
+
     const requested = await requestApproval({
       transactionId: id.data,
       operationId: operation(),
@@ -205,12 +220,6 @@ async function decide(
           "An approval for this purchase is already open and must be answered where it was issued.",
       };
     }
-
-    const buyer = await getPrismaClient().transaction.findUnique({
-      where: { id: id.data },
-      select: { buyerProfileId: true },
-    });
-    if (buyer === null) return { kind: "ERROR", message: "Unknown purchase." };
 
     const answered = await decideApproval({
       token: requested.token,

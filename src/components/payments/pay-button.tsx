@@ -86,32 +86,47 @@ export function PayButton({
   const verify = useCallback(
     async (session: CheckoutSessionDto, response: CheckoutSuccessResponse) => {
       setPhase({ kind: "VERIFYING" });
-      // Only what the server needs to find its own record and check the
-      // signature. The amount is not sent, because the browser has no say in it.
-      const verified = await postJson<{
-        kind: string;
-        providerPaymentId?: string;
-        rejection?: string;
-      }>("/api/payments/callback", {
-        transactionId: session.transactionId,
-        paymentAttemptId: session.paymentAttemptId,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_signature: response.razorpay_signature,
-      });
-
-      if (verified.data?.kind === "PAYMENT_VERIFIED") {
-        setPhase({
-          kind: "VERIFIED",
-          paymentId: verified.data.providerPaymentId ?? response.razorpay_payment_id,
+      try {
+        // Only what the server needs to find its own record and check the
+        // signature. The amount is not sent, because the browser has no say in it.
+        const verified = await postJson<{
+          kind: string;
+          providerPaymentId?: string;
+          rejection?: string;
+        }>("/api/payments/callback", {
+          transactionId: session.transactionId,
+          paymentAttemptId: session.paymentAttemptId,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_signature: response.razorpay_signature,
         });
-        return;
+
+        if (verified.data?.kind === "PAYMENT_VERIFIED") {
+          setPhase({
+            kind: "VERIFIED",
+            paymentId: verified.data.providerPaymentId ?? response.razorpay_payment_id,
+          });
+          return;
+        }
+        setPhase({
+          kind: "PROBLEM",
+          message:
+            "We could not confirm this payment as genuine. Open this purchase again to see where it stands - the page reads the authoritative record, and support can look it up.",
+        });
+      } catch {
+        // This point is reached *after* the person paid, so the one thing that
+        // must not be said here is "nothing was charged". A dropped connection
+        // or a non-JSON error response means we do not know the outcome, not
+        // that there was none - and the provider's own webhook will reconcile
+        // it regardless of what this browser managed to send. Without this
+        // catch the promise simply rejected and the button sat on "Verifying"
+        // for ever, which is the worst of both: no answer and no way forward.
+        setPhase({
+          kind: "PROBLEM",
+          message:
+            "Your payment may well have gone through - we just could not confirm it from this page. Do not pay again. Open this purchase to see the confirmed outcome.",
+        });
       }
-      setPhase({
-        kind: "PROBLEM",
-        message:
-          "We could not confirm this payment as genuine. Nothing has been charged to you by us, and support can look it up.",
-      });
     },
     [],
   );
@@ -179,7 +194,12 @@ export function PayButton({
               setPhase({ kind: "DISMISSED" });
               // Recorded, but it decides nothing: closing a window is not a
               // failed payment, and the server treats it as neither.
-              void postJson("/api/payments/dismissed", { transactionId });
+              // Fire and forget, and genuinely forgotten: this call decides
+              // nothing, so a failure must not surface as an unhandled
+              // rejection in the person's console.
+              void postJson("/api/payments/dismissed", { transactionId }).catch(
+                () => undefined,
+              );
             },
           },
         });

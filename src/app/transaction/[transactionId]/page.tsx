@@ -8,7 +8,9 @@ import {
   awaitsProvider,
   buildJourney,
   describeState,
+  formatDateTime,
   formatMoney,
+  formatTime,
 } from "@/domain/ui/journey";
 import { loadTransactionOverview } from "@/services/transaction/overview-service";
 import type { TransactionOverview } from "@/services/transaction/overview-service";
@@ -102,9 +104,7 @@ function QuoteCard({ overview }: { readonly overview: TransactionOverview }) {
         <div>
           <dt>Price held until</dt>
           <dd>
-            <time dateTime={quote.expiresAt}>
-              {new Date(quote.expiresAt).toLocaleString("en-IN")}
-            </time>
+            <time dateTime={quote.expiresAt}>{formatDateTime(quote.expiresAt)}</time>
           </dd>
         </div>
       </dl>
@@ -191,7 +191,7 @@ function InventoryCard({ overview }: { readonly overview: TransactionOverview })
         <p className="hint">
           Held until{" "}
           <time dateTime={overview.reservationExpiresAt}>
-            {new Date(overview.reservationExpiresAt).toLocaleString("en-IN")}
+            {formatDateTime(overview.reservationExpiresAt)}
           </time>
           .
         </p>
@@ -310,7 +310,7 @@ function Timeline({ overview }: { readonly overview: TransactionOverview }) {
         {overview.timeline.map((entry, index) => (
           <li key={`${entry.source}-${String(index)}`}>
             <time dateTime={new Date(entry.occurredAt).toISOString()}>
-              {new Date(entry.occurredAt).toLocaleTimeString("en-IN")}
+              {formatTime(entry.occurredAt)}
             </time>
             <div>
               <p className="event">{entry.conciseExplanation}</p>

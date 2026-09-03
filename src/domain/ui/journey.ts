@@ -286,5 +286,42 @@ export function formatMoney(amount: MoneyDto): string {
   return `${negative ? "-" : ""}${symbol}${grouped}.${fraction}`;
 }
 
+// ---------------------------------------------------------------------------
+// Dates and times
+// ---------------------------------------------------------------------------
+
+/**
+ * The zone every displayed time is rendered in, stated rather than inherited.
+ *
+ * These pages are server components, so the string a buyer reads is produced by
+ * whichever machine rendered it. That machine is not theirs: a Vercel function
+ * runs with no `TZ` set, so Node falls back to UTC, and a quote expiring at
+ * 2:46 pm in Delhi was being shown to the person who owns it as 9:16 am. The
+ * locale was already pinned to `en-IN`; the zone was left to the host, which
+ * made a financial deadline wrong by five and a half hours.
+ *
+ * Pinned to India because that is what this deployment is: prices are INR, the
+ * provider is Razorpay, and the buyer is in India. A multi-region deployment
+ * would resolve the zone per buyer instead - but it would still resolve it
+ * deliberately, which is the point. A displayed deadline must never depend on
+ * where the server happens to be.
+ */
+const DISPLAY_TIME_ZONE = "Asia/Kolkata";
+const DISPLAY_LOCALE = "en-IN";
+
+/** A full date and time, for a deadline a person may need to act before. */
+export function formatDateTime(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
+}
+
+/** Just the clock time, for entries in a timeline whose date is already clear. */
+export function formatTime(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleTimeString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
+}
+
 /** A compile-time check that every state is described. */
 export const DESCRIBED_STATES: readonly TransactionState[] = TRANSACTION_STATES;

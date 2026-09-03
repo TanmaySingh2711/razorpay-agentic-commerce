@@ -4,7 +4,9 @@ import {
   awaitsProvider,
   buildJourney,
   describeState,
+  formatDateTime,
   formatMoney,
+  formatTime,
 } from "@/domain/ui/journey";
 import { TRANSACTION_STATES } from "@/domain/transaction/states";
 import type { TransactionState } from "@/domain/transaction/states";
@@ -171,5 +173,53 @@ describe("the tone a state is shown in", () => {
       (state: TransactionState) => describeState(state).tone === "POSITIVE",
     );
     expect([...positive].sort()).toEqual(["COMPLETED", "PAYMENT_CAPTURED"]);
+  });
+});
+
+describe("displayed times do not depend on where the server runs", () => {
+  /**
+   * The regression this locks down.
+   *
+   * These pages are server components, so the string a buyer reads is rendered
+   * by the host. A Vercel function sets no `TZ`, so Node used UTC, and a quote
+   * expiring at 2:46 pm in Delhi was shown to its owner as 9:16 am - a
+   * five-and-a-half-hour error on a deadline they were expected to act before.
+   *
+   * The instant below is chosen so the two readings fall on either side of
+   * noon: under UTC it reads "am", under India time "pm". A test that only
+   * checked the shape of the string would pass in both worlds, so these assert
+   * the actual clock reading.
+   */
+  const NINE_SIXTEEN_UTC = "2026-09-03T09:16:25.000Z";
+
+  it("renders a deadline in India time, not the host's", () => {
+    expect(formatDateTime(NINE_SIXTEEN_UTC)).toContain("2:46:25 pm");
+    expect(formatDateTime(NINE_SIXTEEN_UTC)).not.toContain("9:16");
+  });
+
+  it("renders a timeline entry in India time, not the host's", () => {
+    expect(formatTime(NINE_SIXTEEN_UTC)).toContain("2:46:25 pm");
+    expect(formatTime(NINE_SIXTEEN_UTC)).not.toContain("9:16");
+  });
+
+  it("is stable whatever TZ the process was started with", () => {
+    // Proves the zone comes from the formatter rather than the environment:
+    // whatever this run inherited, the answer is the same one asserted above.
+    const before = process.env["TZ"];
+    try {
+      for (const zone of ["UTC", "America/New_York", "Asia/Kolkata"]) {
+        process.env["TZ"] = zone;
+        expect(formatDateTime(NINE_SIXTEEN_UTC), zone).toContain("2:46:25 pm");
+      }
+    } finally {
+      if (before === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = before;
+    }
+  });
+
+  it("shows an unparseable timestamp as itself rather than as Invalid Date", () => {
+    // A broken date on a payment screen must not look like a real deadline.
+    expect(formatDateTime("not-a-date")).toBe("not-a-date");
+    expect(formatTime("")).toBe("");
   });
 });
