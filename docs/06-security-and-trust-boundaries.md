@@ -112,6 +112,53 @@ The **webhook** is deliberately exempt. It is machine-to-machine, carries no
 browser headers, and its authenticity comes from an HMAC over the raw body —
 a far stronger claim than any origin header.
 
+### Dependency hardening
+
+`package.json` carries one narrowly scoped `overrides` entry, nested under the
+`prisma` key so it only rewrites versions actually resolved through Prisma's own
+dependency tree:
+
+```json
+"overrides": {
+  "prisma": {
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.3"
+  }
+}
+```
+
+Both packages are transitive dependencies of the `prisma` CLI, never imported
+by this application's own code — `deepmerge-ts` is used once inside
+`@prisma/config` to merge CLI config objects, and `mysql2` is a driver Prisma's
+CLI bundles for MySQL projects, unused by this Postgres-only project. `prisma`
+is a `devDependency`, but `@prisma/client` (a runtime dependency) lists `prisma`
+as an optional peer, so both packages were still reachable in a
+`npm ls --omit=dev` production tree walk — the override was worth doing rather
+than dismissing as dev-only.
+
+The versions before the override carried real advisories: `deepmerge-ts@7.1.5`
+(GHSA-ggr8-5vv4-36mx, a stack-exhaustion denial of service in `deepmerge()`
+against a crafted recursive object, fixed at `8.0.0`) and `mysql2@3.15.3`
+(GHSA-3f6p-5ww8-9rcr, an auth-plugin downgrade that can leak a plaintext
+password to a rogue or MITM'd MySQL server, fixed at `3.22.0`; and
+GHSA-rgwj-5xj2-c3m3, an unbounded `zlib.inflate` decompression bomb reachable
+only with `compress: true`, fixed at `3.23.1`). None of these three advisories
+apply to this project's own request path — the CLI never merges attacker input
+and this application never opens a MySQL connection — but the override removes
+them at the tree level anyway rather than leaving them present-but-inert.
+
+The override is safe: both packages are used through a single stable call site
+each (`deepmerge()`'s public signature is unchanged across the major version;
+Prisma's CLI only needs `mysql2` importable, never touches its compression or
+auth-switch internals), and after applying it `prisma generate`, `prisma
+validate`, `prisma migrate status`, and the full local Docker-Postgres test
+schema setup all ran clean, and the complete `npm run verify` suite (1142
+tests) stayed green.
+
+This override should be removed once a `prisma` release upstream depends on
+`deepmerge-ts@^8` and `mysql2@^3.22` (or later) directly, so the pin stops being
+necessary.
+
 ## Conventions
 
 ### Secrets

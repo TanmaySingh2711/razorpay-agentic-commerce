@@ -101,25 +101,33 @@ export default function AboutPage() {
           and not the agent
         </li>
         <li>
-          <strong>Transaction lifecycle through PAYMENT_CAPTURED</strong> — every state
+          <strong>Requote on retry</strong> — if a retry finds its quote has expired but
+          the stock hold is still active, the server quotes today&apos;s price, supersedes
+          the old quote, and reruns policy before rebinding the same hold — never a second
+          reservation, and never the old price charged behind anyone&apos;s back
+        </li>
+        <li>
+          <strong>Full transaction lifecycle through COMPLETED</strong> — every state
           change goes through one state machine, with an immutable history of how the
           transaction got there
         </li>
       </ul>
 
-      <h2>Where this stops, deliberately</h2>
+      <h2>Where trust changes hands, deliberately</h2>
       <p>
         A verified signature proves a payment confirmation is genuine and belongs to this
         order. It is <strong>not</strong> proof that funds were captured — only the
         provider can assert that, and only through a webhook this server authenticates
         itself. So <code>PAYMENT_VERIFIED</code> and <code>PAYMENT_CAPTURED</code> stay
-        separate states, reached by different evidence.
+        separate states, reached by different evidence, and a captured webhook can arrive
+        before the browser ever returns.
       </p>
       <p>
-        Captured is still not finished. The lifecycle ends at{" "}
-        <code>PAYMENT_CAPTURED</code>: stock stays reserved rather than sold, and no
-        transaction is marked complete. Inventory commit and final completion are later
-        objectives and are not implemented here.
+        Capture is still not the end. Only once that provider evidence is in does the
+        reservation commit — exactly once, however many times the same webhook is
+        redelivered — and the transaction move to <code>COMPLETED</code>. This has run end
+        to end against Razorpay Test Mode, including a genuine bank decline, a retry, and
+        a duplicate webhook redelivery that changed nothing.
       </p>
 
       <footer>
