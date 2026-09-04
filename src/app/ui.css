@@ -156,9 +156,17 @@ summary:focus-visible {
   box-shadow: var(--shadow-sm);
 }
 
+/* Blends toward white rather than swapping to a fixed second colour. `--accent`
+   and `--rzp-blue` resolve to the exact same value in dark mode, which made
+   this hover state invisible in the one theme most reviewers actually see -
+   the button read as flat because, on hover, its fill genuinely did not
+   change. Blending always lightens the button's own colour, in either theme,
+   without ever changing what colour it is. The lift makes the response felt
+   as well as seen. */
 :where(button, a).primary:hover:not(:disabled) {
-  background: var(--rzp-blue);
+  background: color-mix(in srgb, var(--accent) 85%, white);
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 :where(button, a).secondary {
@@ -177,6 +185,13 @@ summary:focus-visible {
 :where(button, a).secondary:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow: var(--shadow-sm);
+}
+
+/* Same blend approach as the hover state above, darkened instead of
+   lightened - so a press reads as a press in both themes, still without
+   changing the button's own colour. */
+:where(button, a).primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
 }
 
 button:disabled {

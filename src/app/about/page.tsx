@@ -20,7 +20,7 @@ export default function AboutPage() {
     <main>
       <p className="breadcrumb">
         <Link href="/" className="secondary">
-          ← Back to the demo
+          ← Back to the Demo
         </Link>
       </p>
 
