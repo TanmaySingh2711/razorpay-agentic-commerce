@@ -196,8 +196,30 @@ Five independent barriers, so no single mistake is sufficient:
 5. The payable amount exists in exactly one place — the `PurchaseQuote` — so
    there is no second code path where a different amount could be introduced.
 
-## Not implemented in Objective 1
+## Implementation status of the conventions above
 
-Authentication and session management, rate limiting, CSRF handling, database
-access control, and the signature verification itself. This document fixes the
-conventions those implementations must satisfy.
+Signature verification is implemented, for both directions and as two separate
+facts: the Razorpay checkout callback is verified with an HMAC over
+`order_id|payment_id` using the **server-stored** order id, and every inbound
+webhook is verified with an HMAC over the raw request body using a different
+secret. Both comparisons are timing-safe. See
+[25 — Checkout and verification](./25-checkout-and-verification.md).
+
+Same-origin checking is implemented for mutating requests, and database access
+runs through a single typed persistence boundary.
+
+There is no authentication, no session, and no login anywhere in this
+application. Every purchase resolves to whichever single `BuyerProfile` row
+PostgreSQL's `findFirst` happens to return — there is exactly one buyer, and no
+code path distinguishes one visitor from another. There is also no rate
+limiting.
+
+This is not a hardened gap in an otherwise multi-user system; it is the actual
+shape of a single-buyer Test Mode demonstration, where no real money moves and
+no second buyer exists to be confused with the first. A deployment serving more
+than one buyer would need to add authenticated sessions, resolve
+`buyerProfileId` from the authenticated identity instead of `findFirst`, add
+per-user authorization on every read and write, and add rate limiting — none of
+which this repository does today. This document fixes the trust-boundary
+conventions those additions would have to satisfy; it does not claim they
+already exist.

@@ -188,7 +188,7 @@ A repeat under the **same** operation id returns the recorded decision with
 second evaluation, and the state machine has no edge for it from `AUTHORIZED`:
 it fails, and the audit event rolls back with it.
 
-## Pre-payment recheck — the handoff to Objective 10
+## Pre-payment recheck
 
 `recheckPolicyAuthorization(transactionId)` in
 `src/services/policy/authorization-recheck.ts` exists for a gap in time. Policy
@@ -196,10 +196,10 @@ is evaluated when a quote is created; a payment order is created later. In
 between, a price can move, a quote can lapse, and a person can change their
 policy. An authorization that was correct at 10:00 is not evidence about 10:40.
 
-The future payment service **must** call it immediately before creating a
-Razorpay order, and must refuse to prepare payment on anything but `AUTHORIZED`.
-It re-derives the decision from scratch against today's rows and compares it
-with what was recorded, refusing on any of:
+`payment-order-service.ts` calls it immediately before creating a Razorpay
+order, and refuses to prepare payment on anything but `AUTHORIZED`. It
+re-derives the decision from scratch against today's rows and compares it with
+what was recorded, refusing on any of:
 
 | Refusal                             | Meaning                                                                               |
 | ----------------------------------- | ------------------------------------------------------------------------------------- |
@@ -224,25 +224,33 @@ something every time it is consulted cannot be consulted freely, and this one
 must be callable immediately before money moves without changing what it is
 measuring.
 
-### The seam Objective 8 fills
+### The seam a consumed approval fills
 
-A purchase a human approves will reach `AUTHORIZED` through the approval gate,
-but re-running the engine against a policy that always demanded approval will
-keep saying `APPROVAL_REQUIRED` — correctly. Treating that as a refusal is the
-fail-closed choice, and it is exactly where Objective 8's `ApprovalRequest` will
-plug in: a stored, scoped human decision this function can consult alongside the
-engine's. Until that exists, a purchase above the ceiling cannot be paid, which
-is the right way round.
+A purchase a human approves reaches `AUTHORIZED` through the approval gate, but
+re-running the engine against a policy that always demands approval would keep
+saying `APPROVAL_REQUIRED` — correctly, in isolation. Treating that alone as a
+refusal would be fail-closed to the point of being wrong, so
+`recheckPolicyAuthorization` accepts an `approvalMaySatisfy` option: when set, a
+consumed `ApprovalRequest` matching this transaction, this quote, this exact
+amount and currency, and this policy version can stand in for the fresh
+`APPROVAL_REQUIRED` verdict. `payment-order-service.ts` passes it; nothing else
+does, so an approval can never quietly satisfy a check it was not asked to.
 
-## What Objective 7 deliberately did not do
+## What this original design did not anticipate needing later, and what filled it
 
-- No human approval workflow, no `ApprovalRequest` decisions (Objective 8).
-- No inventory reservation, no Razorpay, no orders, no checkout, no webhooks.
-- No audit **system** or UI — only the single evaluation event this objective
-  needs (Objective 9 builds the rest).
-- No route handler. Nothing in `src/app/api/` imports the policy service, and a
-  test asserts it: the browser cannot choose the outcome because the browser
-  cannot reach the decision at all.
+- The human approval workflow (`ApprovalRequest`, the approval gate) is
+  implemented — see [22](./22-approval-and-inventory.md) — and is exactly what
+  fills the seam above.
+- Inventory reservation, Razorpay, orders, checkout and webhooks are all
+  implemented — see [22](./22-approval-and-inventory.md),
+  [24](./24-payment-order-creation.md) and
+  [25](./25-checkout-and-verification.md).
+- The full audit system and the transaction page are implemented — see
+  [23](./23-audit-and-explainability.md).
+- There is still no route handler for policy evaluation directly: nothing in
+  `src/app/api/` imports the policy service other than through the server
+  action / payment-order path, and a test asserts it — the browser cannot
+  choose the outcome because it cannot reach the decision at all.
 - `Transaction.authorizedAmount` is left null. Writing it would mean a second
   module mutating a transaction outside the state machine, and the recheck
   compares against the live quote and the live policy anyway, so nothing depends

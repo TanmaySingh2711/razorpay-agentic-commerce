@@ -17,8 +17,9 @@ boundary refuses to start the payment path with anything that is not an
 closed rather than quietly working.
 
 The staging URL is stable, and it is the base URL for the
-Razorpay webhook endpoint. That endpoint does not exist yet and is deliberately
-not configured.
+Razorpay webhook endpoint `POST /api/webhooks/razorpay`, which is implemented,
+configured against this deployment, and verifies every inbound delivery's HMAC
+signature over the raw request body before the payload is trusted.
 
 ## Platform and runtime
 
@@ -96,15 +97,19 @@ npm run db:verify:staging   # does the live schema still match the design?
 `db push` is never a substitute for migration history, and the staging database
 is never reset, truncated, dropped or recreated to resolve a migration problem.
 
-## What the deployment does not prove
+## What a verified callback does and does not prove
 
 `PAYMENT_VERIFIED` is **not** `PAYMENT_CAPTURED`, and neither is `COMPLETED`.
 
 A verified signature proves the payment confirmation is authentic and belongs to
 the order this server created. It does not prove funds were captured, that the
 order should be fulfilled, or that stock should be committed. Confirming capture
-is the payment provider's job to assert through a webhook, which the deployment now
-verifies and reconciles. Capture is still not fulfilment: inventory commit and final
-completion remain later objectives.
-Until then the lifecycle stops at `PAYMENT_VERIFIED`, stock stays reserved rather
-than sold, and no transaction is marked complete.
+is the payment provider's job to assert through a webhook, which this deployment
+verifies and reconciles.
+
+The full lifecycle past that point is implemented and has run end to end here: a
+signature-verified `payment.captured` webhook advances the transaction to
+`PAYMENT_CAPTURED`, commits the inventory reservation exactly once, and completes
+the transaction exactly once. A duplicate redelivery of the same provider event
+is recorded and changes nothing. See
+[28 — Final architecture](./28-final-architecture.md).

@@ -137,20 +137,21 @@ open to `human_user` and `transaction_service`.
 
 Anything not in the table is rejected with a typed reason:
 
-| Rejection reason      | Example                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------- |
-| `unknown_transition`  | `PRODUCT_SELECTED → AUTHORIZED` (skips verification, quote and policy)                            |
-| `unknown_transition`  | `PRODUCT_VERIFIED → POLICY_EVALUATED` (skips the quote, so policy would judge an unfrozen amount) |
-| `unknown_transition`  | `AUTHORIZED → PAYMENT_ORDER_CREATED` (skips the reservation — the check-then-charge race)         |
-| `unknown_transition`  | `POLICY_EVALUATED → PAYMENT_CAPTURED` (skips authorization and the payment itself)                |
-| `actor_not_permitted` | `buyer_agent` attempting `APPROVAL_REQUIRED → AUTHORIZED`                                         |
-| `actor_not_permitted` | `buyer_agent` attempting `PAYMENT_VERIFIED → PAYMENT_CAPTURED`                                    |
-| `terminal_state`      | any move out of `COMPLETED`, `BLOCKED`, `CANCELLED` or `EXPIRED`                                  |
+| Rejection reason      | Example                                                                                                                                                                                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unknown_transition`  | `PRODUCT_SELECTED → AUTHORIZED` (skips verification, quote and policy)                                                                                                                                                                                                                                                         |
+| `unknown_transition`  | `PRODUCT_VERIFIED → POLICY_EVALUATED` (skips the quote, so policy would judge an unfrozen amount)                                                                                                                                                                                                                              |
+| `unknown_transition`  | `AUTHORIZED → PAYMENT_ORDER_CREATED` **for an ordinary first payment** (skips the reservation — the check-then-charge race). One narrow, later-added exception exists for a controlled retry rebinding stock already held before the first attempt — see [27](./27-payment-retry.md); it is not a second way to skip the hold. |
+| `unknown_transition`  | `POLICY_EVALUATED → PAYMENT_CAPTURED` (skips authorization and the payment itself)                                                                                                                                                                                                                                             |
+| `actor_not_permitted` | `buyer_agent` attempting `APPROVAL_REQUIRED → AUTHORIZED`                                                                                                                                                                                                                                                                      |
+| `actor_not_permitted` | `buyer_agent` attempting `PAYMENT_VERIFIED → PAYMENT_CAPTURED`                                                                                                                                                                                                                                                                 |
+| `terminal_state`      | any move out of `COMPLETED`, `BLOCKED`, `CANCELLED` or `EXPIRED`                                                                                                                                                                                                                                                               |
 
-Rejections are returned as values (`Result`), not thrown, because a refusal is
-an auditable business outcome: the `explanation` field feeds straight into a
-decision record. `assertTransition` is the throwing variant, for call sites
-where a rejection would mean a bug.
+Rejections are returned as values (a `TransitionDecision`), not thrown, because
+a refusal is an auditable business outcome. The implemented engine's return
+shape and its throwing/typed-error behaviour at the service boundary are
+documented in [17](./17-transaction-state-machine.md#errors) — there is no
+separate "assert" variant; every caller is expected to inspect the decision.
 
 ## Transition history
 

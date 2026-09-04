@@ -1,5 +1,9 @@
 # 15 — Roadmap
 
+> **Historical record.** This is the original forward plan. The objectives it describes have since been delivered. It is kept for the reasoning, not as a
+> description of the current system — for that, see
+> [28 — Final architecture](./28-final-architecture.md).
+
 Later objectives, ordered so each one lands against a working system and none
 requires revisiting the architecture. No feature here is an invention beyond
 the Track 01 brief.

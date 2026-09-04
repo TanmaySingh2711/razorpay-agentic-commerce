@@ -5,96 +5,127 @@ one database, with hard internal boundaries. It is not to be split into
 services — see [02](./02-architecture.md) for why.
 
 Every file listed exists and does something. There are no placeholder
-directories: a folder appears when its first real file does. The homes for
-future modules are named here so they land in the right place without being
-pre-created as empty shells.
+directories: a folder appears when its first real file does.
 
 ```
 razorpay-agentic-commerce/
 ├── docs/                       architecture record (this directory)
 ├── prisma/
-│   ├── schema.prisma           the database schema (single source of DDL)
 │   ├── migrations/             reviewable, committed schema history
+│   ├── schema.prisma           the single schema definition
 │   └── seed.ts                 idempotent demo seed
-├── scripts/
+├── scripts/                    standalone CLI tooling, outside the app runtime
+│   ├── buyer-agent-smoke.ts    one live agent run, outside npm test
+│   ├── checkout-smoke-setup.ts prepares one real Test Mode checkout
+│   ├── checkout-smoke-check.ts inspects the result of that checkout
+│   ├── database-target-guard.ts refuses a command aimed at the wrong database
 │   ├── db-verify.ts            verifies the live DB matches the design
 │   ├── gemini-smoke.ts         the one live Gemini call, outside npm test
+│   ├── pooled-endpoint.ts      pooled-vs-direct connection recognition
+│   ├── prisma-cli.ts           the guarded entry point for every db:* script
+│   ├── razorpay-smoke.ts       one live Razorpay Test Mode call
+│   ├── setup-dev-database.ts   local development DB, loopback only
 │   └── setup-test-schema.ts    creates + migrates the isolated test schema
 ├── src/
 │   ├── app/                    Next.js App Router — delivery layer only
+│   │   ├── actions/purchase.ts server actions the pages invoke
 │   │   ├── api/buyer-agent/    AI buyer agent endpoint (handler.ts + route.ts)
 │   │   ├── api/catalog/        agent-readable catalog endpoints
-│   │   │   ├── handlers.ts     HTTP validation + response mapping (testable)
-│   │   │   ├── merchant/route.ts
-│   │   │   └── products/route.ts, products/[productId]/route.ts
 │   │   ├── api/health/route.ts liveness endpoint
-│   │   ├── globals.css         minimal foundation styling
+│   │   ├── api/payments/       order, checkout, callback, retry, dismissed
+│   │   │   └── handler.ts      HTTP validation + response mapping (testable)
+│   │   ├── api/webhooks/razorpay/  provider webhook intake and verification
+│   │   ├── checkout/[transactionId]/    the page that offers Pay
+│   │   ├── transaction/[transactionId]/ the authoritative purchase view
+│   │   ├── about/page.tsx      how the system works, for a reviewer
 │   │   ├── layout.tsx          root layout
-│   │   └── page.tsx            foundation landing page
+│   │   └── page.tsx            landing page
+│   ├── components/
+│   │   ├── buyer/buyer-console.tsx       the shopping input
+│   │   ├── payments/pay-button.tsx       the one place a person spends money
+│   │   └── transaction/decision-form.tsx approve / reject
 │   ├── config/
 │   │   └── env.ts              the ONLY reader of process.env
 │   ├── generated/prisma/       generated Prisma client (git-ignored artifact)
 │   ├── integrations/
 │   │   ├── llm/
-│   │   │   ├── gemini-provider.ts  the ONLY @google/genai importer
-│   │   │   └── provider.ts         provider-neutral AiProvider port
+│   │   │   ├── gemini-provider.ts   the ONLY @google/genai importer
+│   │   │   └── provider.ts          provider-neutral AiProvider port
+│   │   ├── payments/
+│   │   │   └── razorpay-provider.ts the ONLY Razorpay HTTP caller
 │   │   └── persistence/
 │   │       └── client.ts       the ONLY database entry point, server-only
 │   ├── services/
+│   │   ├── approval/approval-service.ts     the human gate
+│   │   ├── audit/audit-service.ts           structured audit writing
 │   │   ├── buyer-agent/
-│   │   │   ├── buyer-agent-service.ts  agent orchestration
-│   │   │   ├── catalog-reader.ts       read-only catalog port
-│   │   │   ├── catalog-tools.ts        the allowlisted tool registry
-│   │   │   └── instructions.ts         developer instructions
+│   │   │   ├── buyer-agent-service.ts   agent orchestration
+│   │   │   ├── catalog-reader.ts        read-only catalog port
+│   │   │   ├── catalog-tools.ts         the allowlisted tool registry
+│   │   │   └── instructions.ts          developer instructions
+│   │   ├── inventory/reservation-service.ts stock holds, rebinds, commits
 │   │   ├── merchant/
-│   │   │   ├── catalog-repository.ts  the catalog's ONLY Prisma read boundary
-│   │   │   └── catalog-service.ts     catalog application service
+│   │   │   ├── catalog-repository.ts    the catalog's ONLY Prisma read boundary
+│   │   │   └── catalog-service.ts       catalog application service
+│   │   ├── payment/
+│   │   │   ├── checkout-service.ts      session start + callback verification
+│   │   │   ├── payment-order-service.ts server-side provider orders
+│   │   │   ├── retry-service.ts         bounded retry and re-quote
+│   │   │   └── webhook-service.ts       provider event reconciliation
+│   │   ├── policy/
+│   │   │   ├── authorization-recheck.ts re-derives authority before payment
+│   │   │   ├── policy-reader.ts         the policy's Prisma read boundary
+│   │   │   └── policy-service.ts        evaluation + recording
 │   │   ├── product-decision/
 │   │   │   └── product-decision-service.ts  AI proposal -> trusted quote
 │   │   ├── quote/
-│   │   │   └── quote-service.ts       trusted quote creation + validation
+│   │   │   ├── quote-reader.ts          quote read boundary
+│   │   │   └── quote-service.ts         trusted quote creation + validation
 │   │   └── transaction/
-│   │       ├── creation-service.ts    the ONLY creator of Transaction rows
-│   │       └── transition-service.ts  the ONLY writer of Transaction.status
+│   │       ├── creation-service.ts      the ONLY creator of Transaction rows
+│   │       ├── overview-service.ts      the read model the pages render
+│   │       └── transition-service.ts    the ONLY writer of Transaction.status
 │   ├── domain/                 pure, framework-free core
+│   │   ├── approval/           token minting, hashing, binding contracts
 │   │   ├── audit-event.ts      audit event contract
-│   │   ├── buyer-agent/
-│   │   │   ├── budget.ts          deterministic budget provenance checks
-│   │   │   ├── decision.ts        BuyerAgentDecision union + reason codes
-│   │   │   ├── errors.ts          AI provider + agent error taxonomy
-│   │   │   ├── intent.ts          structured purchase intent schema
-│   │   │   └── validation.ts      the deterministic selection gate
-│   │   ├── catalog/
-│   │   │   ├── contracts.ts       public product/merchant DTOs
-│   │   │   ├── errors.ts          catalog error types
-│   │   │   └── query.ts           the bounded, validated query contract
+│   │   ├── audit/              payload schemas + human-readable explanations
+│   │   ├── buyer-agent/        intent, decision, budget, validation, errors
+│   │   ├── catalog/            public DTOs, bounded query contract, errors
 │   │   ├── decision-record.ts  explainability contract
 │   │   ├── errors.ts           error taxonomy
 │   │   ├── identifiers.ts      branded id types
+│   │   ├── inventory/          reservation contracts + pure rules
 │   │   ├── money.ts            integer minor units + currency
-│   │   ├── product-decision/
-│   │   │   └── eligibility.ts     deterministic candidate rules (pure)
-│   │   ├── quote/
-│   │   │   ├── contracts.ts       decision result union
-│   │   │   ├── errors.ts          quote error types
-│   │   │   └── rules.ts           expiry, validity, invalidation (pure)
-│   │   └── transaction/
-│   │       ├── errors.ts          lifecycle-specific error types
-│   │       ├── events.ts          domain events + reason codes
-│   │       ├── state-machine.ts   the adjudicator (pure)
-│   │       ├── states.ts          states, actors, terminal/failure sets
-│   │       └── transitions.ts     the transition matrix
+│   │   ├── payment/            provider port, checkout, webhook, retry, rules
+│   │   ├── policy/
+│   │   │   ├── decision.ts        decision + reason-code vocabulary
+│   │   │   ├── engine.ts          the deterministic engine (pure)
+│   │   │   └── errors.ts          policy error types
+│   │   ├── product-decision/   deterministic candidate rules (pure)
+│   │   ├── quote/              contracts, errors, expiry/validity rules (pure)
+│   │   ├── transaction/
+│   │   │   ├── errors.ts          lifecycle-specific error types
+│   │   │   ├── events.ts          domain events + reason codes
+│   │   │   ├── state-machine.ts   the adjudicator (pure)
+│   │   │   ├── states.ts          states, actors, terminal/failure sets
+│   │   │   └── transitions.ts     the transition matrix
+│   │   └── ui/journey.ts       what the buyer is shown at each state
 │   └── lib/                    cross-cutting primitives
 │       ├── api-response.ts     the shared HTTP success/error envelope
+│       ├── checkout-script.ts  provider script loading, browser side
 │       ├── clock.ts            injectable time, so expiry is testable
+│       ├── http/same-origin.ts refuses cross-site state-changing requests
 │       ├── json.ts             JSON value model
 │       ├── logger.ts           structured operational logging
 │       ├── redact.ts           secret and reasoning scrubbing
 │       ├── result.ts           Result<T, E>
 │       └── server-only.ts      module-scope browser-bundle guard
 ├── tests/                      Vitest suites, mirroring src by concern
+│   ├── db/                     integration suites against local PostgreSQL
+│   └── support/                fakes + the offline guard
 ├── .env.example                tracked, credential-free template
 ├── .nvmrc                      Node.js 24 LTS selection
+├── docker-compose.yml          the local PostgreSQL for dev and tests
 ├── prisma.config.ts            Prisma 7 CLI config (direct connection)
 ├── eslint.config.mjs           lint rules incl. the process.env ban
 ├── next.config.ts
@@ -119,26 +150,33 @@ razorpay-agentic-commerce/
 | `tests/`                        | Kept out of `src/` so the shipped surface is obvious and the test runner needs no exclusion rules.                                                                                                                                                         |
 | `docs/`                         | The design record. It is the artefact that lets a later session continue without redesigning.                                                                                                                                                              |
 
-## Where future modules go
+## Where each module lives
 
-Created when their first real file is written, not before:
+Every module named in [02 — Architecture](./02-architecture.md) is implemented.
+This is where each one is:
 
-| Module                        | Home                                                       |
-| ----------------------------- | ---------------------------------------------------------- |
-| Buyer Agent                   | `src/services/buyer-agent/` - **built**                    |
-| Merchant Service + Catalog    | `src/services/merchant/` - **catalog built**               |
-| Product Decision Engine       | `src/services/product-decision/` - **built**               |
-| Policy / Authorization Engine | `src/domain/policy/` (pure, so it belongs in the core)     |
-| Human Approval Gate           | `src/services/approval/`                                   |
-| Transaction Service           | `src/services/transaction/` - **transition service built** |
-| Audit Service                 | `src/services/audit/`                                      |
-| Payment Provider Interface    | `src/integrations/payment/`                                |
-| Razorpay adapter              | `src/integrations/payment/razorpay/`                       |
-| AI Provider Adapter           | `src/integrations/llm/` - **Gemini adapter built**         |
-| Persistence (Prisma/Postgres) | `src/integrations/persistence/` - **built**                |
-| PurchaseQuote service         | `src/services/quote/` - **built**                          |
-| Inventory reservation         | `src/services/inventory/`                                  |
-| UI components                 | `src/components/`                                          |
+| Module                        | Home                                         |
+| ----------------------------- | -------------------------------------------- |
+| Buyer Agent                   | `src/services/buyer-agent/`                  |
+| AI Provider Adapter           | `src/integrations/llm/`                      |
+| Merchant Service + Catalog    | `src/services/merchant/`                     |
+| Product Decision Engine       | `src/services/product-decision/`             |
+| PurchaseQuote service         | `src/services/quote/`                        |
+| Policy / Authorization Engine | `src/domain/policy/`, `src/services/policy/` |
+| Human Approval Gate           | `src/services/approval/`                     |
+| Inventory reservation         | `src/services/inventory/`                    |
+| Transaction Service           | `src/services/transaction/`                  |
+| Transaction State Machine     | `src/domain/transaction/`                    |
+| Payment Provider Interface    | `src/domain/payment/provider.ts`             |
+| Razorpay adapter              | `src/integrations/payments/`                 |
+| Webhook handling              | `src/services/payment/webhook-service.ts`    |
+| Audit Service                 | `src/services/audit/`                        |
+| Persistence (Prisma/Postgres) | `src/integrations/persistence/`              |
+| UI components                 | `src/components/`                            |
+
+The policy engine lives in `src/domain/` rather than `src/services/` because it
+is pure: no database, no network, no clock, no model. That placement is the
+security property, not a filing preference.
 
 ## Rules that keep it clean
 

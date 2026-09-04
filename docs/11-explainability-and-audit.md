@@ -1,9 +1,13 @@
 # 11 — Explainability and audit
 
-Contracts implemented:
+**Contracts and principles.** The implemented audit trail — the services that
+write it, the event vocabulary and the user-facing timeline — is documented in
+[23 — Audit and explainability](./23-audit-and-explainability.md).
+
+Contracts:
 [`decision-record.ts`](../src/domain/decision-record.ts),
 [`audit-event.ts`](../src/domain/audit-event.ts). The services that write them
-are not.
+are now implemented and are documented in [23](./23-audit-and-explainability.md).
 
 ## Explainability is not chain-of-thought
 

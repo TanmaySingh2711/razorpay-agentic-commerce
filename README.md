@@ -5,9 +5,9 @@
 A merchant that an AI buyer agent can transact with end to end, where every
 financial action is explainable, bounded, gated and auditable.
 
-The target flow: a person says _"Find me the best mechanical keyboard under
-₹3000 and buy it"_, and an agent completes that purchase — without ever being
-trusted with the money.
+The flow: a person says _"Find me the best mechanical keyboard under ₹3000 and
+buy it"_, and an agent completes that purchase — without ever being trusted with
+the money.
 
 ## The rule this repository is built around
 
@@ -22,50 +22,72 @@ AI proposes  →  deterministic systems validate  →  authorization gates  → 
 The AI may interpret language, compare products and recommend one. It may not
 invent an amount, alter a price, change a policy, approve its own action, decide
 that a payment is permitted, mark a payment successful, or mutate transaction
-state.
+state. Not because it is instructed not to — because it has no tool, no
+parameter and no state-machine edge through which it could.
 
-## Status
+## What is implemented
 
-**Objective 1 — foundation and architecture. Complete.**
+The full purchase lifecycle works end to end, and has been exercised against the
+deployed environment with **real Razorpay Test Mode payments** — including a
+genuine bank decline, a controlled retry, a successful capture, and a duplicate
+webhook redelivery that correctly changed nothing.
 
-What exists: a strict-TypeScript Next.js application, the pure financial core
-(money as integer minor units, the typed transaction state machine, error,
-decision and audit contracts), a typed configuration boundary, structured
-logging with redaction, a health endpoint, and the full architecture record in
-[`docs/`](./docs).
+| Area                            | State                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| Buyer agent                     | Bounded orchestration over Gemini behind a provider-neutral adapter                  |
+| Agent-readable catalog          | Deterministic filtering, read-only tools, budget in minor units                      |
+| Trusted `PurchaseQuote`         | The one place a payable amount originates                                            |
+| Deterministic policy engine     | Pure function → `ALLOWED` / `APPROVAL_REQUIRED` / `BLOCKED`                          |
+| Human approval gate             | One-time, exactly bound, hashed token, replay-protected                              |
+| Inventory reservation           | Stock held before money moves; oversell prevented by database constraints            |
+| Payment order + Checkout        | Server-side amount only, Razorpay **Test Mode** only                                 |
+| Callback + webhook verification | Two separate facts; provider truth is authoritative                                  |
+| Capture, commit, completion     | Inventory committed exactly once, transaction completed exactly once                 |
+| Controlled retry + re-quote     | Bounded to 3 attempts; a stale quote is re-quoted against fresh facts, never revived |
+| Structured audit trail          | Reason codes and deterministic facts; no secrets, no chain-of-thought                |
+| PostgreSQL + Prisma             | Authoritative store; invariants held by CHECK constraints and unique indexes         |
 
-What does not exist yet, deliberately: the buyer agent, any LLM call, the
-catalog, the policy engine, the approval gate, Razorpay, webhooks, and the
-database. See [docs/14](./docs/14-objective-1-scope.md) for the exact line, and
-[docs/15](./docs/15-roadmap.md) for the order they arrive in.
+**No real money moves.** The configuration boundary refuses any Razorpay key id
+that is not `rzp_test_…`, so a live key fails closed rather than quietly working.
+
+## Documentation
+
+Start with **[28 — Final architecture](./docs/28-final-architecture.md)**: the
+whole system in one document, with the architecture diagram, the trust
+boundaries, the price flow, the state machine, the retry design, and an index
+that maps a reviewer's questions to where they are answered.
+
+Then [`docs/README.md`](./docs/README.md) for the full set.
 
 ## Getting started
 
-Requires **Node.js 24 LTS** (`.nvmrc` and `engines` both pin it) and npm.
+Requires **Node.js 24 LTS** (`.nvmrc` and `engines` both pin it), npm, and
+Docker for the local database.
 
 ```bash
 nvm use              # optional, reads .nvmrc
 npm install
+npm run db:test:up   # start the local Docker PostgreSQL
+npm run db:dev:setup # create, migrate and seed razorpay_agentic_dev
 npm run dev          # http://localhost:3000
 ```
 
 **No API key or secret is required to boot.** The application starts, builds and
-runs its foundation tests against an entirely empty environment — asserted by a
-test.
+runs its non-provider tests against an entirely empty environment — asserted by
+a test. Gemini and Razorpay configuration is validated lazily, at the moment the
+feature that needs it runs.
 
-The database layer runs entirely on your own machine. Nothing here needs a
-hosted database, an account or a credential:
+To run the database test suite as well:
 
 ```bash
-npm run db:test:up          # start the local Docker PostgreSQL
-npm run db:dev:setup        # create, migrate and seed razorpay_agentic_dev
-npm run db:test:setup       # prepare the isolated test schema
+npm run db:test:setup   # prepare the isolated, disposable test schema
+npm run verify          # typecheck + lint + test + build, all local
 ```
 
-Which database each command reaches is decided by the command's own name:
-plain `db:*` names target the local development database, `db:test:*` the
-disposable test one, and only the explicit `db:*:staging` commands reach the
-hosted database — see [docs/09](./docs/09-configuration.md).
+Which database each command reaches is decided by the command's own name: plain
+`db:*` names target the local development database, `db:test:*` the disposable
+test one, and only the explicit `db:*:staging` commands reach the hosted
+database. Every one of them refuses the wrong target before it connects.
 
 | Environment       | Database                                 |
 | ----------------- | ---------------------------------------- |
@@ -75,29 +97,26 @@ hosted database — see [docs/09](./docs/09-configuration.md).
 | ORM everywhere    | Prisma                                   |
 
 Copy [`.env.example`](./.env.example) to `.env.local` only when you need to
-reach the hosted database or the external providers.
+reach the hosted database or the external providers. It contains placeholders
+only.
 
 ## Scripts
 
-| Command             | Does                                                    |
-| ------------------- | ------------------------------------------------------- |
-| `npm run dev`       | Development server                                      |
-| `npm run build`     | Production build                                        |
-| `npm start`         | Serve the production build                              |
-| `npm run typecheck` | Route typegen + `tsc --noEmit`                          |
-| `npm run lint`      | ESLint                                                  |
-| `npm run test`      | Vitest                                                  |
-| `npm run format`    | Prettier                                                |
-| `npm run verify`    | typecheck + lint + test + build                         |
-| `npm run db:*`      | Database tooling — see [docs/16](./docs/16-database.md) |
+| Command                | Does                                                    |
+| ---------------------- | ------------------------------------------------------- |
+| `npm run dev`          | Development server                                      |
+| `npm run build`        | Production build                                        |
+| `npm start`            | Serve the production build                              |
+| `npm run typecheck`    | Route typegen + `tsc --noEmit`                          |
+| `npm run lint`         | ESLint                                                  |
+| `npm run test`         | Vitest                                                  |
+| `npm run format:check` | Prettier check (deliberately not part of `verify`)      |
+| `npm run verify`       | typecheck + lint + test + build — entirely local        |
+| `npm run db:*`         | Database tooling — see [docs/16](./docs/16-database.md) |
+| `npm run *:smoke`      | Deliberate external checks; never run by `verify`       |
 
-## Documentation
-
-Start with [`docs/README.md`](./docs/README.md). The two documents that carry
-the most weight are
-[03 — AI vs deterministic control](./docs/03-ai-vs-deterministic.md) and
-[05 — Transaction state machine](./docs/05-transaction-state-machine.md), which
-is where the rule above stops being prose and becomes enforced code.
+Automated verification never calls Gemini, Razorpay, Vercel or the hosted
+database — a Vitest setup file blocks non-loopback `fetch` to enforce it.
 
 ## Stack
 
@@ -110,9 +129,8 @@ database, with hard internal module boundaries. Explicitly not microservices.
 | Language           | TypeScript 5, strict                                                      |
 | Runtime            | Node.js 24 LTS, npm                                                       |
 | Database           | PostgreSQL (authoritative) via Prisma ORM — Docker locally, Neon deployed |
-| AI                 | External provider behind an AI Provider Adapter — later objective         |
-| Payments           | Razorpay behind a Payment Provider Interface — later objective            |
+| AI                 | Google Gemini behind a provider-neutral AI Provider Adapter               |
+| Payments           | Razorpay **Test Mode** behind a Payment Provider Interface                |
 | Validation / tests | Zod, Vitest, ESLint, Prettier                                             |
 
 No agent framework, no AI SDK, no payment SDK, no state-management library.
-Each arrives with the objective that needs it.

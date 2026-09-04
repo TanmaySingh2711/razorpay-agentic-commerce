@@ -1,5 +1,9 @@
 # 14 — Objective 1 scope
 
+> **Historical record.** This records what the _first_ objective built and deliberately left out. Almost everything listed here as absent has since been implemented. It is kept for the reasoning, not as a
+> description of the current system — for that, see
+> [28 — Final architecture](./28-final-architecture.md).
+
 ## What Objective 1 implemented
 
 ### Application foundation

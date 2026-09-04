@@ -57,9 +57,10 @@ repository today.**
 | `DATABASE_URL`            | Persistence — **pooled** PostgreSQL connection used at runtime                                                                | yes             |
 | `DIRECT_URL`              | Persistence — **direct** connection for migrations. Optional; omit when the instance is unpooled                              | yes             |
 
-`getGeminiConfig()`, `getRazorpayConfig()`, `getRazorpayCredentials()`,
-`getDatabaseConfig()` and `getCatalogConfig()` throw a `ConfigurationError`
-when their variables are missing.
+`getGeminiConfig()`, `getRazorpayConfig()`, `getRazorpayCredentials()` and
+`getDatabaseConfig()` throw a `ConfigurationError` when their variables are
+missing. `getCatalogConfig()` does not appear in that list on purpose: its one
+variable is fully defaulted, so it always returns a usable value.
 
 `getRazorpayCredentials()` is the narrower of the two Razorpay accessors: it
 validates `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` alone, which is everything
@@ -73,6 +74,24 @@ in a degraded state that silently skips a control.
 
 `isSectionConfigured()` answers "is this feature available?" without throwing —
 useful for a demo that wants to show a disabled state.
+
+### Optional and fully defaulted — no value needs setting
+
+These have safe defaults, so the system runs correctly with none of them
+present. They are documented because three of them are **financial rules** —
+how long a frozen price stands, how long a person has to answer, how long stock
+is held — and a rule nobody can find is a rule nobody can review.
+
+| Variable                  | Default           | Bounds     | What it governs                                                                                                                                                                    |
+| ------------------------- | ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CATALOG_MERCHANT_SLUG`   | `keebworks-india` | 1–80 chars | Which merchant the public catalog serves. Configuration, never a request parameter — a caller who could name the merchant could enumerate other merchants' products. Not a secret. |
+| `QUOTE_TTL_SECONDS`       | `300` (5 min)     | 30–3600    | How long a trusted `PurchaseQuote` stays usable. See [20](./20-trusted-purchase-quote.md).                                                                                         |
+| `APPROVAL_TTL_SECONDS`    | `900` (15 min)    | 30–86400   | How long a human has to answer an approval request. The approval also expires with its quote, whichever comes first. See [22](./22-approval-and-inventory.md).                     |
+| `RESERVATION_TTL_SECONDS` | `600` (10 min)    | 30–3600    | How long reserved stock is held — the checkout window. Deliberately **longer** than the quote TTL, which is why a retry commonly re-quotes; see [27](./27-payment-retry.md).       |
+
+Read through `getCatalogConfig()`, `getQuoteConfig()`, `getApprovalConfig()` and
+`getReservationConfig()`. The bounds are enforced at the config boundary, so an
+out-of-range value is a startup-time refusal rather than a surprising expiry.
 
 ## Test Mode is enforced, not requested
 

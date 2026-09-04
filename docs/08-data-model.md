@@ -1,8 +1,19 @@
 # 08 — Data model design
 
-**Design only.** No schema, model or migration exists in Objective 1. This
-document locks the _shape_, so the Objective 2 schema is a transcription rather
-than a redesign.
+> **Historical record.** This is the pre-implementation sketch written before
+> the schema existed. The shipped schema kept its entities, its relationships
+> and its core money/currency discipline, but **not** every field name below —
+> most notably, amounts are **not** stored as paired `<name>MinorUnits` /
+> `<name>Currency` columns as this document specifies; see the correction after
+> the next section. For the field names, constraints and indexes actually in
+> `prisma/schema.prisma` today, see
+> [16 — Database](./16-database.md) and the schema file itself. This document
+> is kept for the entities' purpose and relationships, which are still accurate.
+
+**Design only, as first written.** No schema, model or migration existed when
+this was drafted. It locked the _shape_ so the schema that followed was a
+transcription rather than a redesign — which is what happened, with the one
+naming exception below.
 
 ## Locked persistence architecture
 
@@ -34,16 +45,21 @@ Objective 2 creates the schema. This patch creates none.
 
 ## Money, everywhere, without exception
 
-Every monetary field is stored as **two columns**:
+**As designed here:** every monetary field paired with its own
+`<name>MinorUnits` / `<name>Currency` columns.
 
-```
-<name>MinorUnits   integer   -- ₹299.00 is 29900
-<name>Currency     text      -- ISO 4217, e.g. "INR"
-```
+**As shipped:** the discipline held — integer minor units, currency always
+present, never a float or `numeric` column — but the column shape is one
+`BIGINT` amount column (named plainly, e.g. `unitAmount`, `totalAmount`,
+`amount`, `maxAutoApproveAmount`) plus **one shared `currency CHAR(3)` column
+per row**, not a currency column per amount. A row with two amounts (like
+`PurchaseQuote`'s `unitAmount` and `totalAmount`) has one `currency` column
+covering both, because both are always denominated the same way. See
+[16 — Database](./16-database.md#money) for the exact columns and the CHECK
+constraints that enforce this.
 
 Never a decimal, float, `numeric`, or `numeric(p,s)` column — in PostgreSQL or
-anywhere else. Never an amount without its currency beside it. In Prisma these
-are `Int` (or `BigInt` where range demands it) plus a `String` or enum currency.
+anywhere else. Never an amount without a currency somewhere on its row.
 
 The application type is [`Money`](../src/domain/money.ts), which enforces the
 integer constraint at construction and refuses to combine mismatched currencies.
@@ -124,14 +140,14 @@ erDiagram
 
 ### PurchaseQuote
 
-|               |                                                                                                                                                                                                                                                                                                           |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Purpose       | **The single place the payable amount exists.** Freezes verified facts for a bounded window, bridging AI selection and deterministic policy.                                                                                                                                                              |
-| Primary id    | `purchaseQuoteId`                                                                                                                                                                                                                                                                                         |
-| Fields        | `transactionId`, `productId`, `quantity`, `amountMinorUnits`, `amountCurrency`, `productVersion` (optional), `createdAt`, `expiresAt`                                                                                                                                                                     |
-| Relationships | Belongs to one transaction; references one product.                                                                                                                                                                                                                                                       |
-| Status enum   | `active` \| `consumed` \| `expired`                                                                                                                                                                                                                                                                       |
-| Security      | **Immutable after creation.** Nothing may update the amount — a changed price means a new quote, not an edited one. Policy, approval, authorization and the payment order all read from here. Written by the Quote Service only, from a `VerifiedProduct`, never from a request body or a model response. |
+|               |                                                                                                                                                                                                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Purpose       | **The single place the payable amount exists.** Freezes verified facts for a bounded window, bridging AI selection and deterministic policy.                                                                                                                                                                               |
+| Primary id    | `purchaseQuoteId`                                                                                                                                                                                                                                                                                                          |
+| Fields        | `transactionId`, `productId`, `quantity`, `amountMinorUnits`, `amountCurrency`, `productVersion` (optional), `createdAt`, `expiresAt`                                                                                                                                                                                      |
+| Relationships | Belongs to one transaction; references one product.                                                                                                                                                                                                                                                                        |
+| Status enum   | `active` \| `consumed` \| `expired`                                                                                                                                                                                                                                                                                        |
+| Security      | **Immutable after creation.** Nothing may update the amount — a changed price means a new quote, not an edited one. Policy, approval, authorization and the payment order all read from here. Written by the Quote Service only, from a fresh database read of the product, never from a request body or a model response. |
 
 ### InventoryReservation
 

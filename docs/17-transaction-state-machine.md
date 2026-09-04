@@ -70,6 +70,7 @@ stateDiagram-v2
   APPROVAL_REQUIRED --> EXPIRED: APPROVAL_EXPIRED
   AUTHORIZED --> INVENTORY_RESERVED: INVENTORY_RESERVED
   AUTHORIZED --> BLOCKED: INVENTORY_UNAVAILABLE
+  AUTHORIZED --> PAYMENT_ORDER_CREATED: PAYMENT_RETRY_REQUESTED (requoted retry)
   INVENTORY_RESERVED --> PAYMENT_ORDER_CREATED: PAYMENT_ORDER_CREATED
   INVENTORY_RESERVED --> PAYMENT_FAILED: PAYMENT_FAILED
   INVENTORY_RESERVED --> EXPIRED: RESERVATION_EXPIRED
@@ -84,6 +85,7 @@ stateDiagram-v2
   PAYMENT_VERIFIED --> PAYMENT_FAILED: PAYMENT_FAILED
   PAYMENT_CAPTURED --> COMPLETED: TRANSACTION_COMPLETED
   PAYMENT_FAILED --> PAYMENT_ORDER_CREATED: PAYMENT_RETRY_REQUESTED
+  PAYMENT_FAILED --> QUOTE_CREATED: QUOTE_ISSUED (re-quote)
   PAYMENT_FAILED --> PAYMENT_CAPTURED: PAYMENT_CAPTURE_CONFIRMED (late)
   PAYMENT_FAILED --> EXPIRED: RESERVATION_EXPIRED
   COMPLETED --> [*]
@@ -120,22 +122,36 @@ transition; it is an acknowledgement that nothing needs to happen.
 
 ## `PAYMENT_FAILED` is not terminal
 
-A failed payment is an expected outcome with two — and only two — exits:
+A failed payment is an expected outcome. Three exits carry it forward (plus the
+ordinary cancellation and expiry edges every non-terminal state has):
 
-| Exit                                                | Actor                 | Why                                                                                                                                           |
-| --------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PAYMENT_RETRY_REQUESTED` → `PAYMENT_ORDER_CREATED` | `transaction_service` | Retry reuses the existing authorization and reservation. It never re-enters the AI path and never re-derives the amount.                      |
-| `PAYMENT_CAPTURE_CONFIRMED` → `PAYMENT_CAPTURED`    | `payment_webhook`     | Money may genuinely have moved after a failure was recorded. Restricted to the webhook actor, so only verified provider evidence can take it. |
+| Exit                                                | Actor                 | Why                                                                                                                                                                                                      |
+| --------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAYMENT_RETRY_REQUESTED` → `PAYMENT_ORDER_CREATED` | `transaction_service` | Retry reuses the existing authorization and reservation, at the quote's still-valid price. It never re-enters the AI path and never re-derives the amount.                                               |
+| `QUOTE_ISSUED` → `QUOTE_CREATED`                    | `quote_service`       | The old quote expired or was invalidated before a person could retry, but the stock hold is still active. Re-quotes against **current** facts, supersedes the old quote, and re-runs policy — see below. |
+| `PAYMENT_CAPTURE_CONFIRMED` → `PAYMENT_CAPTURED`    | `payment_webhook`     | Money may genuinely have moved after a failure was recorded. Restricted to the webhook actor, so only verified provider evidence can take it.                                                            |
 
-Objective 3 makes these transitions _possible_. The conditions under which a
-service may request them belong to the payment objective. Everything else from
-`PAYMENT_FAILED` — completing, restarting the flow, re-quoting — is rejected.
+Objective 3 makes the first and third of these transitions _possible_; the
+conditions under which a service may request them belong to the payment
+objective. Objective 14 supplies those conditions for the plain retry edge: the
+request must come from an explicit human action, the persisted attempt count
+must be below `MAX_PAYMENT_ATTEMPTS`, and the quote, policy, approval binding
+and stock hold must all still hold when re-read.
 
-Objective 14 supplies those conditions for the retry edge: the request must come
-from an explicit human action, the persisted attempt count must be below
-`MAX_PAYMENT_ATTEMPTS`, and the quote, policy, approval binding and stock hold
-must all still hold when re-read. See
-[27 — Payment retry](./27-payment-retry.md).
+Objective 18 adds the re-quote edge for the case Objective 14 refused outright:
+a quote's TTL is ordinarily shorter than the reservation's, so a real person who
+fails a payment and comes back to retry it commonly finds the quote stale while
+the hold is still good. Rather than dead-ending the purchase, the retry service
+creates a fresh quote from the current product row, supersedes the old one
+(never reviving it), reruns policy against the new amount, and rebinds the
+surviving reservation — before continuing to `AUTHORIZED` and then
+`PAYMENT_ORDER_CREATED` via the edge above, or stopping for a fresh human
+approval if the new amount requires it. See
+[27 — Payment retry](./27-payment-retry.md) for the full sequence and the
+production-proven example.
+
+Everything else from `PAYMENT_FAILED` — completing without a capture,
+restarting the flow as a brand-new intent — is rejected.
 
 ## A late capture during a retry
 

@@ -85,7 +85,7 @@ one, so widening AI authority requires deliberately editing a failing test.
 ## The amount, specifically
 
 The amount charged is computed exactly once: when the Quote Service turns a
-`VerifiedProduct` — re-read from PostgreSQL — into a `PurchaseQuote`. It is not
+the product row — re-read from PostgreSQL by id, at the moment of quoting — into a `PurchaseQuote`. It is not
 read from the browser, not read from the model, and never recomputed downstream.
 Policy, approval, authorization and the payment order all read the same frozen
 integer from the same quote.

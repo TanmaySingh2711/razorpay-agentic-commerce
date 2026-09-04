@@ -373,10 +373,12 @@ appears only in the disposable schema's teardown.
 `postinstall` runs `prisma generate`, so a fresh clone has a usable client after
 `npm install`. The generated client is git-ignored — it is a build artifact.
 
-## Deferred to later objectives
+## Scope of this document
 
-Objective 2 ships **models, not behaviour**. Not implemented: quote generation,
-policy evaluation, approval workflow, inventory reservation logic, state-machine
-execution, transition writing, audit writing, catalog APIs, Razorpay, and the
-AI provider. Every table those need exists and is tested; none of their logic
-does.
+This document covers the **persistence layer**: models, migrations, constraints
+and the local/hosted database split. The behaviour built on top of these tables
+— quote generation, policy evaluation, the approval workflow, inventory
+reservation, state-machine execution, transition and audit writing, the catalog
+APIs, Razorpay and the AI provider — is all implemented, and each is documented
+in its own file. See [`docs/README.md`](./README.md) for the map, or
+[28 — Final architecture](./28-final-architecture.md) for the whole picture.

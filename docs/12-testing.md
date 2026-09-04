@@ -37,26 +37,27 @@ it. The point of the table is that a reviewer can find where each behaviour is
 actually proven, rather than trusting that a file with a promising name proves
 it. Requirements sharing a row are proven by the same suite.
 
-| Behaviour                                                      | Proven in                                                                       |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Intent extraction; structured-output validation                | `buyer-agent-orchestration`, `buyer-agent-authority`, **`model-schema-parity`** |
-| Prompt injection; budget-bypass prompts                        | `buyer-agent-security`, `buyer-agent-orchestration`, `db/buyer-agent-flow`      |
-| Catalog visibility, filters, authority, hostile text           | `db/catalog-api`, `catalog-query`, `catalog-contract`                           |
-| Quote creation, expiry, price change, inventory change         | `db/purchase-quote`, `quote-rules`                                              |
-| Concurrent inventory reservation; reservation lifecycle        | `db/approval-and-reservation`, `db/money-and-persistence`                       |
-| Policy below / exactly at / above the limit; currency mismatch | `policy-engine`, `db/policy-evaluation`                                         |
-| Approval success, rejection, expiry, replay                    | `db/approval-and-reservation`, `approval-token-and-inventory-rules`             |
-| State-machine valid and invalid paths; idempotent transition   | `transaction-state-machine`, `db/transition-service`                            |
-| No direct state mutation; server-only boundary                 | `lint-architecture`                                                             |
-| Order creation; duplicate order request; receipt reuse         | `db/payment-order`, `payment-order-rules`                                       |
-| Valid and invalid payment signature                            | `db/checkout-verification`, `checkout-signature`                                |
-| Valid, invalid, duplicate and out-of-order webhooks            | `db/webhook-reconciliation`, `webhook-signature`                                |
-| Payment success and failure; failure classification            | `db/webhook-reconciliation`, `payment-failure-classification`                   |
-| Controlled retry; retry limit; late capture after failure      | `db/payment-retry`, `payment-retry-rules`                                       |
-| A settled purchase cannot be paid or fulfilled twice           | **`db/settled-transaction`**                                                    |
-| Audit completeness and ordering                                | `db/audit-timeline`, `audit-record-contract`, `decision-and-audit-contracts`    |
-| Secret and reasoning safety in logs and audit records          | `logging-redaction`, `config-env`, and a "no secret" assertion in each suite    |
-| The verification infrastructure itself                         | `verification-infrastructure`, `db/test-database-guard`                         |
+| Behaviour                                                       | Proven in                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Intent extraction; structured-output validation                 | `buyer-agent-orchestration`, `buyer-agent-authority`, **`model-schema-parity`** |
+| Prompt injection; budget-bypass prompts                         | `buyer-agent-security`, `buyer-agent-orchestration`, `db/buyer-agent-flow`      |
+| Catalog visibility, filters, authority, hostile text            | `db/catalog-api`, `catalog-query`, `catalog-contract`                           |
+| Quote creation, expiry, price change, inventory change          | `db/purchase-quote`, `quote-rules`                                              |
+| Concurrent inventory reservation; reservation lifecycle         | `db/approval-and-reservation`, `db/money-and-persistence`                       |
+| Policy below / exactly at / above the limit; currency mismatch  | `policy-engine`, `db/policy-evaluation`                                         |
+| Approval success, rejection, expiry, replay                     | `db/approval-and-reservation`, `approval-token-and-inventory-rules`             |
+| State-machine valid and invalid paths; idempotent transition    | `transaction-state-machine`, `db/transition-service`                            |
+| No direct state mutation; server-only boundary                  | `lint-architecture`                                                             |
+| Order creation; duplicate order request; receipt reuse          | `db/payment-order`, `payment-order-rules`                                       |
+| Valid and invalid payment signature                             | `db/checkout-verification`, `checkout-signature`                                |
+| Valid, invalid, duplicate and out-of-order webhooks             | `db/webhook-reconciliation`, `webhook-signature`                                |
+| Payment success and failure; failure classification             | `db/webhook-reconciliation`, `payment-failure-classification`                   |
+| Controlled retry; retry limit; late capture after failure       | `db/payment-retry`, `payment-retry-rules`                                       |
+| Stale-quote re-quote on retry; re-priced approval; rebound hold | **`db/payment-retry-requote`**                                                  |
+| A settled purchase cannot be paid or fulfilled twice            | **`db/settled-transaction`**                                                    |
+| Audit completeness and ordering                                 | `db/audit-timeline`, `audit-record-contract`, `decision-and-audit-contracts`    |
+| Secret and reasoning safety in logs and audit records           | `logging-redaction`, `config-env`, and a "no secret" assertion in each suite    |
+| The verification infrastructure itself                          | `verification-infrastructure`, `db/test-database-guard`                         |
 
 Two properties are asserted repeatedly across suites rather than in one place,
 because they are the ones a future change is most likely to erode: that
@@ -143,8 +144,8 @@ The runner is split so each half gets the scheduling it needs:
 
 | Project | Files         | Parallel | Why                                                    |
 | ------- | ------------- | -------- | ------------------------------------------------------ |
-| `unit`  | `tests/*`     | yes      | No shared state. 679 tests, seconds.                   |
-| `db`    | `tests/db/**` | **no**   | 406 tests sharing one schema, truncated between tests. |
+| `unit`  | `tests/*`     | yes      | No shared state. 718 tests, seconds.                   |
+| `db`    | `tests/db/**` | **no**   | 420 tests sharing one schema, truncated between tests. |
 
 Per-worker schemas would let the database files run concurrently too, but that
 means provisioning and migrating N schemas per run and teaching the disposable-

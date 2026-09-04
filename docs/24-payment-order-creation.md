@@ -287,7 +287,8 @@ adapter. It is never in a response, an audit payload, a log line, an error, or a
 
 `RAZORPAY_KEY_ID` is the public half. It is returned in the response `meta`
 **only alongside a real order**, so an endpoint probe cannot read configuration
-out of the server. Checkout will need it next objective.
+out of the server. Checkout uses it: it is passed to the Razorpay Checkout
+script's `key` option in the browser, and only there.
 
 ## Responses
 
@@ -303,10 +304,10 @@ out of the server. Checkout will need it next objective.
 
 **Inventory is not released on a provider failure.** A transient outage is not a
 reason to give a buyer's reserved unit away; the hold has its own expiry. And no
-`PAYMENT_FAILED` transition is emitted — the payment failure and retry workflow
-of a later objective owns the decisions about when to release stock and when to
-permit a fresh attempt. Moving the lifecycle here would pre-empt those decisions
-with a guess.
+`PAYMENT_FAILED` transition is emitted here — the payment failure and controlled
+retry workflow (see [27](./27-payment-retry.md)) owns the decisions about when
+to release stock and when to permit a fresh attempt, based on the provider's
+verified outcome, not on this call's own failure to create an order.
 
 ## Testing
 
