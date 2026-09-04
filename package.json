@@ -40,28 +40,28 @@
     "checkout:smoke": "tsx scripts/checkout-smoke-setup.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.19.0",
+    "@google/genai": "^2.21.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "next": "16.3.3",
+    "next": "16.3.4",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "eslint": "^9",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.3.4",
     "prettier": "^3.9.6",
     "prisma": "^7.10.0",
     "tsx": "^4.23.13",
     "typescript": "^5",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "description": "Agent-transactable commerce with deterministic financial controls (Razorpay AI Buildathon 2026, Track 01).",
   "engines": {
@@ -73,5 +73,13 @@
       "deepmerge-ts": "^8.0.2",
       "mysql2": "^3.24.3"
     }
+  },
+  "allowScripts": {
+    "@google/genai": true,
+    "@prisma/engines": true,
+    "esbuild": true,
+    "prisma": true,
+    "protobufjs": true,
+    "unrs-resolver": true
   }
 }

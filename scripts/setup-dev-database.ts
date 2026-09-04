@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 import { Client } from "pg";
 import {
@@ -6,6 +5,7 @@ import {
   assertNotDisposableTestDatabase,
   databaseNameOf,
 } from "./database-target-guard";
+import { runPackageBin } from "./run-package-bin";
 
 /**
  * Prepares the local development database.
@@ -100,17 +100,8 @@ async function main(): Promise<void> {
   // over the `.env.local` those tools load, without editing that file.
   const childEnv = { ...process.env, DIRECT_URL: directUrl, DATABASE_URL: directUrl };
 
-  execFileSync("npx", ["prisma", "migrate", "deploy"], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-    env: childEnv,
-  });
-
-  execFileSync("npx", ["tsx", "prisma/seed.ts"], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-    env: childEnv,
-  });
+  runPackageBin("prisma", ["migrate", "deploy"], { env: childEnv });
+  runPackageBin("tsx", ["prisma/seed.ts"], { env: childEnv });
 
   console.log(
     `\nDevelopment database ready. \`npm run dev\` will use it, because Next.js ` +

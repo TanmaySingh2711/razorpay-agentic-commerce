@@ -29,7 +29,7 @@
 | [`money.ts`](../src/domain/money.ts)                     | Integer minor units with explicit currency. No float can become a charge; currencies cannot be mixed.                                     |
 | [`transaction/`](../src/domain/transaction/)             | 17 typed states, a complete actor-scoped transition table, and a pure adjudicator with idempotent replay handling. Vendor-neutral actors. |
 | [`errors.ts`](../src/domain/errors.ts)                   | Eight-category taxonomy with separate internal and public faces.                                                                          |
-| [`identifiers.ts`](../src/domain/identifiers.ts)         | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs. Covers quote, reservation and transition ids.             |
+| `identifiers.ts` _(removed — see below)_                 | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs. Covers quote, reservation and transition ids.             |
 | [`decision-record.ts`](../src/domain/decision-record.ts) | The explainability contract, with a hard cap on the reason field.                                                                         |
 | [`audit-event.ts`](../src/domain/audit-event.ts)         | The audit contract, over a closed event vocabulary.                                                                                       |
 
@@ -40,7 +40,7 @@
 - [`lib/logger.ts`](../src/lib/logger.ts) and
   [`lib/redact.ts`](../src/lib/redact.ts) — structured operational logging with
   secret and chain-of-thought scrubbing.
-- [`lib/result.ts`](../src/lib/result.ts), [`lib/json.ts`](../src/lib/json.ts).
+- `lib/result.ts` _(removed — see below)_, [`lib/json.ts`](../src/lib/json.ts).
 - `GET /api/health` — the only route.
 - A landing page that states the architectural rule. No product UI.
 
@@ -113,3 +113,14 @@ Confirmed absent from the codebase:
 | `npm run build`     | production build succeeds with **no environment file present**          |
 | `npm run dev`       | starts clean; `/` returns 200, `/api/health` returns 200 with no errors |
 | Secrets             | no `.env` exists anywhere; only `.env.example` is tracked               |
+
+## Since removed as dead code
+
+Two of the modules above never gained a caller as later objectives built on
+top of this foundation: `identifiers.ts`'s branded-id types and `lib/result.ts`'s
+generic `Result<T, E>` wrapper. Every engine that followed ended up returning
+its own named discriminated union (e.g. `TransitionDecision`) instead of the
+generic wrapper, and every id stayed a plain validated `string`. Both files
+were deleted once a repository-wide sweep confirmed zero imports of either.
+This is exactly the kind of drift this historical record exists to make
+visible rather than hide.

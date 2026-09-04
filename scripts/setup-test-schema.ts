@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 import { Client } from "pg";
 import {
@@ -7,6 +6,7 @@ import {
   TEST_SCHEMA_MARKER_VALUE,
 } from "../tests/db/schema-identity";
 import { resolveTestDatabaseUrl } from "../tests/db/test-database-url";
+import { runPackageBin } from "./run-package-bin";
 
 loadEnv({ path: ".env.local", quiet: true });
 
@@ -68,9 +68,7 @@ function main(): void {
 
     // Apply the very same migrations the real database uses, into the test
     // schema. Testing against a hand-built schema would let the two drift.
-    execFileSync("npx", ["prisma", "migrate", "deploy"], {
-      stdio: "inherit",
-      shell: process.platform === "win32",
+    runPackageBin("prisma", ["migrate", "deploy"], {
       env: { ...process.env, DIRECT_URL: withSchema(directUrl, TEST_SCHEMA) },
     });
 

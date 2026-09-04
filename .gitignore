@@ -2,13 +2,6 @@
 
 # dependencies
 /node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
 # testing
 /coverage
@@ -17,12 +10,28 @@
 /.next/
 /out/
 
-# production
-/build
-
-# misc
+# OS and sync artefacts. `.DS_Store` alone covered macOS while this repository
+# is developed on Windows inside a OneDrive-synced folder, which writes
+# `desktop.ini` into directories it manages and `Thumbs.db` when Explorer
+# renders a folder. None are useful to a reviewer and all are easy to commit
+# by accident with `git add -A`.
 .DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*.lnk
+
+# Keys and certificates. Never a tracked file, whatever the extension.
 *.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and local tool state. Personal to a machine, not to the project.
+.vscode/
+.idea/
+*.swp
+*~
 
 # debug
 npm-debug.log*

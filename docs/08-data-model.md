@@ -219,10 +219,12 @@ erDiagram
 
 - **Timestamps**: every entity carries `createdAt`; mutable entities carry
   `updatedAt`. All UTC, stored as `timestamptz`.
-- **Identifiers**: opaque strings, branded in TypeScript
-  ([`identifiers.ts`](../src/domain/identifiers.ts)) so a `ProductId` cannot be
-  passed where a `TransactionId` belongs. Brands exist for every entity here,
-  including `PurchaseQuoteId`, `InventoryReservationId` and `StateTransitionId`.
+- **Identifiers**: opaque strings — Prisma's `uuid(7)` default on every model's
+  `id` column. An earlier branded-type layer (distinct `ProductId`,
+  `TransactionId`, and so on as incompatible TypeScript types) was built in
+  Objective 1 but never adopted by the services that followed and was removed
+  as dead code; nothing today stops a plain `string` from one entity's id being
+  passed where another's belongs except naming discipline and tests.
 - **Enums**: transaction state names come from
   [`states.ts`](../src/domain/transaction/states.ts). The Prisma schema must
   match that list; it must not declare a second, drifting definition.

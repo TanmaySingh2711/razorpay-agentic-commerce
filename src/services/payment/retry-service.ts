@@ -629,7 +629,7 @@ async function requoteAndContinue(
   // Either ALLOWED or APPROVAL_REQUIRED from here: both mean the purchase is
   // still alive, so the hold this transaction already has - still real stock -
   // is told which quote now prices it before either answer is given. Rebinding
-  // regardless of which of the two it is is what lets a later plain retry,
+  // in either case is what lets a later plain retry,
   // after a person grants the fresh approval, find the reservation already
   // aligned with the quote that approval was scoped to - without this, the
   // very next retry click would refuse RESERVATION_NOT_HELD against a hold

@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 import {
   assertLocalHost,
@@ -6,6 +5,7 @@ import {
   assertRemoteHost,
   databaseNameOf,
 } from "./database-target-guard";
+import { runPackageBin } from "./run-package-bin";
 
 /**
  * Runs a Prisma CLI command against an explicitly chosen database.
@@ -98,9 +98,7 @@ function main(): void {
       : `${command} -> ${database} on ${host} (local)`,
   );
 
-  execFileSync("npx", ["prisma", ...args], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
+  runPackageBin("prisma", args, {
     env: { ...process.env, DIRECT_URL: url, DATABASE_URL: url },
   });
 }

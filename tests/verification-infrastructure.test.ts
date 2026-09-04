@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   REMOTE_TEST_DATABASE_OPT_IN,
@@ -22,6 +24,7 @@ import {
   POOLED_HOSTNAME_CONVENTIONS,
   isPooledHostname,
 } from "../scripts/pooled-endpoint";
+import { resolvePackageBin } from "../scripts/run-package-bin";
 
 /**
  * The verification infrastructure, tested like anything else.
@@ -442,5 +445,35 @@ describe("why the disposable-schema guard refused", () => {
         throw new DisposableSchemaGuardError(describeMarkerFailure(error));
       }).toThrow(/Refusing to run destructive test cleanup/);
     }
+  });
+});
+
+describe("dependency CLIs are spawned without a shell", () => {
+  /**
+   * The database scripts used to run `npx <tool>` with `shell: true` on
+   * Windows, which Node 24 deprecates (DEP0190) precisely because arguments
+   * are concatenated into a command string instead of being passed
+   * individually. Resolving the tool's own entry point removes the shell, and
+   * therefore removes the question of whether an argument would have been
+   * quoted correctly. These assert the resolution itself, because a wrong path
+   * here would fail at spawn time inside a migration rather than here.
+   */
+  it("resolves the Prisma CLI to a real JavaScript entry point", () => {
+    const bin = resolvePackageBin("prisma");
+    expect(isAbsolute(bin)).toBe(true);
+    expect(bin.endsWith(".js")).toBe(true);
+    expect(existsSync(bin)).toBe(true);
+  });
+
+  it("resolves the tsx CLI, which the seed step runs", () => {
+    const bin = resolvePackageBin("tsx");
+    expect(isAbsolute(bin)).toBe(true);
+    expect(existsSync(bin)).toBe(true);
+  });
+
+  it("refuses a package that exposes no CLI, rather than spawning a guess", () => {
+    // `zod` is a library with no bin. Resolving it must fail loudly here, not
+    // hand `node` a path that does not exist.
+    expect(() => resolvePackageBin("zod")).toThrow(/no bin entry/);
   });
 });

@@ -40,10 +40,16 @@ not disclose the internal state names.
   unrecognised throwables become `internal` with the original message preserved
   **for operators only**.
 - Expected business outcomes are **not** exceptions. A policy denial, a
-  verification mismatch and a rejected state transition are returned as
-  `Result` values ([`lib/result.ts`](../src/lib/result.ts)) so callers must
-  handle them and so they can be audited. Exceptions are for genuinely
-  exceptional conditions.
+  verification mismatch and a rejected state transition are returned as plain
+  discriminated-union values — e.g. `TransitionDecision`'s `APPLY` /
+  `IDEMPOTENT_NO_OP` / `INVALID` / `LATE_EVENT_RECONCILIATION_CANDIDATE` kinds
+  from `resolveTransition()` in
+  [`state-machine.ts`](../src/domain/transaction/state-machine.ts) — so callers
+  must handle every branch and so the outcome can be audited. Exceptions are
+  for genuinely exceptional conditions. (An earlier generic `Result<T, E>`
+  wrapper was built for this in Objective 1 but every engine ended up with its
+  own named-kind union instead; the generic wrapper had no caller and was
+  removed as dead code.)
 - `details` is structured and redaction-safe: identifiers, states, rule names.
   Never a payload, never a secret.
 
