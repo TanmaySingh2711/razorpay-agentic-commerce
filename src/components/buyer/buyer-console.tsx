@@ -31,7 +31,7 @@ function SubmitButton(): React.JSX.Element {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="primary" disabled={pending} aria-busy={pending}>
-      {pending ? "Thinking…" : "Ask"}
+      {pending ? "Finding…" : "Find"}
     </button>
   );
 }
@@ -83,7 +83,7 @@ export function BuyerConsole(): React.JSX.Element {
    * The examples were previously plain list items: they looked like something
    * to press and did nothing at all, which is the worst of both. Filling the
    * field rather than submitting it is deliberate - the person still reads the
-   * sentence and presses Ask themselves, so nothing is requested on their
+   * sentence and presses Find themselves, so nothing is requested on their
    * behalf.
    */
   const fillWithExample = (example: string): void => {

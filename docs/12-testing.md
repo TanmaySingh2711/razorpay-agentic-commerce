@@ -144,8 +144,8 @@ The runner is split so each half gets the scheduling it needs:
 
 | Project | Files         | Parallel | Why                                                    |
 | ------- | ------------- | -------- | ------------------------------------------------------ |
-| `unit`  | `tests/*`     | yes      | No shared state. 718 tests, seconds.                   |
-| `db`    | `tests/db/**` | **no**   | 420 tests sharing one schema, truncated between tests. |
+| `unit`  | `tests/*`     | yes      | No shared state. 780 tests, seconds.                   |
+| `db`    | `tests/db/**` | **no**   | 427 tests sharing one schema, truncated between tests. |
 
 Per-worker schemas would let the database files run concurrently too, but that
 means provisioning and migrating N schemas per run and teaching the disposable-

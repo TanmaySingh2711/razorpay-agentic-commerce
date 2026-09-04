@@ -4,6 +4,7 @@ import { approvePurchase, rejectPurchase, reserveStock } from "@/app/actions/pur
 import { AwaitingProvider } from "@/components/transaction/awaiting-provider";
 import { DecisionForm } from "@/components/transaction/decision-form";
 import { PayButton } from "@/components/payments/pay-button";
+import { SafetyPassport } from "@/components/transaction/safety-passport";
 import { describePaymentFailure } from "@/domain/payment/failure";
 import {
   awaitsProvider,
@@ -393,6 +394,7 @@ export default async function TransactionPage({
       <QuoteCard overview={overview} />
       <PolicyCard overview={overview} />
       <InventoryCard overview={overview} />
+      <SafetyPassport passport={overview.passport} />
       <Timeline overview={overview} />
 
       <details className="technical">

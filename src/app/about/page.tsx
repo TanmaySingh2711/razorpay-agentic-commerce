@@ -19,15 +19,14 @@ export default function AboutPage() {
   return (
     <main>
       <p className="breadcrumb">
-        <Link href="/">← Back to the demo</Link>
+        <Link href="/" className="secondary">
+          ← Back to the demo
+        </Link>
       </p>
 
       <header className="page-head">
+        <p className="project-label">Razorpay Agentic Commerce</p>
         <h1>Architecture &amp; Safety</h1>
-        <p className="lead">Razorpay Agentic Commerce</p>
-        <p className="eyebrow">
-          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
-        </p>
       </header>
 
       <p>
@@ -124,8 +123,7 @@ export default function AboutPage() {
       </p>
 
       <footer>
-        Razorpay Test Mode — no real money moves. Full implementation detail lives in{" "}
-        <code>docs/</code> rather than here. Liveness endpoint: <code>/api/health</code>.
+        <p className="tagline">Razorpay Test Mode — no real money moves.</p>
       </footer>
     </main>
   );

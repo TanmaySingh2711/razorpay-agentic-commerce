@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
  * This is a presentation regression suite, added alongside the demo-polish
  * pass that: gave the page a slim product header carrying the Test Mode
  * badge, added a one-line trust-flow strip, replaced a text link that was
- * easy to miss with a visible secondary link, and reordered the Ask button
+ * easy to miss with a visible secondary link, and reordered the submit button
  * ahead of the character counter. None of that touches a server action, a
  * service, or the database - so these assertions are about words and markup
  * shape, not behaviour, and stay separate from `tests/db/` and the
@@ -33,6 +33,12 @@ describe("the homepage reads as a product, not a submission banner", () => {
     const markup = renderToStaticMarkup(HomePage());
     expect(markup).toMatch(/Test Mode/i);
     expect(markup).toMatch(/no real money/i);
+  });
+
+  it("names the product in full in the top bar", async () => {
+    const { default: HomePage } = await import("@/app/page");
+    const markup = renderToStaticMarkup(HomePage());
+    expect(markup).toMatch(/Razorpay Agentic Commerce/);
   });
 
   it("states the trust flow without ever putting an AI actor before it executes", async () => {
@@ -69,21 +75,28 @@ describe("the homepage reads as a product, not a submission banner", () => {
     expect(markup).toMatch(/View Architecture/);
   });
 
-  it("orders the Ask button before the character counter in the markup", async () => {
+  it("labels the submit button Find, the word the console actually does", async () => {
     const { default: HomePage } = await import("@/app/page");
     const markup = renderToStaticMarkup(HomePage());
-    const askIndex = markup.indexOf(">Ask<");
+    expect(markup).toContain(">Find<");
+    expect(markup).not.toContain(">Ask<");
+  });
+
+  it("orders the Find button before the character counter in the markup", async () => {
+    const { default: HomePage } = await import("@/app/page");
+    const markup = renderToStaticMarkup(HomePage());
+    const findIndex = markup.indexOf(">Find<");
     const counterIndex = markup.indexOf("0/1000");
-    expect(askIndex).toBeGreaterThan(-1);
+    expect(findIndex).toBeGreaterThan(-1);
     expect(counterIndex).toBeGreaterThan(-1);
-    expect(askIndex).toBeLessThan(counterIndex);
+    expect(findIndex).toBeLessThan(counterIndex);
   });
 
   it("describes the five real steps, naming no step the system cannot back", async () => {
     const { default: HomePage } = await import("@/app/page");
     const markup = renderToStaticMarkup(HomePage());
     for (const step of [
-      "You ask",
+      "You describe",
       "AI proposes",
       "Server verifies",
       "Policy / Approval",

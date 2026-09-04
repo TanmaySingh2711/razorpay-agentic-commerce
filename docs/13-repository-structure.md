@@ -38,12 +38,18 @@ razorpay-agentic-commerce/
 │   │   ├── checkout/[transactionId]/    the page that offers Pay
 │   │   ├── transaction/[transactionId]/ the authoritative purchase view
 │   │   ├── about/page.tsx      how the system works, for a reviewer
+│   │   ├── globals.css         design tokens + element defaults
+│   │   ├── ui.css              component styles, loaded after globals.css
+│   │   ├── icon.tsx            generated tab icon (Next file convention)
 │   │   ├── layout.tsx          root layout
 │   │   └── page.tsx            landing page
 │   ├── components/
 │   │   ├── buyer/buyer-console.tsx       the shopping input
 │   │   ├── payments/pay-button.tsx       the one place a person spends money
-│   │   └── transaction/decision-form.tsx approve / reject
+│   │   └── transaction/
+│   │       ├── awaiting-provider.tsx  polls while the webhook is outstanding
+│   │       ├── decision-form.tsx      approve / reject
+│   │       └── safety-passport.tsx    the deterministic safety summary
 │   ├── config/
 │   │   └── env.ts              the ONLY reader of process.env
 │   ├── generated/prisma/       generated Prisma client (git-ignored artifact)
@@ -81,6 +87,7 @@ razorpay-agentic-commerce/
 │   │   ├── quote/
 │   │   │   ├── quote-reader.ts          quote read boundary
 │   │   │   └── quote-service.ts         trusted quote creation + validation
+│   │   ├── safety/passport-service.ts   safety passport rows, read-only
 │   │   └── transaction/
 │   │       ├── creation-service.ts      the ONLY creator of Transaction rows
 │   │       ├── overview-service.ts      the read model the pages render
@@ -93,7 +100,6 @@ razorpay-agentic-commerce/
 │   │   ├── catalog/            public DTOs, bounded query contract, errors
 │   │   ├── decision-record.ts  explainability contract
 │   │   ├── errors.ts           error taxonomy
-│   │   ├── identifiers.ts      branded id types
 │   │   ├── inventory/          reservation contracts + pure rules
 │   │   ├── money.ts            integer minor units + currency
 │   │   ├── payment/            provider port, checkout, webhook, retry, rules
@@ -103,6 +109,7 @@ razorpay-agentic-commerce/
 │   │   │   └── errors.ts          policy error types
 │   │   ├── product-decision/   deterministic candidate rules (pure)
 │   │   ├── quote/              contracts, errors, expiry/validity rules (pure)
+│   │   ├── safety/passport.ts  the deterministic safety passport (pure)
 │   │   ├── transaction/
 │   │   │   ├── errors.ts          lifecycle-specific error types
 │   │   │   ├── events.ts          domain events + reason codes
@@ -118,7 +125,6 @@ razorpay-agentic-commerce/
 │       ├── json.ts             JSON value model
 │       ├── logger.ts           structured operational logging
 │       ├── redact.ts           secret and reasoning scrubbing
-│       ├── result.ts           Result<T, E>
 │       └── server-only.ts      module-scope browser-bundle guard
 ├── tests/                      Vitest suites, mirroring src by concern
 │   ├── db/                     integration suites against local PostgreSQL
@@ -171,6 +177,7 @@ This is where each one is:
 | Razorpay adapter              | `src/integrations/payments/`                 |
 | Webhook handling              | `src/services/payment/webhook-service.ts`    |
 | Audit Service                 | `src/services/audit/`                        |
+| Safety Passport               | `src/domain/safety/`, `src/services/safety/` |
 | Persistence (Prisma/Postgres) | `src/integrations/persistence/`              |
 | UI components                 | `src/components/`                            |
 

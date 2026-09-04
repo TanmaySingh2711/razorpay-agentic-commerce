@@ -43,6 +43,7 @@ retry design — and it links onward to whichever document owns each detail.
 | [26 — Staging deployment](./26-staging-deployment.md)               | The public Vercel environment and its variables             |
 | [27 — Payment retry](./27-payment-retry.md)                         | Bounded human-triggered retry, and the stale-quote re-quote |
 | [28 — Final architecture](./28-final-architecture.md)               | **The whole system in one document**                        |
+| [29 — Safety passport](./29-safety-passport.md)                     | The deterministic reviewer summary on the transaction page  |
 
 ## Testing
 

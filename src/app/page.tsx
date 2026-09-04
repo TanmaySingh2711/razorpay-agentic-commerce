@@ -32,13 +32,13 @@ export const maxDuration = 60;
 export const metadata = {
   title: "Razorpay Agentic Commerce — buy something",
   description:
-    "Ask for what you want in plain words. The assistant proposes; the server prices, checks the rules and takes payment.",
+    "Describe what you want in plain words. The assistant proposes; the server prices, checks the rules and takes payment.",
 };
 
 const STEPS = [
   {
-    title: "You ask",
-    body: "Describe what you want and your budget.",
+    title: "You describe",
+    body: "Describe what you want in plain words, including a budget if you have one.",
   },
   {
     title: "AI proposes",
@@ -71,7 +71,7 @@ function ProductBar() {
   return (
     <header className="product-bar">
       <div className="product-bar-inner">
-        <span className="brand">Agentic Commerce</span>
+        <span className="brand">Razorpay Agentic Commerce</span>
         <span className="badge test-mode">
           <span className="dot" aria-hidden="true" />
           Test Mode · No real money

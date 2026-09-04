@@ -4,8 +4,13 @@ import { getTransactionAuditHistory } from "@/services/audit/audit-service";
 import { readActiveQuote } from "@/services/quote/quote-reader";
 import { readRecordedEvaluation } from "@/services/policy/policy-reader";
 import { readRetryStatus } from "@/services/payment/retry-service";
+import {
+  assembleSafetyPassport,
+  readPassportRows,
+} from "@/services/safety/passport-service";
 import { toQuoteDto } from "@/domain/quote/rules";
 import type { AuditTimelineEntry } from "@/services/audit/audit-service";
+import type { SafetyPassportViewModel } from "@/domain/safety/passport";
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { QuoteDto } from "@/domain/quote/rules";
 import type { RetryStatusDto } from "@/domain/payment/retry";
@@ -75,6 +80,16 @@ export interface TransactionOverview {
   /** Server-computed. The page never works out retry eligibility itself. */
   readonly retry: RetryStatusDto | null;
   readonly timeline: readonly AuditTimelineEntry[];
+  /**
+   * The reviewer-facing safety summary, derived from everything above plus the
+   * transaction's quotes, approvals, holds and payment attempts.
+   *
+   * Built here rather than in the page for the same reason as the rest of this
+   * value: a claim about whether a purchase was safe is a business judgement,
+   * and business judgements do not belong in JSX. It is derived, never stored,
+   * and no part of it comes from a language model.
+   */
+  readonly passport: SafetyPassportViewModel;
 }
 
 export interface OverviewDeps {
@@ -116,17 +131,21 @@ export async function loadTransactionOverview(
   if (transaction === null) return null;
 
   const now = deps.clock.now();
-  const [active, evaluation, reservation, retry, timeline] = await Promise.all([
-    readActiveQuote(deps.prisma, transactionId, now),
-    readRecordedEvaluation(deps.prisma, transactionId),
-    deps.prisma.inventoryReservation.findFirst({
-      where: { transactionId },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, expiresAt: true },
-    }),
-    readRetryStatus(transactionId, { prisma: deps.prisma, clock: deps.clock }),
-    getTransactionAuditHistory(transactionId, { prisma: deps.prisma }),
-  ]);
+  const [active, evaluation, reservation, retry, timeline, passportRows] =
+    await Promise.all([
+      readActiveQuote(deps.prisma, transactionId, now),
+      readRecordedEvaluation(deps.prisma, transactionId),
+      deps.prisma.inventoryReservation.findFirst({
+        where: { transactionId },
+        orderBy: { createdAt: "desc" },
+        select: { status: true, expiresAt: true },
+      }),
+      readRetryStatus(transactionId, { prisma: deps.prisma, clock: deps.clock }),
+      getTransactionAuditHistory(transactionId, { prisma: deps.prisma }),
+      // Runs alongside the rest rather than after it: the passport reads
+      // different tables from everything above, so it costs no extra latency.
+      readPassportRows(deps.prisma, transactionId),
+    ]);
 
   const quote = active === null ? null : toQuoteDto(active.snapshot);
 
@@ -155,24 +174,28 @@ export async function loadTransactionOverview(
           attributes: readableAttributes(row?.attributes),
         };
 
+  const policy: OverviewPolicy | null =
+    evaluation.kind === "FOUND"
+      ? {
+          decision: evaluation.evaluation.decision,
+          reasonCode: evaluation.evaluation.reasonCode,
+          autoApproveLimit: {
+            amountMinor: evaluation.evaluation.autoApproveLimitMinor.toString(),
+            currency: quote?.currency ?? "INR",
+          },
+        }
+      : null;
+
+  const quoteUsable = active?.usability.kind === "VALID";
+
   return {
     transactionId: transaction.id,
     state: transaction.status,
     createdAt: transaction.createdAt.toISOString(),
     quote,
-    quoteUsable: active?.usability.kind === "VALID",
+    quoteUsable,
     product,
-    policy:
-      evaluation.kind === "FOUND"
-        ? {
-            decision: evaluation.evaluation.decision,
-            reasonCode: evaluation.evaluation.reasonCode,
-            autoApproveLimit: {
-              amountMinor: evaluation.evaluation.autoApproveLimitMinor.toString(),
-              currency: quote?.currency ?? "INR",
-            },
-          }
-        : null,
+    policy,
     reservationStatus: reservation?.status ?? null,
     reservationExpiresAt: reservation?.expiresAt.toISOString() ?? null,
     reservationHeld:
@@ -181,5 +204,15 @@ export async function loadTransactionOverview(
       reservation.expiresAt.getTime() > now.getTime(),
     retry,
     timeline,
+    passport: assembleSafetyPassport({
+      transactionId: transaction.id,
+      state: transaction.status,
+      quoteUsable,
+      policyDecision: policy?.decision ?? null,
+      policyReasonCode: policy?.reasonCode ?? null,
+      retry,
+      timeline,
+      rows: passportRows,
+    }),
   };
 }

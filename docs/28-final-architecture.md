@@ -655,6 +655,29 @@ Two rules the audit trail is built on:
 
 Full detail: [23 — Audit and explainability](./23-audit-and-explainability.md).
 
+### The Agentic Purchase Safety Passport
+
+The transaction page carries a compact panel that answers "why was this
+AI-assisted purchase safe?" in a few seconds, so a reviewer does not have to
+read the whole trail to see the shape of it. It reports the AI's authority and
+the server's, the verified price, the policy decision, whether approval was
+required, the stock hold, the callback verification and the provider capture
+**separately**, whether inventory was committed, how each payment attempt ended,
+and whether a redelivered provider event was deduplicated.
+
+It is derived, never stored, and **no language model writes any part of it** —
+the builder is a pure function over persisted rows, with no field a model output
+could occupy. A positive claim requires evidence for that specific claim:
+"captured" is never inferred from a verified callback, "committed" never from a
+capture, and "exactly once" never from a single current row, because a row shows
+the present and "once" is a claim about history. Absent evidence renders as
+`NOT_REACHED`, drawn neutral rather than green.
+
+It complements the audit timeline and does not replace it: the trail below it
+remains the complete chronological evidence.
+
+Full detail: [29 — Safety passport](./29-safety-passport.md).
+
 ---
 
 ## 16. End-to-end: a successful Test Mode purchase
@@ -761,6 +784,7 @@ Full detail: [12 — Testing](./12-testing.md).
 | How are duplicate webhooks handled?                     | §10, §13                                                      |
 | How is inventory committed exactly once?                | §8, §13                                                       |
 | What is written to the audit trail?                     | §15                                                           |
+| Why was this particular purchase safe?                  | §15, [29](./29-safety-passport.md)                            |
 | What database is used locally vs deployed?              | §12, [16](./16-database.md), [26](./26-staging-deployment.md) |
 | How are migrations and tests run?                       | §18, [16](./16-database.md)                                   |
 | Which parts are ours vs Razorpay Test Mode?             | §14                                                           |

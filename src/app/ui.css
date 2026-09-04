@@ -34,24 +34,6 @@ main.wide {
   max-width: 54rem;
 }
 
-/* Demoted from a banner headline to a footnote under the lead. The competition
-   context is genuinely useful to a reviewer arriving cold, but it was the first
-   and loudest thing on a page whose actual subject is buying something. */
-.eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0.85rem 0 0;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-
-.eyebrow strong {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .page-head h1 {
   font-size: clamp(1.6rem, 4vw, 2.25rem);
 }
@@ -729,19 +711,25 @@ button[aria-busy="true"]::after {
 }
 
 .product-bar-inner {
-  max-width: 60rem;
+  /* Matches `main.wide` below exactly, so the brand block and the hero
+     heading share one left edge instead of sitting in two differently-sized
+     centred columns. */
+  max-width: 54rem;
   margin: 0 auto;
   padding: 0.85rem 1.5rem;
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
 .product-bar .brand {
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.015em;
+  color: var(--foreground);
 }
 
 /* The one status a reviewer must never be unsure about. A dot rather than
@@ -861,5 +849,264 @@ button[aria-busy="true"]::after {
 .safety-grid p {
   margin: 0;
   font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* --- Architecture & Safety: title hierarchy -------------------------------
+   "Razorpay Agentic Commerce" is the product; "Architecture & Safety" is
+   this page. The label sits above the heading, small and quiet, so the
+   reading order confirms that order rather than contradicting it the way a
+   smaller line *below* a big title would. */
+
+.project-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  margin: 0 0 0.35rem;
+}
+
+/* --- Objective 20: the Agentic Purchase Safety Passport -------------------
+   A summary panel, not a badge. It sits between the status cards and the
+   audit timeline: close enough for a reviewer to find in a few seconds, far
+   enough below the action card that it never competes with Pay.
+
+   Tone drives every colour here, and tone is decided in the domain from
+   persisted evidence - so a pending capture cannot be styled like a
+   confirmed one by editing this file. */
+
+.card.passport {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.passport-head h2 {
+  margin: 0;
+}
+
+.passport-head .hint {
+  margin: 0.15rem 0 0;
+}
+
+.authority-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.authority {
+  background: var(--accent-quiet);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+}
+
+.authority-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.authority-value {
+  margin: 0.1rem 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.authority .hint {
+  margin: 0;
+}
+
+.passport-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.passport-check {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.1rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.passport-check .mark,
+.passport-properties .mark {
+  flex: 0 0 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.passport-check.positive .mark,
+.passport-properties .evidenced .mark {
+  background: var(--positive-bg);
+  color: var(--positive);
+}
+
+.passport-check.warning .mark {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.passport-check.negative .mark {
+  background: var(--negative-bg);
+  color: var(--negative);
+}
+
+.passport-check.neutral .mark,
+.passport-properties .unevidenced .mark {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.passport-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.passport-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.passport-value {
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.passport-body .hint {
+  margin: 0.15rem 0 0;
+}
+
+.price-source {
+  margin: 0.75rem 0 0;
+  font-style: italic;
+}
+
+/* --- Retry safety --------------------------------------------------------
+   Rendered only when a re-quote, a retry or a duplicate provider event
+   actually happened. An empty heading here would be decoration. */
+
+.passport-retry {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.passport-retry h3 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.passport-retry .hint {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.passport-rows {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.passport-rows > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.passport-rows dt {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.passport-rows dd {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.passport-rows > div.positive dd {
+  color: var(--positive);
+}
+
+.passport-rows > div.warning dd {
+  color: var(--warning);
+}
+
+.passport-rows > div.negative dd {
+  color: var(--negative);
+}
+
+.passport-rows > div.neutral dd {
+  color: var(--muted);
+}
+
+/* --- The five properties -------------------------------------------------
+   Each one carries the evidence from this transaction that supports it, and
+   is drawn neutral when that evidence is absent. */
+
+.passport-properties {
+  list-style: none;
+  margin: 1.25rem 0 0.75rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+}
+
+.passport-properties li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.property-label {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.passport-properties .hint {
+  margin: 0.1rem 0 0;
+}
+
+.passport-properties .unevidenced .property-label {
   color: var(--muted);
 }

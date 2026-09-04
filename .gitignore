@@ -33,11 +33,14 @@ desktop.ini
 *.swp
 *~
 
-# debug
+# debug. The named patterns are what the package managers write; the general
+# rule catches a redirected command's output (`npm run verify > verify.log`),
+# which is the way a log file actually tends to appear in this repository.
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
 # env files - every real secret-bearing file stays untracked.
 # .env.example is the single tracked, credential-free template.

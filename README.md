@@ -1,156 +1,129 @@
-# razorpay-agentic-commerce
+# Razorpay Agentic Commerce
 
 **Razorpay AI Buildathon 2026 · Track 01 — AI Growth & Agentic Commerce**
 
-A merchant that an AI buyer agent can transact with end to end, where every
-financial action is explainable, bounded, gated and auditable.
+An AI buyer agent that can shop and pay for you — safely. You type something
+like _"Find me the best mechanical keyboard under ₹3000 and buy it"_, and the
+agent finds a product and completes the purchase. The AI only ever **suggests**;
+your server always decides the price, checks the rules, and is the only thing
+that can actually spend money.
 
-The flow: a person says _"Find me the best mechanical keyboard under ₹3000 and
-buy it"_, and an agent completes that purchase — without ever being trusted with
-the money.
+## 🔗 Try it online — nothing to install
 
-## Try it now — no setup required
+**Live app: [razorpay-agentic-commerce-xi.vercel.app](https://razorpay-agentic-commerce-xi.vercel.app)**
 
-**Live demo: https://razorpay-agentic-commerce-xi.vercel.app**
+This is a real, working deployment. It uses a real hosted database and real
+**Razorpay Test Mode** — so a full purchase, including payment, works end to
+end. No real money ever moves: the app is hard-coded to refuse any Razorpay key
+that isn't a test key.
 
-The whole flow runs there against a real, hosted database and real Razorpay
-**Test Mode** — no real money moves, ever; the app refuses to start the payment
-path with anything but a `rzp_test_…` key. To go all the way to a completed
-payment, click Pay at checkout and choose any test payment method — Razorpay's
-own Test Mode Checkout screen shows exactly what to enter, no account or real
-card needed.
+To pay at checkout, use Razorpay's own Test Mode screen — it tells you exactly
+what test card, UPI ID, or number to enter. No real card or bank account needed.
 
-No clone, no `npm install`, no API keys, no database to run — this link alone
-is enough to review the project end to end. Cloning and running it locally
-(below) is only for inspecting or modifying the code itself.
+You do not need to clone this repo, install anything, or have an API key to
+review the project. The link above is the whole app.
 
-## The rule this repository is built around
+## Running it on your own machine
 
-> **LLM can propose. Deterministic code authorizes. Payment infrastructure executes.**
->
-> **No LLM output can directly cause a payment.**
+Only needed if you want to read or change the code. You'll need:
 
-```
-AI proposes  →  deterministic systems validate  →  authorization gates  →  payment infrastructure executes
-```
+- **Node.js 24** ([download](https://nodejs.org)) — `.nvmrc` pins this version
+- **Docker Desktop** ([download](https://www.docker.com/products/docker-desktop)) — runs the local database
+- **npm** (comes with Node.js)
 
-The AI may interpret language, compare products and recommend one. It may not
-invent an amount, alter a price, change a policy, approve its own action, decide
-that a payment is permitted, mark a payment successful, or mutate transaction
-state. Not because it is instructed not to — because it has no tool, no
-parameter and no state-machine edge through which it could.
-
-## What is implemented
-
-The full purchase lifecycle works end to end, and has been exercised against the
-deployed environment with **real Razorpay Test Mode payments** — including a
-genuine bank decline, a controlled retry, a successful capture, and a duplicate
-webhook redelivery that correctly changed nothing.
-
-| Area                            | State                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| Buyer agent                     | Bounded orchestration over Gemini behind a provider-neutral adapter                  |
-| Agent-readable catalog          | Deterministic filtering, read-only tools, budget in minor units                      |
-| Trusted `PurchaseQuote`         | The one place a payable amount originates                                            |
-| Deterministic policy engine     | Pure function → `ALLOWED` / `APPROVAL_REQUIRED` / `BLOCKED`                          |
-| Human approval gate             | One-time, exactly bound, hashed token, replay-protected                              |
-| Inventory reservation           | Stock held before money moves; oversell prevented by database constraints            |
-| Payment order + Checkout        | Server-side amount only, Razorpay **Test Mode** only                                 |
-| Callback + webhook verification | Two separate facts; provider truth is authoritative                                  |
-| Capture, commit, completion     | Inventory committed exactly once, transaction completed exactly once                 |
-| Controlled retry + re-quote     | Bounded to 3 attempts; a stale quote is re-quoted against fresh facts, never revived |
-| Structured audit trail          | Reason codes and deterministic facts; no secrets, no chain-of-thought                |
-| PostgreSQL + Prisma             | Authoritative store; invariants held by CHECK constraints and unique indexes         |
-
-**No real money moves.** The configuration boundary refuses any Razorpay key id
-that is not `rzp_test_…`, so a live key fails closed rather than quietly working.
-
-## Documentation
-
-Start with **[28 — Final architecture](./docs/28-final-architecture.md)**: the
-whole system in one document, with the architecture diagram, the trust
-boundaries, the price flow, the state machine, the retry design, and an index
-that maps a reviewer's questions to where they are answered.
-
-Then [`docs/README.md`](./docs/README.md) for the full set.
-
-## Getting started
-
-Requires **Node.js 24 LTS** (`.nvmrc` and `engines` both pin it), npm, and
-Docker for the local database.
+### Steps
 
 ```bash
-nvm use              # optional, reads .nvmrc
+# 1. Get the code
+git clone https://github.com/TanmaySingh2711/razorpay-agentic-commerce.git
+cd razorpay-agentic-commerce
+
+# 2. Install dependencies
 npm install
-npm run db:test:up   # start the local Docker PostgreSQL
-npm run db:dev:setup # create, migrate and seed razorpay_agentic_dev
-npm run dev          # http://localhost:3000
+
+# 3. Start a local PostgreSQL database in Docker
+npm run db:test:up
+
+# 4. Create, migrate and seed your local dev database
+npm run db:dev:setup
+
+# 5. Start the app
+npm run dev
 ```
 
-**No API key or secret is required to boot.** The application starts, builds and
-runs its non-provider tests against an entirely empty environment — asserted by
-a test. Gemini and Razorpay configuration is validated lazily, at the moment the
-feature that needs it runs.
+Open **http://localhost:3000** — that's it. No `.env` file and no API key is
+required just to start the app and browse it.
 
-To run the database test suite as well:
+### If you want the AI or real payments to work locally
+
+The buyer agent needs a **Gemini API key**, and payments need a **Razorpay Test
+Mode key**. Both are free and take a couple of minutes to get:
+
+1. Copy the template: `cp .env.example .env.local`
+2. Get a free Gemini key from [Google AI Studio](https://aistudio.google.com/apikey)
+3. Get free Razorpay **Test Mode** keys from the [Razorpay Dashboard](https://dashboard.razorpay.com/) (Test Mode, not Live Mode)
+4. Paste both into `.env.local`
+5. Restart `npm run dev`
+
+Nothing in this project ever reads a real (`rzp_live_…`) Razorpay key — it's
+refused on purpose, so it's impossible to accidentally take real money.
+
+### Running the test suite
 
 ```bash
-npm run db:test:setup   # prepare the isolated, disposable test schema
-npm run verify          # typecheck + lint + test + build, all local
+npm run db:test:setup   # one-time: prepares an isolated test database
+npm run verify           # typecheck + lint + tests + production build
 ```
 
-Which database each command reaches is decided by the command's own name: plain
-`db:*` names target the local development database, `db:test:*` the disposable
-test one, and only the explicit `db:*:staging` commands reach the hosted
-database. Every one of them refuses the wrong target before it connects.
+Everything here runs locally. Tests never call Gemini, Razorpay, or any real
+network service — that's enforced automatically, not just a convention.
 
-| Environment       | Database                                 |
-| ----------------- | ---------------------------------------- |
-| Local development | Docker PostgreSQL (`docker-compose.yml`) |
-| Automated tests   | Docker PostgreSQL, disposable schema     |
-| Vercel deployment | Neon PostgreSQL                          |
-| ORM everywhere    | Prisma                                   |
+## What this project actually does
 
-Copy [`.env.example`](./.env.example) to `.env.local` only when you need to
-reach the hosted database or the external providers. It contains placeholders
-only — no real credential is ever committed to this repository, and that is
-deliberate rather than an oversight: a `Gemini` key and a `Razorpay` key are
-each free to obtain in a couple of minutes (Google AI Studio, Razorpay
-Dashboard Test Mode) if you want to run the buyer agent or a payment locally,
-but for reviewing the project the [live demo above](#try-it-now--no-setup-required)
-needs none of that.
+| Piece                | What it's for                                                 |
+| -------------------- | ------------------------------------------------------------- |
+| Buyer agent (Gemini) | Reads your request, proposes a product — nothing more         |
+| Trusted price quote  | The server re-checks the real price and freezes it            |
+| Policy engine        | Decides automatically: allow, ask a human, or block           |
+| Human approval       | A one-time, single-use approval for anything above your limit |
+| Inventory hold       | Stock is reserved before payment, so nothing oversells        |
+| Razorpay payment     | Server-controlled amount, Test Mode only                      |
+| Retry                | Up to 3 tries if a payment fails, never silently repeated     |
+| Audit trail          | Every decision is logged with a reason — readable by a human  |
+| Safety Passport      | A plain-English summary of why each purchase was allowed      |
 
-## Scripts
+**The one rule everything else follows:**
 
-| Command                | Does                                                    |
-| ---------------------- | ------------------------------------------------------- |
-| `npm run dev`          | Development server                                      |
-| `npm run build`        | Production build                                        |
-| `npm start`            | Serve the production build                              |
-| `npm run typecheck`    | Route typegen + `tsc --noEmit`                          |
-| `npm run lint`         | ESLint                                                  |
-| `npm run test`         | Vitest                                                  |
-| `npm run format:check` | Prettier check (deliberately not part of `verify`)      |
-| `npm run verify`       | typecheck + lint + test + build — entirely local        |
-| `npm run db:*`         | Database tooling — see [docs/16](./docs/16-database.md) |
-| `npm run *:smoke`      | Deliberate external checks; never run by `verify`       |
+> The AI can propose. Only your server can authorize. Only Razorpay moves money.
 
-Automated verification never calls Gemini, Razorpay, Vercel or the hosted
-database — a Vitest setup file blocks non-loopback `fetch` to enforce it.
+## Full documentation
 
-## Stack
+Read **[docs/28 — Final architecture](./docs/28-final-architecture.md)** for
+the complete system in one document — diagrams, the payment flow, and how
+safety is enforced.
 
-A **modular monolith** — one Next.js application, one deployable unit, one
-database, with hard internal module boundaries. Explicitly not microservices.
+The full set of design docs is indexed in [docs/README.md](./docs/README.md).
 
-| Layer              | Choice                                                                    |
-| ------------------ | ------------------------------------------------------------------------- |
-| App                | Next.js 16 (App Router), React 19                                         |
-| Language           | TypeScript 5, strict                                                      |
-| Runtime            | Node.js 24 LTS, npm                                                       |
-| Database           | PostgreSQL (authoritative) via Prisma ORM — Docker locally, Neon deployed |
-| AI                 | Google Gemini behind a provider-neutral AI Provider Adapter               |
-| Payments           | Razorpay **Test Mode** behind a Payment Provider Interface                |
-| Validation / tests | Zod, Vitest, ESLint, Prettier                                             |
+## Useful commands
 
-No agent framework, no AI SDK, no payment SDK, no state-management library.
+| Command                | What it does                     |
+| ---------------------- | -------------------------------- |
+| `npm run dev`          | Start the app locally            |
+| `npm run build`        | Production build                 |
+| `npm run verify`       | typecheck + lint + tests + build |
+| `npm run format:check` | Check code formatting            |
+| `npm run db:test:up`   | Start the local Docker database  |
+| `npm run db:dev:setup` | Set up your local dev database   |
+
+More database commands are documented in [docs/16-database.md](./docs/16-database.md).
+
+## Built with
+
+- **Next.js 16** + **React 19** + **TypeScript** (strict mode)
+- **PostgreSQL** via **Prisma** — Docker locally, Neon in production
+- **Google Gemini** for the AI, behind a swappable adapter
+- **Razorpay Test Mode** for payments, behind a swappable adapter
+- **Vitest**, **ESLint**, **Prettier** for testing and code quality
+
+One Next.js app, one database, no microservices, no agent framework — kept
+deliberately simple.

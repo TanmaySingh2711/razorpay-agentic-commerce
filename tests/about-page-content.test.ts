@@ -56,4 +56,29 @@ describe("the /about page describes the system as it actually is", () => {
       /cannot control price, authorization, payment, retries, or transaction state/,
     );
   });
+
+  it("puts the product name above the page title, not below it", () => {
+    // Regression for a deliberate reorder: "Razorpay Agentic Commerce" is the
+    // product and must read first; "Architecture & Safety" is this page and
+    // follows it - never the other way round.
+    const productIndex = markup.indexOf("Razorpay Agentic Commerce");
+    const titleIndex = markup.indexOf("Architecture &amp; Safety");
+    expect(productIndex).toBeGreaterThan(-1);
+    expect(titleIndex).toBeGreaterThan(-1);
+    expect(productIndex).toBeLessThan(titleIndex);
+  });
+
+  it("does not repeat the Buildathon line here - the product name already identifies it", () => {
+    expect(markup).not.toMatch(/Buildathon/i);
+  });
+
+  it("does not surface repo-oriented text like the docs/ path or the liveness endpoint", () => {
+    expect(markup).not.toMatch(/Liveness endpoint/i);
+    expect(markup).not.toMatch(/docs\//);
+    expect(markup).not.toMatch(/api\/health/i);
+  });
+
+  it("styles the return link as a visible secondary action, not a bare text link", () => {
+    expect(markup).toMatch(/<a class="secondary" href="\/">/);
+  });
 });
