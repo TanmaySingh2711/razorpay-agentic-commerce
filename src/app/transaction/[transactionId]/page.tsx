@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { approvePurchase, rejectPurchase, reserveStock } from "@/app/actions/purchase";
+import { AwaitingProvider } from "@/components/transaction/awaiting-provider";
 import { DecisionForm } from "@/components/transaction/decision-form";
 import { PayButton } from "@/components/payments/pay-button";
 import { describePaymentFailure } from "@/domain/payment/failure";
@@ -384,12 +385,7 @@ export default async function TransactionPage({
       <header className="page-head">
         <h1>{narrative.label}</h1>
         <p className="lead">{narrative.meaning}</p>
-        {awaitsProvider(overview.state) ? (
-          <p className="notice neutral" role="status">
-            Waiting for the payment provider to confirm. This page does not update by
-            itself — <a href="">refresh</a> in a moment to see the latest.
-          </p>
-        ) : null}
+        {awaitsProvider(overview.state) ? <AwaitingProvider /> : null}
       </header>
 
       <Journey overview={overview} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import {
   loadCheckoutScript,
@@ -82,6 +83,24 @@ export function PayButton({
   readonly maxAttempts?: number;
 }): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>({ kind: "IDLE" });
+  const router = useRouter();
+
+  /**
+   * Re-reads the server-rendered journey after something has actually moved.
+   *
+   * This component owns a local phase for the *checkout window*, but the page
+   * around it is a server component reading the authoritative transaction
+   * state. Without this the two drift apart the moment a payment lands: the
+   * button says verified while the timeline above it still shows the previous
+   * step, and only F5 reconciled them. `router.refresh()` re-runs the server
+   * render in place, keeping the local phase message intact.
+   *
+   * It is deliberately never a source of truth - it asks the server what
+   * happened, it does not tell the server anything.
+   */
+  const rereadServerState = useCallback(() => {
+    router.refresh();
+  }, [router]);
 
   const verify = useCallback(
     async (session: CheckoutSessionDto, response: CheckoutSuccessResponse) => {
@@ -106,13 +125,18 @@ export function PayButton({
             kind: "VERIFIED",
             paymentId: verified.data.providerPaymentId ?? response.razorpay_payment_id,
           });
+          // The transaction has moved to PAYMENT_VERIFIED server-side. Re-read
+          // so the journey above updates itself instead of waiting for F5.
+          rereadServerState();
           return;
         }
         setPhase({
           kind: "PROBLEM",
           message:
-            "We could not confirm this payment as genuine. Open this purchase again to see where it stands - the page reads the authoritative record, and support can look it up.",
+            "We could not confirm this payment as genuine. The page below re-reads the authoritative record, and support can look it up.",
         });
+        // Outcome unknown here, which is exactly why the server is asked.
+        rereadServerState();
       } catch {
         // This point is reached *after* the person paid, so the one thing that
         // must not be said here is "nothing was charged". A dropped connection
@@ -128,7 +152,7 @@ export function PayButton({
         });
       }
     },
-    [],
+    [rereadServerState],
   );
 
   const onPay = useCallback(() => {
@@ -154,11 +178,13 @@ export function PayButton({
                     ? // The retry found the price had changed and re-quoted it,
                       // but the new amount needs a person's approval before it
                       // can be paid - the same rule a first purchase above the
-                      // spending ceiling already follows. Refreshing shows the
-                      // approve/reject prompt; this click cannot itself proceed.
-                      "The price for this purchase changed and now needs your approval. Refresh this page to approve or reject it."
-                    : "This purchase cannot be paid again. Reload the page to see why.",
+                      // spending ceiling already follows. The approve/reject
+                      // prompt now appears on its own; this click cannot itself
+                      // proceed.
+                      "The price for this purchase changed and now needs your approval. The approval prompt is below."
+                    : "This purchase cannot be paid again - the current state is shown below.",
             });
+            rereadServerState();
             return;
           }
         } else {
@@ -230,6 +256,7 @@ export function PayButton({
           modal: {
             ondismiss: () => {
               setPhase({ kind: "DISMISSED" });
+              rereadServerState();
               // Recorded, but it decides nothing: closing a window is not a
               // failed payment, and the server treats it as neither.
               // Fire and forget, and genuinely forgotten: this call decides
@@ -252,6 +279,9 @@ export function PayButton({
               failure.error?.description ??
               "The payment did not go through. You have not been charged.",
           });
+          // A failed attempt is now recorded, and the retry affordance below
+          // depends on it. Re-read rather than making the buyer refresh.
+          rereadServerState();
         });
 
         setPhase({ kind: "AWAITING_PAYMENT" });
@@ -264,7 +294,7 @@ export function PayButton({
         });
       }
     })();
-  }, [transactionId, mode, verify]);
+  }, [transactionId, mode, verify, rereadServerState]);
 
   // Disabling the button while a request is in flight is a courtesy to the
   // person, not a control. Two clicks that both get through converge on one

@@ -9,6 +9,21 @@ The flow: a person says _"Find me the best mechanical keyboard under ₹3000 and
 buy it"_, and an agent completes that purchase — without ever being trusted with
 the money.
 
+## Try it now — no setup required
+
+**Live demo: https://razorpay-agentic-commerce-xi.vercel.app**
+
+The whole flow runs there against a real, hosted database and real Razorpay
+**Test Mode** — no real money moves, ever; the app refuses to start the payment
+path with anything but a `rzp_test_…` key. To go all the way to a completed
+payment, click Pay at checkout and choose any test payment method — Razorpay's
+own Test Mode Checkout screen shows exactly what to enter, no account or real
+card needed.
+
+No clone, no `npm install`, no API keys, no database to run — this link alone
+is enough to review the project end to end. Cloning and running it locally
+(below) is only for inspecting or modifying the code itself.
+
 ## The rule this repository is built around
 
 > **LLM can propose. Deterministic code authorizes. Payment infrastructure executes.**
@@ -98,7 +113,12 @@ database. Every one of them refuses the wrong target before it connects.
 
 Copy [`.env.example`](./.env.example) to `.env.local` only when you need to
 reach the hosted database or the external providers. It contains placeholders
-only.
+only — no real credential is ever committed to this repository, and that is
+deliberate rather than an oversight: a `Gemini` key and a `Razorpay` key are
+each free to obtain in a couple of minutes (Google AI Studio, Razorpay
+Dashboard Test Mode) if you want to run the buyer agent or a payment locally,
+but for reviewing the project the [live demo above](#try-it-now--no-setup-required)
+needs none of that.
 
 ## Scripts
 

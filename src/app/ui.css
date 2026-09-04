@@ -34,12 +34,22 @@ main.wide {
   max-width: 54rem;
 }
 
+/* Demoted from a banner headline to a footnote under the lead. The competition
+   context is genuinely useful to a reviewer arriving cold, but it was the first
+   and loudest thing on a page whose actual subject is buying something. */
 .eyebrow {
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 0 0 0.75rem;
+  margin: 0.85rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.eyebrow strong {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .page-head h1 {
@@ -62,6 +72,17 @@ main.wide {
 
 .console {
   margin: 2.5rem 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 30rem) {
+  .console {
+    padding: 1.1rem;
+  }
 }
 
 h2.plain {
@@ -77,14 +98,34 @@ h2.plain {
   padding: 0.9rem 1rem;
   font: inherit;
   color: inherit;
-  background: var(--background);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  resize: vertical;
   min-height: 5.5rem;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+  /* `resize: vertical` painted a native grab-handle in the bottom-right corner
+     - a small light triangle that reads as a rendering artefact on a dark
+     surface, and was reported as exactly that. `field-sizing` grows the box to
+     fit what is typed, which is what the handle was there to allow, so the
+     affordance is gone and the capability is not. Browsers without support
+     simply keep a fixed three-row box. */
+  resize: none;
+  field-sizing: content;
+  max-height: 16rem;
 }
 
-.ask textarea:focus-visible,
+.ask textarea:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+
+.ask textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible {
@@ -111,22 +152,74 @@ button.secondary {
   cursor: pointer;
   /* A comfortable touch target on a phone. */
   min-height: 44px;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease),
+    transform 0.08s var(--ease);
 }
 
 button.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-sm);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--rzp-blue);
+  box-shadow: var(--shadow-md);
 }
 
 button.secondary {
-  background: transparent;
+  background: var(--surface);
   color: var(--foreground);
-  border-color: var(--border);
+  border-color: var(--border-strong);
+}
+
+button.secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Pressed feedback. Small on purpose: this is a payment flow, not a game. */
+button.primary:active:not(:disabled),
+button.secondary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-sm);
 }
 
 button:disabled {
   opacity: 0.6;
   cursor: progress;
+}
+
+/* Busy buttons say so twice - the label changes, and the edge pulses - because
+   the Buyer Agent round trip is long enough that a still button reads as a
+   click that missed. */
+button[aria-busy="true"]:not(:disabled),
+button[aria-busy="true"]:disabled {
+  position: relative;
+  overflow: hidden;
+}
+
+button[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, #fff 28%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: sweep 1.15s var(--ease) infinite;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .hint {
@@ -145,11 +238,56 @@ button:disabled {
 }
 
 .examples li {
+  margin: 0;
+}
+
+/* These used to be dashed, unclickable list items that looked like buttons and
+   did nothing when pressed. They are buttons now, and they are styled to say
+   so: solid edge, pointer cursor, and a hover state that moves. */
+.chip {
+  font: inherit;
   font-size: 0.85rem;
-  color: var(--muted);
-  border: 1px dashed var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 0.3rem 0.8rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s var(--ease),
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    transform 0.08s var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+  color: var(--accent);
+}
+
+.chip:active {
+  transform: translateY(1px);
+}
+
+/* --- The character counter ----------------------------------------------- */
+
+.ask-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.counter {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.counter.near-limit {
+  color: var(--attention);
+  font-weight: 600;
 }
 
 /* --- Cards --------------------------------------------------------------- */
@@ -478,4 +616,87 @@ button:disabled {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* --- Waiting on the provider --------------------------------------------- */
+
+.notice.awaiting {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.notice.awaiting p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.notice.awaiting button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* A spinner rather than a static full stop, because the honest message here is
+   "something is still happening", and stillness reads as "something broke". */
+.spinner {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.2rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+/* --- Journey rail: make the current step obvious ------------------------- */
+
+.journey .step.current .dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  animation: pulse 2s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey .step.current .dot {
+    animation: none;
+  }
+}
+
+/* --- Cards: lift them off the page --------------------------------------- */
+
+.card {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s var(--ease);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* The one card offering an action earns the brand colour; the rest stay quiet
+   so there is never a question about what to press next. */
+.card.action {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: var(--shadow-md);
 }

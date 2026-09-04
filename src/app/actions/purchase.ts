@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getPrismaClient } from "@/integrations/persistence/client";
@@ -230,8 +231,13 @@ async function decide(
 
     switch (answered.kind) {
       case "AUTHORIZED":
+        // The transaction's state has genuinely moved, so the page that renders
+        // it is now stale. Without this the buyer sees the old step until they
+        // press F5 - the decision landed, but the journey appeared frozen.
+        revalidatePath(`/transaction/${id.data}`);
         return { kind: "DONE", message: "Approved. You can pay when you are ready." };
       case "REJECTED":
+        revalidatePath(`/transaction/${id.data}`);
         return { kind: "DONE", message: "Rejected. Nothing has been charged." };
       default:
         return {
@@ -282,12 +288,17 @@ export async function reserveStock(
       transactionId: id.data,
       operationId: operation(),
     });
-    return result.kind === "RESERVED"
-      ? { kind: "DONE", message: "The item is held for you." }
-      : {
-          kind: "ERROR",
-          message: "That item could not be held. It may no longer be available.",
-        };
+    if (result.kind === "RESERVED") {
+      // Same reason as the approval decision above: the hold changes the state
+      // the page is rendering, so the page must be re-read rather than left for
+      // the buyer to refresh by hand.
+      revalidatePath(`/transaction/${id.data}`);
+      return { kind: "DONE", message: "The item is held for you." };
+    }
+    return {
+      kind: "ERROR",
+      message: "That item could not be held. It may no longer be available.",
+    };
   } catch (error: unknown) {
     log.error("stock could not be held", {
       transactionId: id.data,

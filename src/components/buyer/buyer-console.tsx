@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitRequest, type RequestOutcome } from "@/app/actions/purchase";
 
@@ -64,10 +64,37 @@ function Outcome({ outcome }: { outcome: RequestOutcome }): React.JSX.Element | 
   );
 }
 
+const MAX_MESSAGE = 1000;
+
 export function BuyerConsole(): React.JSX.Element {
   const [outcome, action] = useActionState<RequestOutcome, FormData>(submitRequest, {
     kind: "IDLE",
   });
+
+  // The textarea is uncontrolled for typing - React does not need to re-render
+  // on every keystroke - but its current length is mirrored here so the counter
+  // and the example buttons have something to work with.
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [length, setLength] = useState(0);
+
+  /**
+   * Fills the box from an example and hands focus back to the person.
+   *
+   * The examples were previously plain list items: they looked like something
+   * to press and did nothing at all, which is the worst of both. Filling the
+   * field rather than submitting it is deliberate - the person still reads the
+   * sentence and presses Ask themselves, so nothing is requested on their
+   * behalf.
+   */
+  const fillWithExample = (example: string): void => {
+    const node = box.current;
+    if (node === null) return;
+    node.value = example;
+    setLength(example.length);
+    node.focus();
+    // Caret to the end, so editing the sentence is the obvious next move.
+    node.setSelectionRange(example.length, example.length);
+  };
 
   return (
     <section className="console" aria-labelledby="ask-heading">
@@ -82,10 +109,14 @@ export function BuyerConsole(): React.JSX.Element {
         <textarea
           id="message"
           name="message"
+          ref={box}
           rows={3}
           required
-          maxLength={1000}
+          maxLength={MAX_MESSAGE}
           placeholder="Find me a mechanical keyboard under ₹3000"
+          onChange={(event) => {
+            setLength(event.currentTarget.value.length);
+          }}
           // Enter submits, so the common case needs no mouse at all; Shift+Enter
           // still adds a line for a longer description.
           onKeyDown={(event) => {
@@ -100,17 +131,37 @@ export function BuyerConsole(): React.JSX.Element {
             The assistant can only suggest a product. It cannot set a price, approve a
             purchase, or spend anything.
           </p>
-          <SubmitButton />
+          <div className="ask-controls">
+            <span
+              className={`counter${length > MAX_MESSAGE - 100 ? " near-limit" : ""}`}
+              aria-hidden="true"
+            >
+              {length}/{MAX_MESSAGE}
+            </span>
+            <SubmitButton />
+          </div>
         </div>
       </form>
 
       <Outcome outcome={outcome} />
 
       <div className="examples">
-        <p className="hint">Try:</p>
-        <ul>
+        <p className="hint" id="examples-label">
+          Try one of these
+        </p>
+        <ul aria-labelledby="examples-label">
           {EXAMPLES.map((example) => (
-            <li key={example}>{example}</li>
+            <li key={example}>
+              <button
+                type="button"
+                className="chip"
+                onClick={() => {
+                  fillWithExample(example);
+                }}
+              >
+                {example}
+              </button>
+            </li>
           ))}
         </ul>
       </div>

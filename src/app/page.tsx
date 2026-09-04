@@ -57,13 +57,14 @@ export default function HomePage() {
   return (
     <main className="wide">
       <header className="page-head">
-        <p className="eyebrow">
-          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
-        </p>
         <h1>Shop by describing what you want</h1>
         <p className="lead">
           An AI assistant that can read a catalog and suggest a product — and a server
           that decides every single thing about the money.
+        </p>
+        <p className="eyebrow">
+          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce ·
+          <strong> Test Mode, no real money moves</strong>
         </p>
       </header>
 

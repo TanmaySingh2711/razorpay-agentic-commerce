@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import type { DecisionOutcome } from "@/app/actions/purchase";
 
@@ -15,6 +16,12 @@ import type { DecisionOutcome } from "@/app/actions/purchase";
  * Nothing is applied optimistically. An approval that appeared to succeed and
  * then had not is worse than a moment of waiting, so the button waits for the
  * server and the page re-reads state afterwards.
+ *
+ * That re-read is real rather than assumed. The server action revalidates the
+ * transaction path, and this component asks the router to re-render once the
+ * action reports success - without both halves the decision landed in the
+ * database while the page kept showing the previous step until someone pressed
+ * F5.
  */
 
 type Action = (previous: DecisionOutcome, formData: FormData) => Promise<DecisionOutcome>;
@@ -52,6 +59,17 @@ export function DecisionForm({
   const [outcome, dispatch] = useActionState<DecisionOutcome, FormData>(action, {
     kind: "IDLE",
   });
+  const router = useRouter();
+
+  // Refresh exactly once per successful decision. `useActionState` keeps the
+  // same outcome object until the next submission, so without the ref this
+  // would re-run on every unrelated re-render.
+  const refreshedFor = useRef<DecisionOutcome | null>(null);
+  useEffect(() => {
+    if (outcome.kind !== "DONE" || refreshedFor.current === outcome) return;
+    refreshedFor.current = outcome;
+    router.refresh();
+  }, [outcome, router]);
 
   return (
     <form action={dispatch} className="decision">
