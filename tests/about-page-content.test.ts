@@ -32,4 +32,28 @@ describe("the /about page describes the system as it actually is", () => {
   it("never claims the browser or the model can move money", () => {
     expect(markup).not.toMatch(/browser can (charge|capture|complete)/i);
   });
+
+  it("is titled Architecture & Safety, the renamed destination of the homepage's CTA", () => {
+    expect(markup).toMatch(/Architecture &amp; Safety/);
+  });
+
+  it("presents the seven safety decisions the demo-polish pass organised the page around", () => {
+    for (const title of [
+      "AI Boundary",
+      "Trusted PurchaseQuote",
+      "Policy &amp; Human Approval",
+      "Inventory Reservation",
+      "Razorpay Verification",
+      "Failure &amp; Retry",
+      "Audit &amp; State Machine",
+    ]) {
+      expect(markup).toContain(title);
+    }
+  });
+
+  it("never lets the AI boundary card claim the model can decide policy or state", () => {
+    expect(markup).toMatch(
+      /cannot control price, authorization, payment, retries, or transaction state/,
+    );
+  });
 });

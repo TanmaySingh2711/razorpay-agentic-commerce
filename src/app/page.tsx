@@ -8,7 +8,8 @@ import { BuyerConsole } from "@/components/buyer/buyer-console";
  * the right thing to ship while there was nothing to use, and the wrong thing
  * to keep once there was: a reviewer arriving at a commerce demo should be able
  * to *buy something* before reading about the architecture. The status page is
- * still here, at /about, and is linked from the footer.
+ * still here, at /about, now titled "Architecture & Safety", and is reached
+ * through a clearly visible secondary link rather than the homepage itself.
  *
  * The page itself is a server component holding no state. The one interactive
  * element is the console, which sends a sentence to a server action and renders
@@ -37,68 +38,113 @@ export const metadata = {
 const STEPS = [
   {
     title: "You ask",
-    body: "Describe what you want in ordinary words, with a budget if you have one.",
+    body: "Describe what you want and your budget.",
   },
   {
-    title: "The assistant proposes",
-    body: "It reads the merchant's catalog and suggests one product. That is the limit of what it can do.",
+    title: "AI proposes",
+    body: "The Buyer Agent reads the merchant catalog and proposes a valid product.",
   },
   {
-    title: "The server decides",
-    body: "It re-reads the real price, freezes it, applies your spending rules and asks you if approval is needed.",
+    title: "Server verifies",
+    body: "The server re-reads trusted price, currency and availability and creates the PurchaseQuote.",
   },
   {
-    title: "You pay",
-    body: "Razorpay Test Mode opens only after every check has passed, and only when you press Pay.",
+    title: "Policy / Approval",
+    body: "Deterministic spending rules authorize the purchase or ask the human for approval.",
+  },
+  {
+    title: "Razorpay payment",
+    body: "Razorpay Test Mode opens only after authorization and an explicit human Pay action.",
   },
 ];
 
+/**
+ * The slim bar every page opens with.
+ *
+ * Not a navigation system - there is nowhere else in this demo to navigate to
+ * from here - just enough identity and status that the page reads as a
+ * product rather than a submission. `TEST MODE · NO REAL MONEY` is the one
+ * fact that must survive no matter how the rest of the copy changes, so it is
+ * a fixed badge rather than prose that could later be edited away.
+ */
+function ProductBar() {
+  return (
+    <header className="product-bar">
+      <div className="product-bar-inner">
+        <span className="brand">Agentic Commerce</span>
+        <span className="badge test-mode">
+          <span className="dot" aria-hidden="true" />
+          Test Mode · No real money
+        </span>
+      </div>
+    </header>
+  );
+}
+
 export default function HomePage() {
   return (
-    <main className="wide">
-      <header className="page-head">
-        <h1>Shop by describing what you want</h1>
-        <p className="lead">
-          An AI assistant that can read a catalog and suggest a product — and a server
-          that decides every single thing about the money.
+    <>
+      <ProductBar />
+      <main className="wide">
+        <header className="page-head">
+          <h1>Shop by describing what you want</h1>
+          <p className="lead">
+            An AI assistant that can read a catalog and suggest a product — and a server
+            that decides every single thing about the money.
+          </p>
+        </header>
+
+        {/* The whole trust model in one line, seen before the input is even
+            reached. No AI actor appears between "verifies" and "executes" -
+            that gap is the entire point of the architecture. */}
+        <p className="flow-strip" aria-label="How authority moves through this system">
+          <span>AI proposes</span>
+          <span aria-hidden="true">→</span>
+          <span>Server verifies &amp; authorizes</span>
+          <span aria-hidden="true">→</span>
+          <span>Razorpay executes</span>
         </p>
-        <p className="eyebrow">
-          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce ·
-          <strong> Test Mode, no real money moves</strong>
+
+        <BuyerConsole />
+
+        <section className="how" aria-labelledby="how-heading">
+          <h2 id="how-heading">How it works</h2>
+          <ol className="steps">
+            {STEPS.map((step, index) => (
+              <li key={step.title}>
+                <span className="step-number" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="rule">
+          <strong>No AI output can directly cause a payment.</strong>
+          The assistant proposes a product and nothing else. It cannot set the
+          authoritative price, approve a purchase, retry a payment, advance transaction
+          state, or declare a payment successful.
+        </div>
+
+        <p className="proof-strip">
+          Explainable · Bounded · Human-gated · Auditable · Failure-safe
         </p>
-      </header>
 
-      <BuyerConsole />
-
-      <section className="how" aria-labelledby="how-heading">
-        <h2 id="how-heading">How it works</h2>
-        <ol className="steps">
-          {STEPS.map((step, index) => (
-            <li key={step.title}>
-              <span className="step-number" aria-hidden="true">
-                {index + 1}
-              </span>
-              <div>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <div className="rule">
-        <strong>No AI output can directly cause a payment.</strong>
-        The assistant proposes a product and nothing else. It cannot set a price, approve
-        a purchase, retry a payment, or move a transaction forward.
-      </div>
-
-      <footer className="site-footer">
-        <p>
-          <Link href="/about">How this is built, and where it stops</Link>
+        <p className="cta-row">
+          <Link href="/about" className="secondary">
+            View Architecture &amp; Safety
+          </Link>
         </p>
-        <p className="tagline">Razorpay Test Mode — no real money moves.</p>
-      </footer>
-    </main>
+
+        <footer className="site-footer">
+          <p className="tagline">Razorpay Test Mode — no real money moves.</p>
+        </footer>
+      </main>
+    </>
   );
 }

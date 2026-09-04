@@ -1,12 +1,15 @@
 import Link from "next/link";
 
 /**
- * What this system is, and where it deliberately stops.
+ * Architecture & Safety — what this system is, and where it deliberately stops.
  *
- * This was the landing page until Objective 16. It is still worth keeping, and
- * it is still honest about scope - but it is no longer the first thing a person
- * sees, because a reviewer arriving at a commerce demo should be able to use it
- * before reading about it.
+ * This was the landing page until Objective 16, and then a long wall of prose
+ * once the demo moved to `/`. Neither shape suited a reviewer well: the first
+ * asked someone to read before they could try anything, and the second asked
+ * them to read a great deal once they got here. This is the same claims,
+ * organised as the seven decisions that actually keep money safe, each stated
+ * in a sentence or two - the detail behind every one of them lives in `docs/`
+ * rather than being duplicated here.
  *
  * Deliberately static. It reads no database, holds no identifiers, and exposes
  * no configuration - there is nothing here for a visitor to learn about the
@@ -18,10 +21,14 @@ export default function AboutPage() {
       <p className="breadcrumb">
         <Link href="/">← Back to the demo</Link>
       </p>
-      <h1>Razorpay Agentic Commerce</h1>
-      <p className="tagline">
-        Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
-      </p>
+
+      <header className="page-head">
+        <h1>Architecture &amp; Safety</h1>
+        <p className="lead">Razorpay Agentic Commerce</p>
+        <p className="eyebrow">
+          Razorpay AI Buildathon 2026 · Track 01 — AI Growth &amp; Agentic Commerce
+        </p>
+      </header>
 
       <p>
         A merchant that an AI buyer agent can transact with end to end, where every
@@ -34,105 +41,91 @@ export default function AboutPage() {
         infrastructure executes.
       </div>
 
-      <h2>What is built</h2>
-      <ul>
-        <li>
-          <strong>Agent-readable merchant catalog</strong> — structured product facts an
-          agent can reason over, served from the merchant&apos;s own source of truth
-        </li>
-        <li>
-          <strong>Gemini-powered buyer agent</strong> — interprets what a shopper wants
-          and proposes a product; it may propose and nothing more
-        </li>
-        <li>
-          <strong>Trusted PurchaseQuote</strong> — the server re-reads price, currency and
-          stock and freezes them, so the amount is never taken from a model or a browser
-        </li>
-        <li>
-          <strong>Deterministic policy engine</strong> — a pure, versioned rule set that
-          answers allowed, approval required, or blocked, and denies by default
-        </li>
-        <li>
-          <strong>Human approval gate</strong> — a single-use, timing-safe token bound to
-          one exact transaction, quote, amount and currency
-        </li>
-        <li>
-          <strong>Inventory reservation</strong> — stock is held atomically before money
-          moves, so two buyers cannot be sold the same last unit
-        </li>
-        <li>
-          <strong>Structured explainability and audit</strong> — an append-only trail
-          where every decision records the values it turned on, in plain sentences
-        </li>
-        <li>
-          <strong>Razorpay Test Mode order creation</strong> — server-side only, with the
-          amount read from the persisted quote and duplicate orders prevented by the
-          database
-        </li>
-        <li>
-          <strong>Standard Checkout</strong> — opened only by an explicit human action;
-          card details are collected by Razorpay and never touch this application
-        </li>
-        <li>
-          <strong>Server-side signature verification</strong> — the payment confirmation
-          is checked with a timing-safe HMAC against the order id this server stored,
-          never the one the browser sent back
-        </li>
-        <li>
-          <strong>Verified provider webhooks</strong> — capture is confirmed by Razorpay,
-          not by the browser: the raw body is authenticated with a timing-safe HMAC before
-          it is even parsed, and the delivery id is claimed in the same database
-          transaction as its effects, so a redelivery changes nothing and a failure can
-          still be retried
-        </li>
-        <li>
-          <strong>Payment reconciliation</strong> — the amount the provider reports is
-          checked against the persisted quote before anything moves, and events are
-          handled in any order: a capture that arrives before the browser returns is
-          reconciled, and a late failure can never undo one
-        </li>
-        <li>
-          <strong>Bounded, human-triggered payment retry</strong> — a failed payment can
-          be retried at most three times in total, counted from payment attempts stored in
-          the database rather than from anything a browser sends. Each retry re-reads the
-          price, re-runs the spending policy and re-checks the stock hold before it may
-          touch the provider, and creates a new payment attempt rather than editing the
-          failed one. Nothing automatic starts a retry — not a webhook, not a page reload,
-          and not the agent
-        </li>
-        <li>
-          <strong>Requote on retry</strong> — if a retry finds its quote has expired but
-          the stock hold is still active, the server quotes today&apos;s price, supersedes
-          the old quote, and reruns policy before rebinding the same hold — never a second
-          reservation, and never the old price charged behind anyone&apos;s back
-        </li>
-        <li>
-          <strong>Full transaction lifecycle through COMPLETED</strong> — every state
-          change goes through one state machine, with an immutable history of how the
-          transaction got there
-        </li>
-      </ul>
+      <h2>What keeps this safe</h2>
+      <div className="safety-grid">
+        <section className="card" aria-labelledby="ai-boundary-heading">
+          <h3 id="ai-boundary-heading">AI Boundary</h3>
+          <p>
+            Gemini can understand the request and propose a catalog product, but it cannot
+            control price, authorization, payment, retries, or transaction state.
+          </p>
+        </section>
 
-      <h2>Where trust changes hands, deliberately</h2>
-      <p>
-        A verified signature proves a payment confirmation is genuine and belongs to this
-        order. It is <strong>not</strong> proof that funds were captured — only the
-        provider can assert that, and only through a webhook this server authenticates
-        itself. So <code>PAYMENT_VERIFIED</code> and <code>PAYMENT_CAPTURED</code> stay
-        separate states, reached by different evidence, and a captured webhook can arrive
-        before the browser ever returns.
-      </p>
-      <p>
-        Capture is still not the end. Only once that provider evidence is in does the
-        reservation commit — exactly once, however many times the same webhook is
-        redelivered — and the transaction move to <code>COMPLETED</code>. This has run end
-        to end against Razorpay Test Mode, including a genuine bank decline, a retry, and
-        a duplicate webhook redelivery that changed nothing.
+        <section className="card" aria-labelledby="quote-heading">
+          <h3 id="quote-heading">Trusted PurchaseQuote</h3>
+          <p>
+            The server re-reads trusted price, currency and stock from PostgreSQL and
+            freezes those financial facts in a short-lived <code>PurchaseQuote</code> —
+            the only amount that can ever be charged.
+          </p>
+        </section>
+
+        <section className="card" aria-labelledby="policy-heading">
+          <h3 id="policy-heading">Policy &amp; Human Approval</h3>
+          <p>
+            A deterministic rule set returns <code>ALLOWED</code>,{" "}
+            <code>APPROVAL_REQUIRED</code> or <code>BLOCKED</code>. Higher-value purchases
+            need an exact, one-time human approval before anything can move.
+          </p>
+        </section>
+
+        <section className="card" aria-labelledby="inventory-heading">
+          <h3 id="inventory-heading">Inventory Reservation</h3>
+          <p>
+            Stock is held atomically before payment, so two competing buyers cannot be
+            sold the same last unit. A capture commits that hold exactly once.
+          </p>
+        </section>
+
+        <section className="card" aria-labelledby="verification-heading">
+          <h3 id="verification-heading">Razorpay Verification</h3>
+          <p>
+            Orders are created server-side from the trusted quote. The browser&apos;s
+            callback signature and Razorpay&apos;s own captured-webhook confirmation are
+            checked separately, and only the second one is proof that money moved.
+          </p>
+        </section>
+
+        <section className="card" aria-labelledby="retry-heading">
+          <h3 id="retry-heading">Failure &amp; Retry</h3>
+          <p>
+            A failed payment can be retried a bounded number of times, only by a person.
+            If the quote expires while the stock hold survives, the server re-quotes
+            today&apos;s price, reruns policy, and reuses the same reservation — never a
+            second one.
+          </p>
+        </section>
+
+        <section className="card" aria-labelledby="audit-heading">
+          <h3 id="audit-heading">Audit &amp; State Machine</h3>
+          <p>
+            Every financial decision and state transition is recorded in a structured,
+            append-only audit trail, and a single authoritative state machine — never the
+            browser, never the model — decides what happens next.
+          </p>
+        </section>
+      </div>
+
+      <h2>Two facts that are never treated as one</h2>
+      <div className="card">
+        <p>
+          <code>PAYMENT_VERIFIED</code> means this browser&apos;s payment confirmation
+          carried an authentic signature. <code>PAYMENT_CAPTURED</code> means Razorpay
+          itself confirmed the money, through a webhook this server independently
+          authenticates. The first can be forged by nothing more than a genuine browser
+          callback; only the second is proof that funds moved, and only the second
+          triggers the inventory commit and the move to <code>COMPLETED</code>.
+        </p>
+      </div>
+
+      <p className="hint">
+        This has run end to end against Razorpay Test Mode, including a genuine bank
+        decline, a retry, and a duplicate webhook redelivery that changed nothing.
       </p>
 
       <footer>
-        Razorpay Test Mode — no real money moves. Architecture documentation lives in{" "}
-        <code>docs/</code>. Liveness endpoint: <code>/api/health</code>.
+        Razorpay Test Mode — no real money moves. Full implementation detail lives in{" "}
+        <code>docs/</code> rather than here. Liveness endpoint: <code>/api/health</code>.
       </footer>
     </main>
   );

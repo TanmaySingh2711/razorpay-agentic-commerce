@@ -19,7 +19,7 @@ import { submitRequest, type RequestOutcome } from "@/app/actions/purchase";
  */
 
 const EXAMPLES = [
-  "Find me a mechanical keyboard under ₹3000",
+  "Find me the best mechanical keyboard under ₹3000 and buy it",
   "I need a wireless keyboard for the office, budget ₹5000",
   "Show me a compact keyboard with linear switches",
 ];
@@ -113,7 +113,7 @@ export function BuyerConsole(): React.JSX.Element {
           rows={3}
           required
           maxLength={MAX_MESSAGE}
-          placeholder="Find me a mechanical keyboard under ₹3000"
+          placeholder="Find me the best mechanical keyboard under ₹3000 and buy it"
           onChange={(event) => {
             setLength(event.currentTarget.value.length);
           }}
@@ -132,13 +132,13 @@ export function BuyerConsole(): React.JSX.Element {
             purchase, or spend anything.
           </p>
           <div className="ask-controls">
+            <SubmitButton />
             <span
               className={`counter${length > MAX_MESSAGE - 100 ? " near-limit" : ""}`}
               aria-hidden="true"
             >
               {length}/{MAX_MESSAGE}
             </span>
-            <SubmitButton />
           </div>
         </div>
       </form>
