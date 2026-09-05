@@ -134,7 +134,7 @@ function paymentDeps(
   provider: PaymentProvider,
   prisma: PrismaClient = testDb(),
 ): PaymentOrderServiceDeps {
-  return { prisma, clock, provider };
+  return { prisma, clock, provider, providerKeyId: "rzp_test_paymentorderfixture" };
 }
 
 async function seedPolicy(version = 1): Promise<string> {

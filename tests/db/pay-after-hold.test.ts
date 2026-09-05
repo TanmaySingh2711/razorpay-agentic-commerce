@@ -78,7 +78,12 @@ let policyDeps: PolicyServiceDeps;
 let reservationDeps: ReservationServiceDeps;
 
 function paymentDeps(): PaymentOrderServiceDeps {
-  return { prisma: testDb(), clock, provider: fakePaymentProvider({}) };
+  return {
+    prisma: testDb(),
+    clock,
+    provider: fakePaymentProvider({}),
+    providerKeyId: "rzp_test_payafterhold",
+  };
 }
 
 function checkoutDeps(): CheckoutServiceDeps {

@@ -1,5 +1,6 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { getPrismaClient } from "@/integrations/persistence/client";
+import { getRazorpayCredentials } from "@/config/env";
 import { systemClock, type Clock } from "@/lib/clock";
 import { createLogger } from "@/lib/logger";
 import { readActiveQuote } from "@/services/quote/quote-reader";
@@ -126,6 +127,19 @@ export interface PaymentOrderServiceDeps {
   readonly prisma: PrismaClient;
   readonly clock: Clock;
   readonly provider: PaymentProvider;
+  /**
+   * The provider's public key id, for the browser to open Checkout with.
+   *
+   * Carried here rather than read by whoever renders the response, for the
+   * same reason `CheckoutServiceDeps` carries its own `providerKeyId`: a
+   * caller supplying a fake `provider` for a test must not have that test
+   * reach past the fake anyway, straight into real environment
+   * configuration, for this one field. It did exactly that until a CI run
+   * with no Razorpay credentials configured - correctly, since CI must
+   * reach no real provider - turned "the fake handles everything" into a
+   * 500 on `ConfigurationError: RAZORPAY_KEY_ID (missing)`.
+   */
+  readonly providerKeyId: string;
 }
 
 export function defaultPaymentOrderDeps(): PaymentOrderServiceDeps {
@@ -135,6 +149,8 @@ export function defaultPaymentOrderDeps(): PaymentOrderServiceDeps {
     // Constructed lazily, so a repository with no Razorpay credentials still
     // imports this module, builds, and runs every deterministic test.
     provider: createRazorpayProvider(),
+    // Read lazily, and only the public half is ever pulled out of the section.
+    providerKeyId: getRazorpayCredentials().RAZORPAY_KEY_ID,
   };
 }
 

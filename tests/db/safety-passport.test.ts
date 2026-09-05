@@ -260,7 +260,7 @@ async function arrangeReady(): Promise<Arranged> {
 
   const order = await createPaymentOrder(
     { transactionId },
-    { prisma: testDb(), clock, provider },
+    { prisma: testDb(), clock, provider, providerKeyId: KEY_ID },
   );
   if (order.kind !== "ORDER_CREATED") throw new Error("expected an order");
 

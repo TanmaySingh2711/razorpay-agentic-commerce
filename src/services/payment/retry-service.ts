@@ -949,8 +949,25 @@ async function releaseHeldStock(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Never rendered: `handleRetryPayment` reports `{}` as its meta regardless of
+ * `result.kind` (see `@/app/api/payments/handler.ts`), so nothing downstream
+ * of a retry-created order ever reads `PaymentOrderServiceDeps.providerKeyId`.
+ * A real value would be harmless here, but it would also mean this internal
+ * call depends on live Razorpay configuration for a field it structurally
+ * cannot use - exactly the coupling `providerKeyId` was added to deps to
+ * avoid. Named rather than blank, so it reads as deliberate if it is ever
+ * seen.
+ */
+const NOT_RENDERED_PROVIDER_KEY_ID = "unused:retry-path-never-renders-checkout-meta";
+
 function orderDeps(deps: RetryServiceDeps): PaymentOrderServiceDeps {
-  return { prisma: deps.prisma, clock: deps.clock, provider: deps.provider };
+  return {
+    prisma: deps.prisma,
+    clock: deps.clock,
+    provider: deps.provider,
+    providerKeyId: NOT_RENDERED_PROVIDER_KEY_ID,
+  };
 }
 
 /** The two counters every retry record carries, both read from the database. */

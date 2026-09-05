@@ -7,6 +7,7 @@ import { evaluateQuotePolicy } from "../src/services/policy/policy-service";
 import { reserveInventory } from "../src/services/inventory/reservation-service";
 import { createPaymentOrder } from "../src/services/payment/payment-order-service";
 import { createRazorpayProvider } from "../src/integrations/payments/razorpay-provider";
+import { getRazorpayCredentials } from "../src/config/env";
 import { systemClock } from "../src/lib/clock";
 
 loadEnv({ path: ".env.local", quiet: true });
@@ -146,7 +147,14 @@ async function main(): Promise<void> {
     // The one real Test Mode order this script creates.
     const order = await createPaymentOrder(
       { transactionId: transaction.id },
-      { prisma, clock: systemClock, provider: createRazorpayProvider() },
+      {
+        prisma,
+        clock: systemClock,
+        provider: createRazorpayProvider(),
+        // This script's whole purpose is one real Test Mode order, so unlike
+        // the automated suite it is meant to read real configuration here.
+        providerKeyId: getRazorpayCredentials().RAZORPAY_KEY_ID,
+      },
     );
     if (order.kind !== "ORDER_CREATED") {
       throw new Error(`No payment order was created: ${order.kind}`);

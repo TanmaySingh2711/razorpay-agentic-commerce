@@ -237,7 +237,7 @@ async function arrangeCaptured(): Promise<Settled> {
 
   const order = await createPaymentOrder(
     { transactionId: transaction.id },
-    { prisma: testDb(), clock, provider },
+    { prisma: testDb(), clock, provider, providerKeyId: KEY_ID },
   );
   if (order.kind !== "ORDER_CREATED") throw new Error("expected an order");
 
@@ -334,7 +334,7 @@ describe.skipIf(!databaseConfigured)("a settled transaction", () => {
 
       const second = await createPaymentOrder(
         { transactionId: settled.transactionId },
-        { prisma: testDb(), clock, provider },
+        { prisma: testDb(), clock, provider, providerKeyId: KEY_ID },
       );
 
       // Not a replay of the existing order either: a completed transaction is

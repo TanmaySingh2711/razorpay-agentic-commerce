@@ -177,7 +177,7 @@ async function arrange(): Promise<Arranged> {
 
   const order = await createPaymentOrder(
     { transactionId: transaction.id },
-    { prisma: testDb(), clock, provider },
+    { prisma: testDb(), clock, provider, providerKeyId: KEY_ID },
   );
   expect(order.kind).toBe("ORDER_CREATED");
   if (order.kind !== "ORDER_CREATED") throw new Error("expected an order");

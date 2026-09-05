@@ -3,7 +3,6 @@ import { jsonData, respond } from "@/lib/api-response";
 import { ValidationError } from "@/domain/errors";
 import { checkRequestOrigin } from "@/lib/http/same-origin";
 import { getRuntimeConfig } from "@/config/env";
-import { getRazorpayCredentials } from "@/config/env";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import {
   createPaymentOrder,
@@ -91,7 +90,7 @@ export function handleCreatePaymentOrder(
 
     return jsonData(
       result as unknown as JsonValue,
-      checkoutMeta(result),
+      checkoutMeta(result, deps),
       STATUS_BY_KIND[result.kind],
     );
   });
@@ -105,13 +104,26 @@ export function handleCreatePaymentOrder(
  * still withheld unless there is an order to pay for, so an endpoint probe
  * cannot be used to read configuration out of the server.
  *
+ * Read from `deps` rather than from `@/config/env` directly, and that
+ * distinction matters: `deps.providerKeyId` is resolved once, in
+ * `defaultPaymentOrderDeps`, exactly like every other field a test can
+ * substitute. Reading real configuration here instead would reach straight
+ * past an injected fake provider, so a test built entirely on a fake still
+ * depended on real Razorpay credentials being present in the environment -
+ * true by accident on a machine with `.env.local` configured, false on a CI
+ * runner with none, where it surfaced as a 500 this endpoint had no reason to
+ * return.
+ *
  * The Checkout flow itself belongs to the next objective. This is the one field
  * it will need, placed here so that objective adds a page rather than reworking
  * this contract.
  */
-function checkoutMeta(result: PaymentOrderResult): JsonObject {
+function checkoutMeta(
+  result: PaymentOrderResult,
+  deps: PaymentOrderServiceDeps,
+): JsonObject {
   if (result.kind !== "ORDER_CREATED") return {};
-  return { razorpayKeyId: getRazorpayCredentials().RAZORPAY_KEY_ID };
+  return { razorpayKeyId: deps.providerKeyId };
 }
 
 // ---------------------------------------------------------------------------
