@@ -350,6 +350,70 @@ describe("the two payment facts are never collapsed into one", () => {
 
     expect(checkOf(passport, "INVENTORY_COMMITTED").status).toBe("PENDING");
   });
+
+  /**
+   * The browser callback and the provider's webhook race, and the webhook can
+   * win - or the browser can never report at all, because the tab was closed on
+   * the provider's own page. The purchase still completes, because settlement
+   * was never the browser's to prove.
+   *
+   * This used to render as "Razorpay callback verification - PENDING, no
+   * confirmation yet" beside a captured, committed, completed transaction: a
+   * permanent warning about a step that was not outstanding and never would be.
+   */
+  it("stops calling the browser callback pending once the provider has confirmed capture", () => {
+    const passport = buildSafetyPassport(
+      facts({
+        ...completedFacts(),
+        // The whole point: no browser callback ever arrived.
+        evidence: evidence({ ...completedFacts().evidence, paymentVerified: 0 }),
+      }),
+    );
+
+    const callback = checkOf(passport, "CALLBACK_VERIFIED");
+    expect(callback.status).toBe("NOT_REQUIRED");
+    expect(callback.status).not.toBe("PENDING");
+    // Neutral, not a warning: nothing here needs anybody to do anything.
+    expect(callback.tone).toBe("NEUTRAL");
+    expect(callback.tone).not.toBe("WARNING");
+
+    // And the distinction it exists to keep is intact - a missing callback is
+    // reported as not needed, never as verified.
+    expect(callback.status).not.toBe("VERIFIED");
+    expect(checkOf(passport, "PROVIDER_CAPTURE").status).toBe("CAPTURED");
+  });
+
+  it("still reports a genuinely outstanding callback as pending", () => {
+    // No capture anywhere: the confirmation really has not arrived yet, and
+    // saying so is correct. The fix above must not silence this case.
+    const passport = buildSafetyPassport(
+      facts({
+        state: "PAYMENT_PENDING",
+        policyDecision: "ALLOWED",
+        reservationStatuses: ["ACTIVE"],
+        attempts: [
+          {
+            attemptNumber: 1,
+            status: "PENDING",
+            amount: inr("289900"),
+            failureCategory: null,
+          },
+        ],
+        evidence: evidence({}),
+      }),
+    );
+
+    expect(checkOf(passport, "CALLBACK_VERIFIED").status).toBe("PENDING");
+  });
+
+  it("keeps reporting a verified callback as verified when capture follows it", () => {
+    // Both facts present: the callback was genuinely checked, so it is not
+    // downgraded to "not needed" just because settlement later confirmed.
+    const passport = buildSafetyPassport(facts(completedFacts()));
+
+    expect(checkOf(passport, "CALLBACK_VERIFIED").status).toBe("VERIFIED");
+    expect(checkOf(passport, "PROVIDER_CAPTURE").status).toBe("CAPTURED");
+  });
 });
 
 describe("no positive claim outruns its evidence", () => {

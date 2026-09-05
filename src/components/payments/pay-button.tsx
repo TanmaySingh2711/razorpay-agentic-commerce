@@ -312,38 +312,126 @@ export function PayButton({
         ? "Retry payment"
         : "Pay";
 
+  const status = describe(phase, mode);
+
   return (
     <div>
-      <button type="button" onClick={onPay} disabled={busy}>
+      {/* The same shared `.primary` control the Find button uses, rather than a
+          second set of payment-specific rules. This button carried no class at
+          all, so it rendered as the browser's default - small, square and
+          visually weaker than every other action in the app, on the one step
+          that matters most. `aria-busy` drives the same pulse Find shows while
+          a request is in flight. */}
+      <button
+        type="button"
+        onClick={onPay}
+        disabled={busy}
+        aria-busy={busy}
+        className="primary"
+      >
         {busy ? "Please wait…" : label}
       </button>
-      <p role="status">{describe(phase, mode)}</p>
+      {status.kind === "HINT" ? (
+        <p className="hint" role="status">
+          {status.detail}
+        </p>
+      ) : (
+        <div className={`notice ${status.tone}`} role="status" aria-live="polite">
+          <strong>{status.title}</strong>
+          <p>{status.detail}</p>
+          {status.reference === undefined ? null : (
+            <p className="notice-reference">Reference {status.reference}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function describe(phase: Phase, mode: PayMode): string {
+/**
+ * What the person is told, as structure rather than a sentence.
+ *
+ * The wording is unchanged in meaning; only its shape is. It used to be one
+ * bare `<p>` under the button, which read as debug output at the exact moment
+ * somebody had just parted with money. A title carries the state, the sentence
+ * explains it, and the provider's payment id - the one genuinely technical
+ * string here - moves to its own quiet line instead of sitting in parentheses
+ * mid-sentence.
+ */
+type StatusView =
+  | { readonly kind: "HINT"; readonly detail: string }
+  | {
+      readonly kind: "NOTICE";
+      readonly tone: "positive" | "neutral" | "negative";
+      readonly title: string;
+      readonly detail: string;
+      readonly reference?: string;
+    };
+
+function describe(phase: Phase, mode: PayMode): StatusView {
   switch (phase.kind) {
     case "IDLE":
-      return mode === "RETRY"
-        ? "Press Retry payment to try again. You have not been charged for the attempt that failed."
-        : "Press Pay to open the secure payment window.";
+      // Before anything has happened there is no status to report, only an
+      // instruction - a bordered box around "press the button" would be noise.
+      return {
+        kind: "HINT",
+        detail:
+          mode === "RETRY"
+            ? "Press Retry payment to try again. You have not been charged for the attempt that failed."
+            : "Press Pay to open the secure payment window.",
+      };
     case "REQUESTING_RETRY":
-      return "Checking whether this purchase can be paid again…";
+      return {
+        kind: "NOTICE",
+        tone: "neutral",
+        title: "Checking this purchase",
+        detail: "Seeing whether this purchase can be paid again…",
+      };
     case "PREPARING":
-      return "Preparing your payment…";
+      return {
+        kind: "NOTICE",
+        tone: "neutral",
+        title: "Preparing your payment",
+        detail: "Setting up a secure payment with Razorpay…",
+      };
     case "AWAITING_PAYMENT":
-      return "Complete the payment in the window that opened.";
+      return {
+        kind: "NOTICE",
+        tone: "neutral",
+        title: "Payment window open",
+        detail: "Complete the payment in the window that opened.",
+      };
     case "VERIFYING":
-      return "Checking that the confirmation is genuine…";
+      return {
+        kind: "NOTICE",
+        tone: "neutral",
+        title: "Checking the confirmation",
+        detail: "Making sure the confirmation is genuine…",
+      };
     case "VERIFIED":
-      // Careful wording. A verified signature is not a settled payment, and
-      // telling someone their order is confirmed here would be a promise this
-      // objective cannot keep.
-      return `Payment confirmation verified (${phase.paymentId}). We are now waiting for your bank to confirm settlement.`;
+      // Careful wording, and unchanged in meaning. A verified signature is not
+      // a settled payment, and telling someone their order is confirmed here
+      // would be a promise this step cannot keep.
+      return {
+        kind: "NOTICE",
+        tone: "positive",
+        title: "Payment confirmation verified",
+        detail: "We are now waiting for your bank to confirm settlement.",
+        reference: phase.paymentId,
+      };
     case "DISMISSED":
-      return "You closed the payment window. Nothing was charged, and your item is still held for a short while.";
+      return {
+        kind: "NOTICE",
+        tone: "neutral",
+        title: "Payment window closed",
+        detail: "Nothing was charged, and your item is still held for a short while.",
+      };
     case "PROBLEM":
-      return phase.message;
+      return {
+        kind: "NOTICE",
+        tone: "negative",
+        title: "This needs your attention",
+        detail: phase.message,
+      };
   }
 }

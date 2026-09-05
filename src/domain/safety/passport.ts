@@ -628,6 +628,31 @@ function callbackCheck(facts: SafetyPassportFacts): PassportCheck {
       "A checkout callback failed its signature or relationship checks and was not acted on.",
     );
   }
+  // The browser's confirmation is an optimisation, not the source of truth, and
+  // once the provider has confirmed settlement out of band it is no longer
+  // outstanding - it is simply not part of how this purchase concluded.
+  //
+  // Saying "PENDING - no confirmation yet" here was wrong in a specific and
+  // alarming way: the two messages race, and a webhook that arrives before the
+  // browser returns (or a browser that never returns at all, because the tab was
+  // closed on the provider's page) settles the purchase without one. The panel
+  // then showed a permanent warning beside a captured, committed, completed
+  // transaction, implying something was still unresolved when nothing was.
+  //
+  // This is deliberately NOT a claim that the callback was verified. The
+  // signature was never checked because no callback arrived, and reporting this
+  // as VERIFIED would merge browser evidence with provider evidence - the one
+  // distinction this row exists to preserve. `NOT_REQUIRED` states the true
+  // fact: the step did not happen, and did not need to.
+  if (hasCapture(facts)) {
+    return check(
+      "CALLBACK_VERIFIED",
+      label,
+      "NOT_REQUIRED",
+      "Not needed",
+      "Razorpay confirmed this payment directly, so the browser's confirmation was never needed. Settlement is proven by the provider's own event, below.",
+    );
+  }
   if (facts.attempts.length > 0 && !HALTED.has(facts.state)) {
     return check("CALLBACK_VERIFIED", label, "PENDING", "No confirmation yet");
   }

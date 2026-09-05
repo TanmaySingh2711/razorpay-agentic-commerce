@@ -414,8 +414,24 @@ button[aria-busy="true"]::after {
   border-color: var(--negative);
 }
 
+/* The counterpart to `.notice.negative`, on the same semantic tokens. Used for
+   a step that genuinely succeeded - a verified payment confirmation - so it
+   does not have to borrow the neutral box and lose the distinction. */
+.notice.positive {
+  background: var(--positive-bg);
+  border-color: var(--positive);
+}
+
 .notice p {
   margin: 0.25rem 0 0;
+}
+
+/* The provider's payment id. Technical, worth keeping, and not worth putting
+   mid-sentence: quiet, small, and tabular so the digits line up. */
+.notice-reference {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .field-error {
