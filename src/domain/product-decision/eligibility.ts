@@ -195,6 +195,56 @@ export function eligibleCandidates(
 }
 
 /**
+ * The refusals that mean "this product is fine, there just is not any of it".
+ *
+ * Kept apart from the rest because only these justify offering a different
+ * product. Every other refusal says the shopper would not have wanted this one
+ * anyway - it costs too much, it is the wrong category, it fails a stated
+ * requirement - and quietly reaching for a substitute in those cases would be
+ * answering a question nobody asked.
+ */
+const AVAILABILITY_REFUSALS: readonly IneligibilityReason[] = [
+  "NOT_PURCHASABLE",
+  "INSUFFICIENT_INVENTORY",
+];
+
+/**
+ * Whether stock, and *only* stock, is what stood in this product's way.
+ *
+ * Deliberately requires every reason to be an availability reason rather than
+ * merely one of them. A product that is both out of stock and over budget must
+ * not be substituted: offering an alternative would imply the shopper could
+ * have had this one, which is untrue, and would hide the refusal that actually
+ * matters to them.
+ */
+export function refusedOnlyForAvailability(
+  reasons: readonly IneligibilityReason[],
+): boolean {
+  return reasons.length > 0 && reasons.every((r) => AVAILABILITY_REFUSALS.includes(r));
+}
+
+/**
+ * The server's own next-best choice, excluding one product.
+ *
+ * "Next best" is the first eligible candidate in the order the catalog already
+ * returned - the caller searches `amount_asc`, so this is the cheapest product
+ * that satisfies the shopper's entire authority. Deterministic by construction:
+ * the same catalog and the same authority always yield the same substitute, and
+ * nothing a model said is an input.
+ */
+export function nextBestAlternative(
+  products: readonly CatalogProductDto[],
+  authority: PurchaseAuthority,
+  excludeProductId: string,
+): CatalogProductDto | null {
+  return (
+    eligibleCandidates(products, authority).find(
+      (product) => product.id !== excludeProductId,
+    ) ?? null
+  );
+}
+
+/**
  * Hard requirements the server cannot check for itself.
  *
  * A requirement is machine-checkable when it names the product's category or an

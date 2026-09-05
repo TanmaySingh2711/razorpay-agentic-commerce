@@ -8,6 +8,7 @@ import { getPrismaClient } from "@/integrations/persistence/client";
 import { createLogger } from "@/lib/logger";
 import { decideApproval, requestApproval } from "@/services/approval/approval-service";
 import { reserveInventory } from "@/services/inventory/reservation-service";
+import { describeReservationRefusal } from "@/domain/inventory/contracts";
 import { evaluateQuotePolicy } from "@/services/policy/policy-service";
 import { decidePurchase } from "@/services/product-decision/product-decision-service";
 import { runBuyerAgent } from "@/services/buyer-agent/buyer-agent-service";
@@ -90,11 +91,21 @@ export async function submitRequest(
           summary:
             "That reads as browsing rather than buying. Say what you would like to buy and I will price it.",
         };
-      case "NO_VALID_CANDIDATE":
+      case "NO_VALID_CANDIDATE": {
+        // Being out of stock and being the wrong product are different
+        // disappointments, and only one of them is worth coming back for. The
+        // reasons come from the deterministic candidate check, so this is
+        // reporting what the server found rather than guessing.
+        const soldOut = result.reasons.some(
+          (reason) => reason === "NOT_PURCHASABLE" || reason === "INSUFFICIENT_INVENTORY",
+        );
         return {
           kind: "NO_MATCH",
-          summary: "Nothing in this catalog matches what you asked for.",
+          summary: soldOut
+            ? "Nothing matching your request is in stock right now, so nothing was opened. Please try again later, or describe something a little different."
+            : "Nothing in this catalog matches what you asked for.",
         };
+      }
       case "AI_SELECTION_REJECTED":
         // The assistant proposed something the server would not stand behind.
         // Worth saying plainly: it is the safety property working, not a fault.
@@ -295,10 +306,16 @@ export async function reserveStock(
       revalidatePath(`/transaction/${id.data}`);
       return { kind: "DONE", message: "The item is held for you." };
     }
-    return {
-      kind: "ERROR",
-      message: "That item could not be held. It may no longer be available.",
-    };
+
+    // A refusal is not a dead end, and the four reasons are not the same
+    // problem. The stock case in particular is ordinary - somebody else
+    // finished checking out first - and the buyer needs to be told what to do
+    // next rather than left reading "could not be held". No substitution is
+    // attempted *here*: this transaction's quote, policy decision and any
+    // approval are all bound to one product and one amount, and quietly
+    // swapping the product underneath them would invalidate every one of those
+    // bindings. The honest move is a fresh purchase, which re-runs all of it.
+    return { kind: "ERROR", message: describeReservationRefusal(result.refusal) };
   } catch (error: unknown) {
     log.error("stock could not be held", {
       transactionId: id.data,

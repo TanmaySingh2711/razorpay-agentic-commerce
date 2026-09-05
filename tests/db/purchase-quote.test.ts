@@ -259,12 +259,82 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
       expect(await testDb().purchaseQuote.count()).toBe(0);
     });
 
-    it("rejects an out-of-stock product", async () => {
+    it("rejects an out-of-stock product, then quotes an in-stock alternative", async () => {
+      // The proposal is still refused - that guard is the trust model and is
+      // asserted below through the audit trail. What changed is what happens
+      // *after* the refusal: rather than leaving the shopper at a dead end, the
+      // server picks a replacement from its own eligible set. The replacement
+      // is the cheapest product that satisfies the whole authority, which in
+      // this fixture is `cheapId` at ₹1499 rather than the ₹2799 one.
       const result = await decidePurchase(
         decision({ selectedProductId: fixture.outOfStockId }),
         deps,
       );
+
+      expect(result.kind).toBe("QUOTE_CREATED");
+      if (result.kind !== "QUOTE_CREATED") return;
+      expect(result.quote.productId).toBe(fixture.cheapId);
+      expect(result.quote.productId).not.toBe(fixture.outOfStockId);
+
+      // The substitute is a real, in-stock, in-budget product - not a relaxation.
+      const substitute = await testDb().product.findUniqueOrThrow({
+        where: { id: result.quote.productId },
+      });
+      expect(substitute.status).toBe("AVAILABLE");
+      expect(substitute.inventory).toBeGreaterThan(0);
+      expect(Number(substitute.unitAmount)).toBeLessThanOrEqual(300_000);
+
+      // The trail tells the whole story: the proposal was blocked, and the
+      // product that replaced it names the one it replaced.
+      const events = await testDb().auditEvent.findMany({
+        where: { transactionId: result.transactionId },
+        orderBy: { createdAt: "asc" },
+      });
+      const rejected = events.find((e) => e.eventType === "product_selection_rejected");
+      expect(rejected?.result).toBe("BLOCKED");
+      expect((rejected?.metadata as { productId?: string }).productId).toBe(
+        fixture.outOfStockId,
+      );
+
+      const selected = events.find((e) => e.eventType === "product_selected");
+      expect(selected?.reasonCode).toBe("PRODUCT_SUBSTITUTED_UNAVAILABLE");
+      expect(
+        (selected?.metadata as { substitutedForProductId?: string })
+          .substitutedForProductId,
+      ).toBe(fixture.outOfStockId);
+    });
+
+    it("does not substitute when the proposal failed for any reason but stock", async () => {
+      // Over budget *and* available elsewhere: an alternative exists, but
+      // offering it would answer a question the shopper never asked.
+      const result = await decidePurchase(
+        decision({ selectedProductId: fixture.overBudgetId }),
+        deps,
+      );
       expect(result.kind).toBe("AI_SELECTION_REJECTED");
+      expect(await testDb().purchaseQuote.count()).toBe(0);
+    });
+
+    it("stops cleanly when the item is out of stock and nothing else qualifies", async () => {
+      // Every other product is put out of stock too, so there is genuinely no
+      // in-stock alternative to offer. The engine settles this before it ever
+      // reaches the substitution step - an empty eligible set is "nothing
+      // matches", which is a more precise answer than "your product was
+      // refused" and is what the shopper is told.
+      await testDb().product.updateMany({
+        where: { merchantId: fixture.merchantId },
+        data: { inventory: 0, status: "OUT_OF_STOCK" },
+      });
+
+      const result = await decidePurchase(
+        decision({ selectedProductId: fixture.outOfStockId }),
+        deps,
+      );
+
+      expect(result.kind).toBe("NO_VALID_CANDIDATE");
+      if (result.kind !== "NO_VALID_CANDIDATE") return;
+      expect(result.reasons).toContain("NOT_PURCHASABLE");
+      // Nothing was quoted, so nothing became payable.
       expect(await testDb().purchaseQuote.count()).toBe(0);
     });
 

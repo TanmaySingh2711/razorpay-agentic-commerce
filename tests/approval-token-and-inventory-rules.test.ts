@@ -1,4 +1,8 @@
 import { readFileSync } from "node:fs";
+import {
+  describeReservationRefusal,
+  RESERVATION_REFUSALS,
+} from "@/domain/inventory/contracts";
 import { describe, expect, it } from "vitest";
 import {
   approvalTokenMatches,
@@ -131,5 +135,46 @@ describe("the reservation expiry boundary", () => {
     );
     expect(isReservationExpired(expiresAt, expiresAt)).toBe(true);
     expect(isReservationExpired(expiresAt, new Date(expiresAt.getTime() + 1))).toBe(true);
+  });
+});
+
+describe("what a refused hold tells the person who pressed the button", () => {
+  /**
+   * A refusal that only says "could not be held" reads, on a payment screen, as
+   * "something happened to my money". Every sentence here therefore answers
+   * both questions - what happened, and whether anything was charged - and the
+   * two recoverable cases point at the next step rather than stopping.
+   */
+  it("describes every refusal in the vocabulary, with no gaps", () => {
+    for (const refusal of RESERVATION_REFUSALS) {
+      const sentence = describeReservationRefusal(refusal);
+      expect(sentence.length).toBeGreaterThan(0);
+      expect(sentence).toMatch(/[.!]$/);
+      // No refusal may imply a charge occurred.
+      expect(sentence).not.toMatch(/charged you|payment failed/i);
+    }
+  });
+
+  it("says plainly that nothing was charged", () => {
+    for (const refusal of RESERVATION_REFUSALS) {
+      expect(describeReservationRefusal(refusal)).toMatch(/nothing has been charged/i);
+    }
+  });
+
+  it("offers a next step for the two refusals a new purchase can fix", () => {
+    // Sold out and a lapsed price are both recoverable by starting again.
+    expect(describeReservationRefusal("INSUFFICIENT_STOCK")).toMatch(
+      /start a new purchase/i,
+    );
+    expect(describeReservationRefusal("QUOTE_NOT_USABLE")).toMatch(
+      /start a new purchase/i,
+    );
+  });
+
+  it("names sold-out stock as the ordinary thing it is, not a failure", () => {
+    const sentence = describeReservationRefusal("INSUFFICIENT_STOCK");
+    expect(sentence).toMatch(/sold out/i);
+    // It must not blame the shopper or imply a defect.
+    expect(sentence).not.toMatch(/error|invalid|failed/i);
   });
 });

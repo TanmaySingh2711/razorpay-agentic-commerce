@@ -91,6 +91,13 @@ const selectionPayload = z.strictObject({
   quantity: z.int().positive(),
   reasons: z.array(shortCode).max(20).optional(),
   candidatesConsidered: z.int().nonnegative().optional(),
+  /**
+   * Set when the server chose this product itself, because the proposed one was
+   * out of stock. Names the product it replaced, so the substitution is a
+   * queryable fact rather than something a reader has to infer from two
+   * adjacent events.
+   */
+  substitutedForProductId: identifier.optional(),
 });
 
 /** The authoritative product facts, re-read from PostgreSQL. */

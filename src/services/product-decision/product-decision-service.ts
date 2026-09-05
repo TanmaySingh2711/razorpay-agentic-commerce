@@ -13,6 +13,8 @@ import {
   assessCandidate,
   eligibleCandidates,
   ineligibilityReasons,
+  nextBestAlternative,
+  refusedOnlyForAvailability,
   unverifiableRequirements,
   type PurchaseAuthority,
 } from "@/domain/product-decision/eligibility";
@@ -315,9 +317,24 @@ export async function decidePurchase(
   }
 
   // --- 5. The proposed id must belong to the server's set. ---
-  const selected = eligible.find((p) => p.id === decision.selectedProductId);
-  if (selected === undefined) {
+  //
+  // When it does not, the proposal is rejected and audited no matter what -
+  // that guard is the trust model and nothing below softens it. What follows
+  // the rejection is the only thing that changed: if the *sole* thing wrong
+  // with the proposal was that the item is out of stock, the server may pick a
+  // replacement from its own eligible set rather than leaving the shopper at a
+  // dead end. The replacement is the server's choice, from the server's
+  // catalog, checked by the same arithmetic as everything else; the model gets
+  // no second say in it.
+  const proposedSelection = eligible.find((p) => p.id === decision.selectedProductId);
+  let selected = proposedSelection;
+  let substitutedFor: string | null = null;
+
+  if (proposedSelection === undefined) {
     const proposed = candidates.find((p) => p.id === decision.selectedProductId);
+    const reasons =
+      proposed === undefined ? [] : ineligibilityReasons(proposed, authority);
+
     log.warn("rejected an ineligible ai selection", {
       correlationId,
       selectedProductId: decision.selectedProductId,
@@ -334,17 +351,41 @@ export async function decidePurchase(
         productId: decision.selectedProductId,
         quantity: authority.quantity,
         candidatesConsidered: candidates.length,
-        reasons: proposed === undefined ? [] : ineligibilityReasons(proposed, authority),
+        reasons,
       },
       correlationId,
       operationKey: `selection-rejected:${correlationId}`,
     });
+
+    const alternative = refusedOnlyForAvailability(reasons)
+      ? nextBestAlternative(candidates, authority, decision.selectedProductId)
+      : null;
+
+    if (alternative === null) {
+      return {
+        kind: "AI_SELECTION_REJECTED",
+        correlationId,
+        transactionId,
+        selectedProductId: decision.selectedProductId,
+        reasons,
+      };
+    }
+
+    log.info("substituted an in-stock alternative for an unavailable proposal", {
+      correlationId,
+      substitutedForProductId: decision.selectedProductId,
+    });
+    selected = alternative;
+    substitutedFor = decision.selectedProductId;
+  }
+
+  if (selected === undefined) {
     return {
       kind: "AI_SELECTION_REJECTED",
       correlationId,
       transactionId,
       selectedProductId: decision.selectedProductId,
-      reasons: proposed === undefined ? [] : ineligibilityReasons(proposed, authority),
+      reasons: [],
     };
   }
 
@@ -367,12 +408,14 @@ export async function decidePurchase(
       action: "product_selected",
       actor: "product_decision_engine",
       result: "SUCCESS",
-      reasonCode: "PRODUCT_SELECTED",
+      reasonCode:
+        substitutedFor === null ? "PRODUCT_SELECTED" : "PRODUCT_SUBSTITUTED_UNAVAILABLE",
       trustedInputs: {
         productId: selected.id,
         quantity: authority.quantity,
         candidatesConsidered: candidates.length,
         reasons: [...selectionReasons],
+        ...(substitutedFor === null ? {} : { substitutedForProductId: substitutedFor }),
       },
       correlationId,
       operationKey: `product-selected:${correlationId}`,

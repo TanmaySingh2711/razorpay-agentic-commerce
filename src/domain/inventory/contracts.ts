@@ -15,6 +15,32 @@ export const RESERVATION_REFUSALS = [
 
 export type ReservationRefusal = (typeof RESERVATION_REFUSALS)[number];
 
+/**
+ * What a refused hold means to the person who pressed the button.
+ *
+ * Derived from the code rather than stored, the same way payment failures and
+ * audit sentences are, so the wording cannot drift from the vocabulary it
+ * describes. Every sentence says two things: what happened, and that nothing
+ * was charged - because "could not be held" on a payment screen reads as
+ * "something went wrong with my money" unless it is answered directly.
+ *
+ * `INSUFFICIENT_STOCK` is the ordinary one. It is not an error in this system;
+ * it is somebody else finishing checkout first, and it deserves a next step
+ * rather than an apology.
+ */
+export function describeReservationRefusal(refusal: ReservationRefusal): string {
+  switch (refusal) {
+    case "INSUFFICIENT_STOCK":
+      return "This item sold out while you were deciding, so it could not be held. Nothing has been charged. Start a new purchase and the assistant will look for another in-stock option.";
+    case "QUOTE_NOT_USABLE":
+      return "The price for this item is no longer valid, so it could not be held. Nothing has been charged. Start a new purchase to get a fresh price.";
+    case "NO_ACTIVE_QUOTE":
+      return "There is no live price for this purchase any more, so nothing could be held. Nothing has been charged. Start a new purchase to try again.";
+    case "NOT_AUTHORIZED":
+      return "This purchase is not authorized yet, so no stock can be held for it. Nothing has been charged.";
+  }
+}
+
 /** Why a reservation could not be committed into a permanent sale. */
 export const COMMIT_REFUSALS = [
   /** No such reservation. */

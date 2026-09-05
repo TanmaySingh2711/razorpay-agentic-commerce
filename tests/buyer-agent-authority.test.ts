@@ -28,6 +28,10 @@ import {
   MIN_QUANTITY,
   structuredPurchaseIntentSchema,
 } from "@/domain/buyer-agent/intent";
+import {
+  nextBestAlternative,
+  refusedOnlyForAvailability,
+} from "@/domain/product-decision/eligibility";
 import { productDto } from "./support/fake-ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 
@@ -856,5 +860,98 @@ describe("regressions from the live provider", () => {
     ]) {
       expect(messageStatesACeiling(message), message).toBe(false);
     }
+  });
+});
+
+describe("substituting an in-stock alternative for an unavailable proposal", () => {
+  /**
+   * The rule this section protects: an out-of-stock product is the *only*
+   * refusal that earns the shopper a different product. Every other refusal
+   * means they would not have wanted this one, and quietly swapping it would be
+   * answering a question nobody asked.
+   */
+  const authority: LockedUserAuthority = {
+    quantity: 1,
+    maxAmountMinor: 300_000n,
+    currency: "INR",
+    budgetScope: "PER_UNIT",
+    hardRequirements: [],
+    category: null,
+  };
+
+  it("treats a purely out-of-stock refusal as substitutable", () => {
+    expect(refusedOnlyForAvailability(["NOT_PURCHASABLE"])).toBe(true);
+    expect(refusedOnlyForAvailability(["INSUFFICIENT_INVENTORY"])).toBe(true);
+  });
+
+  it("refuses to substitute when anything other than stock was also wrong", () => {
+    // Both out of stock and over budget. Offering an alternative here would
+    // imply the shopper could have had this one, which is untrue.
+    expect(refusedOnlyForAvailability(["NOT_PURCHASABLE", "OVER_BUDGET"])).toBe(false);
+    expect(refusedOnlyForAvailability(["OVER_BUDGET"])).toBe(false);
+    expect(refusedOnlyForAvailability(["UNMET_HARD_REQUIREMENT"])).toBe(false);
+    expect(refusedOnlyForAvailability(["WRONG_CATEGORY"])).toBe(false);
+    // An empty reason list is not a refusal at all, so it is not substitutable.
+    expect(refusedOnlyForAvailability([])).toBe(false);
+  });
+
+  it("picks the cheapest eligible product that is not the rejected one", () => {
+    const soldOut = productDto({
+      id: "p-soldout",
+      availability: { status: "OUT_OF_STOCK", quantity: 0, purchasable: false },
+    });
+    const cheaper = productDto({
+      id: "p-cheap",
+      amount: { amountMinor: "199900", currency: "INR" },
+    });
+    const dearer = productDto({
+      id: "p-dear",
+      amount: { amountMinor: "289900", currency: "INR" },
+    });
+
+    // The catalog is searched amount_asc, so "first eligible" is "cheapest".
+    const chosen = nextBestAlternative(
+      [soldOut, cheaper, dearer],
+      authority,
+      "p-soldout",
+    );
+    expect(chosen?.id).toBe("p-cheap");
+  });
+
+  it("never returns the rejected product itself, even if it would qualify", () => {
+    const inStock = productDto({ id: "p-1" });
+    expect(nextBestAlternative([inStock], authority, "p-1")).toBeNull();
+  });
+
+  it("returns null when every remaining candidate fails the shopper's authority", () => {
+    const soldOut = productDto({
+      id: "p-soldout",
+      availability: { status: "OUT_OF_STOCK", quantity: 0, purchasable: false },
+    });
+    const tooDear = productDto({
+      id: "p-dear",
+      amount: { amountMinor: "999900", currency: "INR" },
+    });
+    const alsoSoldOut = productDto({
+      id: "p-soldout-2",
+      availability: { status: "OUT_OF_STOCK", quantity: 0, purchasable: false },
+    });
+
+    expect(
+      nextBestAlternative([soldOut, tooDear, alsoSoldOut], authority, "p-soldout"),
+    ).toBeNull();
+  });
+
+  it("will not substitute a product that breaks a stated hard requirement", () => {
+    const strict: LockedUserAuthority = {
+      ...authority,
+      hardRequirements: [{ attribute: "layout", operator: "EQUALS", value: "tkl-87" }],
+    };
+    const wrongLayout = productDto({
+      id: "p-wrong",
+      attributes: { switchType: "linear-red", layout: "full-104" },
+    });
+
+    expect(nextBestAlternative([wrongLayout], strict, "p-soldout")).toBeNull();
   });
 });

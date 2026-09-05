@@ -264,6 +264,8 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
           transactionId={overview.transactionId}
           label="Hold it for me"
           busyLabel="Holding…"
+          recoveryHref="/"
+          recoveryLabel="Start a new purchase"
         />
       </section>
     );
@@ -380,7 +382,9 @@ export default async function TransactionPage({
   return (
     <main className="wide">
       <p className="breadcrumb">
-        <Link href="/">← Start another purchase</Link>
+        <Link href="/" className="secondary">
+          ← Start another purchase
+        </Link>
       </p>
 
       <header className="page-head">

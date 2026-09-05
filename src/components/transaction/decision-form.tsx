@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
@@ -49,12 +50,24 @@ export function DecisionForm({
   label,
   busyLabel,
   variant = "primary",
+  recoveryHref,
+  recoveryLabel,
 }: {
   readonly action: Action;
   readonly transactionId: string;
   readonly label: string;
   readonly busyLabel: string;
   readonly variant?: "primary" | "secondary";
+  /**
+   * Where a person goes when this decision cannot be made at all.
+   *
+   * Some refusals are permanent for *this* transaction - the item sold out, the
+   * price lapsed - and a sentence explaining that, with nothing to press, is a
+   * dead end. When a recovery route is supplied it is offered as a real control
+   * beside the explanation, and only once the server has actually refused.
+   */
+  readonly recoveryHref?: string;
+  readonly recoveryLabel?: string;
 }): React.JSX.Element {
   const [outcome, dispatch] = useActionState<DecisionOutcome, FormData>(action, {
     kind: "IDLE",
@@ -85,6 +98,15 @@ export function DecisionForm({
           {outcome.message}
         </p>
       )}
+      {outcome.kind === "ERROR" &&
+      recoveryHref !== undefined &&
+      recoveryLabel !== undefined ? (
+        <p className="recovery-row">
+          <Link href={recoveryHref} className="secondary">
+            {recoveryLabel}
+          </Link>
+        </p>
+      ) : null}
     </form>
   );
 }

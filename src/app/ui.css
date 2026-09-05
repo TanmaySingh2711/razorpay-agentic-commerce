@@ -1125,3 +1125,14 @@ button[aria-busy="true"]::after {
 .passport-properties .unevidenced .property-label {
   color: var(--muted);
 }
+
+/* --- Recovery from a refused decision ------------------------------------
+   A refusal that only explains itself is a dead end. When the server refuses
+   a hold permanently - the item sold out, the price lapsed - the explanation
+   is followed by a real control, styled as the same secondary action used
+   everywhere else, so the next step is something to press rather than
+   something to work out. */
+
+.recovery-row {
+  margin: 0.75rem 0 0;
+}
