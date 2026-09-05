@@ -47,7 +47,8 @@ import type { PaymentAttempt, PrismaClient } from "@/generated/prisma/client";
  * this service stops at `PAYMENT_VERIFIED`: it never reaches `PAYMENT_CAPTURED`
  * or `COMPLETED`, and it never commits inventory. Only the provider, speaking
  * for itself through a channel we authenticate separately, can say money was
- * captured - and that belongs to a later objective.
+ * captured - and that is the webhook's job, in
+ * `@/services/payment/webhook-service`.
  */
 assertServerOnly("src/services/payment/checkout-service.ts");
 

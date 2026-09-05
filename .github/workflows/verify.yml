@@ -1,0 +1,170 @@
+# Continuous verification.
+#
+# This runs the same commands a developer runs locally, on a machine that has
+# never seen this repository before. That is the point: `npm run verify` passing
+# on a laptop proves it passes with that laptop's `.env.local`, its warm Prisma
+# client and its already-running database. Here there is none of that, so a
+# change that quietly depends on local state fails here instead of on a
+# reviewer's first clone.
+#
+# WHAT THIS JOB IS NOT ALLOWED TO REACH. No Neon, no Gemini, no Razorpay, no
+# Vercel. The database below is a disposable container that exists for the
+# length of one job, and `tests/support/no-network.ts` fails any test that
+# attempts a non-loopback request, so the isolation is enforced by the suite
+# itself rather than by this file's good intentions. No secret is referenced
+# here, and none is needed: every credential below belongs to that throwaway
+# container and authorises nothing outside it.
+
+name: Verify
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # Pinned to match docker-compose.yml, so a constraint, enum or unique
+        # index behaves here exactly as it does locally.
+        image: postgres:17
+        env:
+          POSTGRES_USER: razorpay
+          POSTGRES_PASSWORD: razorpay_local_test
+          POSTGRES_DB: razorpay_agentic_test
+        ports:
+          - 5432:5432
+        # GitHub holds the job until this reports healthy, so the first step
+        # can connect without a sleep or a retry loop.
+        options: >-
+          --health-cmd "pg_isready -U razorpay -d razorpay_agentic_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      # The suite reads this and only this. DATABASE_URL and DIRECT_URL are
+      # deliberately left unset: `tests/db/test-database-url.ts` refuses to fall
+      # back to an application database, and there is none here to fall back to.
+      # The host is localhost, which the database-target guard's allow-list
+      # already accepts - no guard is relaxed to make CI work.
+      TEST_DIRECT_URL: postgresql://razorpay:razorpay_local_test@localhost:5432/razorpay_agentic_test?sslmode=disable
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Reads `24` from .nvmrc, so the runtime is defined in one place and
+          # cannot drift from package.json's `engines` field.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        # `npm ci` installs exactly what package-lock.json pins and fails if the
+        # lockfile and package.json disagree. Its postinstall runs
+        # `prisma generate`, which needs no database.
+        run: npm ci
+
+      - name: Prepare the disposable test schema
+        # The project's own script: it builds the `agentic_test` schema by
+        # applying the real migrations, then stamps the marker row that the
+        # suite's guard requires before it will truncate anything.
+        run: npm run db:test:setup
+
+      - name: Verify
+        # typecheck + lint + test + production build, unchanged from local use.
+        run: npm run verify
+
+      - name: Check formatting
+        # Separate from verify on purpose, exactly as it is locally.
+        run: npm run format:check
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Audit production dependencies for high and critical advisories
+        # Kept in its own job so the advisory registry cannot make correct
+        # application code look broken: `verify` above is the authoritative
+        # answer about this repository, and this is an answer about the wider
+        # npm ecosystem, which changes without anyone touching this code.
+        #
+        # The retry exists only for the registry being unreachable. A real
+        # finding is never retried away - the verdict is read out of the JSON
+        # report, so "audit succeeded and found something" and "audit could not
+        # run" stay distinguishable rather than collapsing into one exit code.
+        run: |
+          set -uo pipefail
+
+          # Reads the report with Node rather than jq: Node is already set up by
+          # the step above, so the verdict does not depend on which utilities a
+          # runner image happens to ship. Exits 0 for a clean report, 1 for a
+          # real finding, and 2 for "there is no report here", which is the only
+          # case the loop retries.
+          read_report() {
+            node -e '
+              const fs = require("node:fs");
+              let report;
+              try {
+                report = JSON.parse(fs.readFileSync("audit.json", "utf8"));
+              } catch {
+                process.exit(2);
+              }
+              const found = report?.metadata?.vulnerabilities;
+              if (found === undefined) process.exit(2);
+              const high = Number(found.high ?? 0);
+              const critical = Number(found.critical ?? 0);
+              if (high > 0 || critical > 0) {
+                console.log(`::error::npm audit found ${critical} critical and ${high} high advisories.`);
+                process.exit(1);
+              }
+              console.log("No high or critical advisories in production dependencies.");
+            '
+          }
+
+          for attempt in 1 2 3; do
+            npm audit --omit=dev --audit-level=high --json > audit.json 2> audit.err
+
+            read_report
+            verdict=$?
+            if [ "$verdict" -eq 0 ]; then exit 0; fi
+            if [ "$verdict" -eq 1 ]; then
+              npm audit --omit=dev --audit-level=high || true
+              exit 1
+            fi
+
+            echo "Attempt $attempt: the npm advisory registry did not return a report."
+            cat audit.err || true
+            sleep $((attempt * 10))
+          done
+
+          # Three attempts, no report. That is an outage, not a finding, and
+          # saying so is more honest than either failing or claiming a pass.
+          echo "::warning::npm audit could not reach the advisory registry after 3 attempts; dependencies were not audited in this run."
+          exit 0

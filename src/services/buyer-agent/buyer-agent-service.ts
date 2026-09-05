@@ -95,7 +95,7 @@ export const MAX_TOOL_ITERATIONS = 4;
 export const MAX_PROVIDER_ATTEMPTS = 3;
 
 /** Base backoff between provider attempts, in milliseconds. */
-export const RETRY_BASE_DELAY_MS = 250;
+const RETRY_BASE_DELAY_MS = 250;
 
 /**
  * The whole request's wall-clock budget, shared across every provider call -

@@ -1,3 +1,4 @@
+import { existsSync, writeFileSync } from "node:fs";
 import { config as loadEnv } from "dotenv";
 import { Client } from "pg";
 import {
@@ -44,6 +45,52 @@ loadEnv({ path: ".env.development.local", quiet: true });
 
 const DEV_DATABASE = "razorpay_agentic_dev";
 
+const DEV_ENV_FILE = ".env.development.local";
+
+/**
+ * The development database inside the container `npm run db:test:up` starts.
+ *
+ * These credentials are the ones already committed in `docker-compose.yml`, and
+ * they are safe there for the same reason: they belong to a throwaway container
+ * listening on loopback, and they authorise nothing else. Writing them out here
+ * is what lets a clone follow the README without inventing a connection string.
+ */
+const LOCAL_DEV_URL = `postgresql://razorpay:razorpay_local_test@localhost:5432/${DEV_DATABASE}`;
+
+/**
+ * Makes the documented five-step setup actually work on a fresh clone.
+ *
+ * `.env.development.local` is git-ignored, so it does not exist after `git
+ * clone`, and this script used to stop there with "DIRECT_URL is not set" -
+ * step 4 of a README whose step 5 then had nothing to run against. The file is
+ * the mechanism that makes `npm run dev` local by default (Next.js loads it
+ * ahead of `.env.local`), so creating it is precisely what "prepare the local
+ * development database" means.
+ *
+ * Only ever created, never modified: an existing file is somebody's deliberate
+ * configuration and is left exactly as it is.
+ */
+function ensureDevEnvFile(): string | undefined {
+  if (existsSync(DEV_ENV_FILE)) return undefined;
+  writeFileSync(
+    DEV_ENV_FILE,
+    [
+      "# Local development database, written by `npm run db:dev:setup`.",
+      "#",
+      "# Next.js loads this file ahead of .env.local for `next dev`, which is what",
+      "# keeps development pointed at the local Docker PostgreSQL while .env.local",
+      "# keeps the hosted credentials for the `:staging` commands. Git-ignored.",
+      `DIRECT_URL="${LOCAL_DEV_URL}"`,
+      `DATABASE_URL="${LOCAL_DEV_URL}"`,
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  process.env["DIRECT_URL"] = LOCAL_DEV_URL;
+  process.env["DATABASE_URL"] = LOCAL_DEV_URL;
+  return DEV_ENV_FILE;
+}
+
 /** The same server, but the maintenance database, so `CREATE DATABASE` can run. */
 function maintenanceUrl(rawUrl: string): string {
   const url = new URL(rawUrl);
@@ -71,10 +118,17 @@ async function ensureDatabaseExists(rawUrl: string): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  const wroteEnvFile = ensureDevEnvFile();
+  if (wroteEnvFile !== undefined) {
+    console.log(
+      `Wrote ${wroteEnvFile}, pointing development at the local Docker database.`,
+    );
+  }
+
   const directUrl = process.env["DIRECT_URL"];
   if (directUrl === undefined || directUrl.length === 0) {
     throw new Error(
-      "DIRECT_URL is not set in .env.development.local. See .env.example for the " +
+      `DIRECT_URL is not set in ${DEV_ENV_FILE}. See .env.example for the ` +
         "local development block.",
     );
   }

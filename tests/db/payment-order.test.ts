@@ -704,7 +704,8 @@ describe.skipIf(!databaseConfigured)("payment order creation", () => {
       expect(transition.fromStatus).toBe("INVENTORY_RESERVED");
       expect(transition.actor).toBe("payment_provider");
       expect(transition.reasonCode).toBe("PAYMENT_ORDER_CREATED");
-      // Not PAYMENT_PENDING: handing checkout to the buyer is a later objective.
+      // Not PAYMENT_PENDING: creating the order does not hand checkout to the
+      // buyer. That is the checkout service's transition, not this one's.
       expect(transition.toStatus).not.toBe("PAYMENT_PENDING");
     });
 

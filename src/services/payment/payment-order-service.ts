@@ -976,8 +976,8 @@ async function recordDefiniteFailure(
 /**
  * Parks an attempt whose provider outcome is unresolved.
  *
- * `RECONCILIATION_REQUIRED` is a status rather than an absence so that the
- * reconciliation work of a later objective is a single indexed query. Any
+ * `RECONCILIATION_REQUIRED` is a status rather than an absence so that finding
+ * everything still awaiting the provider's word is a single indexed query. Any
  * provider order id we did learn is stored even here - especially here - since
  * an order whose id was lost is far harder to reconcile than one whose local
  * bookkeeping simply did not finish.

@@ -5,7 +5,6 @@ import { sanitizeAuditPayload } from "@/domain/audit/record";
 import type { AuditActor, AuditRecord, AuditResult } from "@/domain/audit/record";
 import type { AuditEventType } from "@/domain/audit-event";
 import type { TransactionCapableClient } from "@/services/transaction/transition-service";
-import type { TransactionState } from "@/domain/transaction/states";
 import type { JsonObject } from "@/lib/json";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -302,18 +301,6 @@ function compareTimelineEntries(
   // UUIDv7: lexicographic order is creation order.
   if (left.eventId === right.eventId) return 0;
   return left.eventId < right.eventId ? -1 : 1;
-}
-
-/** The lifecycle state this transaction is authoritatively in, per Objective 3. */
-export async function getAuthoritativeState(
-  transactionId: string,
-  deps: AuditServiceDeps = defaultDeps(),
-): Promise<TransactionState | null> {
-  const transaction = await deps.prisma.transaction.findUnique({
-    where: { id: transactionId },
-    select: { status: true },
-  });
-  return transaction?.status ?? null;
 }
 
 function asJsonObject(value: unknown): JsonObject {

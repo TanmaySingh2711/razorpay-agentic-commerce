@@ -18,7 +18,7 @@
 
   /* Surfaces and text */
   --background: #ffffff;
-  --surface: #ffffff;
+  --surface: #f7f8fa;
   --surface-raised: #f7f9fc;
   --foreground: #0f1729;
   --muted: #5b6472;
@@ -28,19 +28,19 @@
   --accent-contrast: #ffffff;
   --accent-quiet: var(--rzp-blue-tint);
 
-  /* Semantic states */
-  --positive: #0f7b4f;
-  --positive-quiet: #e6f6ee;
-  --attention: #9a6200;
-  --attention-quiet: #fff4e0;
-  --negative: #c02626;
-  --negative-quiet: #fdecec;
+  /* Semantic states. Each is a foreground/background pair so a status never
+     has to pick its own tint at the call site. */
+  --positive: #0f7b45;
+  --positive-bg: #e8f6ee;
+  --warning: #8a5a00;
+  --warning-bg: #fdf3e2;
+  --negative: #b3261e;
+  --negative-bg: #fdecea;
 
   /* Elevation and motion */
   --shadow-sm: 0 1px 2px rgb(2 4 43 / 6%);
   --shadow-md: 0 4px 16px rgb(2 4 43 / 8%);
-  --shadow-lg: 0 12px 32px rgb(2 4 43 / 12%);
-  --radius: 10px;
+  --radius: 12px;
   --radius-lg: 14px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -48,7 +48,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: var(--rzp-navy);
-    --surface: #0a0d33;
+    --surface: #14171c;
     --surface-raised: #11153f;
     --foreground: #e9ecf5;
     --muted: #9aa4bf;
@@ -58,16 +58,15 @@
     --accent-contrast: #04122b;
     --accent-quiet: #10224a;
 
-    --positive: #4ade9f;
-    --positive-quiet: #0d2b20;
-    --attention: #f0b45e;
-    --attention-quiet: #2e2410;
-    --negative: #ff8a8a;
-    --negative-quiet: #331717;
+    --positive: #59d08c;
+    --positive-bg: #10241a;
+    --warning: #e0ac52;
+    --warning-bg: #2a2113;
+    --negative: #f0837c;
+    --negative-bg: #2a1614;
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
     --shadow-md: 0 4px 16px rgb(0 0 0 / 45%);
-    --shadow-lg: 0 12px 32px rgb(0 0 0 / 55%);
   }
 }
 

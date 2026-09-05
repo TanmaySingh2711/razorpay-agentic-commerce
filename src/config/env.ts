@@ -351,16 +351,7 @@ const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
   database: databaseEnvSchema,
 };
 
-/** Reports whether a later-objective section is configured, without throwing. */
+/** Reports whether an optional section is configured, without throwing. */
 export function isSectionConfigured(section: OptionalConfigSection): boolean {
   return OPTIONAL_SECTION_SCHEMAS[section].safeParse(currentEnv()).success;
-}
-
-export function isProduction(): boolean {
-  return getRuntimeConfig().NODE_ENV === "production";
-}
-
-/** Test-only: drops the memoised runtime config. */
-export function resetConfigCache(): void {
-  runtimeConfigCache = undefined;
 }

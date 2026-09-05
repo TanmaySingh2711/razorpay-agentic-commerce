@@ -28,11 +28,6 @@ export interface Money {
 
 export const currencyCodeSchema = z.enum(SUPPORTED_CURRENCIES);
 
-export const moneySchema = z.object({
-  minorUnits: z.int(),
-  currency: currencyCodeSchema,
-});
-
 /** Constructs money, rejecting anything that is not a safe integer. */
 export function money(minorUnits: number, currency: CurrencyCode): Money {
   if (!Number.isSafeInteger(minorUnits)) {
@@ -43,10 +38,6 @@ export function money(minorUnits: number, currency: CurrencyCode): Money {
     });
   }
   return { minorUnits, currency };
-}
-
-export function zeroMoney(currency: CurrencyCode): Money {
-  return { minorUnits: 0, currency };
 }
 
 function assertSameCurrency(left: Money, right: Money, operation: string): void {
@@ -62,11 +53,6 @@ function assertSameCurrency(left: Money, right: Money, operation: string): void 
 export function addMoney(left: Money, right: Money): Money {
   assertSameCurrency(left, right, "add");
   return money(left.minorUnits + right.minorUnits, left.currency);
-}
-
-export function subtractMoney(left: Money, right: Money): Money {
-  assertSameCurrency(left, right, "subtract");
-  return money(left.minorUnits - right.minorUnits, left.currency);
 }
 
 /** Multiplies a unit price by an integer quantity. Quantities are never fractional. */
@@ -90,10 +76,6 @@ export function compareMoney(left: Money, right: Money): -1 | 0 | 1 {
 
 export function isMoneyWithinBudget(amount: Money, budget: Money): boolean {
   return compareMoney(amount, budget) <= 0;
-}
-
-export function isNonNegativeMoney(amount: Money): boolean {
-  return amount.minorUnits >= 0;
 }
 
 /**

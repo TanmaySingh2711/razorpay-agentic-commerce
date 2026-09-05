@@ -144,8 +144,8 @@ The runner is split so each half gets the scheduling it needs:
 
 | Project | Files         | Parallel | Why                                                    |
 | ------- | ------------- | -------- | ------------------------------------------------------ |
-| `unit`  | `tests/*`     | yes      | No shared state. 780 tests, seconds.                   |
-| `db`    | `tests/db/**` | **no**   | 427 tests sharing one schema, truncated between tests. |
+| `unit`  | `tests/*`     | yes      | No shared state. 811 tests, seconds.                   |
+| `db`    | `tests/db/**` | **no**   | 429 tests sharing one schema, truncated between tests. |
 
 Per-worker schemas would let the database files run concurrently too, but that
 means provisioning and migrating N schemas per run and teaching the disposable-
@@ -205,8 +205,39 @@ First-time setup:
 1. `npm run db:test:up` - start the container.
 2. Copy the `TEST_DIRECT_URL` line from `.env.example` into `.env.local`, then
    `npm run db:test:setup` for the disposable test schema.
-3. Create `.env.development.local` with the local `DATABASE_URL`/`DIRECT_URL`
-   from `.env.example`, then `npm run db:dev:setup` for the development
-   database. `npm run dev` picks it up automatically - see
-   [09](./09-configuration.md) for the precedence rules and which command
-   reaches which database.
+3. `npm run db:dev:setup` for the development database. It writes
+   `.env.development.local` pointing at the local Docker database if that file
+   does not exist yet, and leaves it untouched if it does, so a fresh clone
+   needs no hand-written connection string. `npm run dev` picks it up
+   automatically - see [09](./09-configuration.md) for the precedence rules and
+   which command reaches which database.
+
+## Continuous integration
+
+`.github/workflows/verify.yml` runs the same two commands on every push and pull
+request, on a machine that has never seen this repository:
+
+```
+npm ci  ->  npm run db:test:setup  ->  npm run verify  ->  npm run format:check
+```
+
+That is deliberately not a CI-specific pipeline. A green local run proves the
+suite passes with one developer's `.env.local`, their already-migrated database
+and their warm Prisma client; the same commands on a cold runner prove it passes
+without any of that.
+
+**What CI is not allowed to reach.** No Neon, no Gemini, no Razorpay, no Vercel,
+and no secret of any kind - the workflow references none, because it needs none.
+The database is a `postgres:17` service container pinned to the same major
+version as `docker-compose.yml`, alive for the length of one job. `TEST_DIRECT_URL`
+points at `localhost`, which the database-target guard's allow-list already
+accepts, so **no guard was relaxed to make CI work** - and `DATABASE_URL` and
+`DIRECT_URL` are left unset precisely so `tests/db/test-database-url.ts` has
+nothing to fall back to even in principle.
+
+The dependency audit is a **separate job** on purpose. `npm audit` consults a
+registry this repository does not control, so an outage there must not make
+correct application code look broken. It retries only when no report comes back
+at all, and reads the verdict out of the JSON rather than from an exit code, so
+"found a high advisory" and "could not run" stay distinguishable. A genuine
+high or critical finding fails the job; it is never retried away.

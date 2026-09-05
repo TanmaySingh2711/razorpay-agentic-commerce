@@ -90,9 +90,9 @@ export interface CatalogSearchResult {
  *
  * Deterministic is the operative word: the same query against the same data
  * returns the same products in the same order, every time. There is no
- * relevance scoring, no embedding, no model. A later objective may *rank* these
- * results with AI, but it will rank a set the database chose - the AI never
- * decides which products exist or what they cost.
+ * relevance scoring, no embedding, no model. An AI may *rank* what this returns,
+ * but it ranks a set the database chose - the AI never decides which products
+ * exist or what they cost.
  *
  * A query matching nothing is a successful, empty result, not an error. An
  * agent asking "anything under ₹500?" deserves a clean "no" it can act on.

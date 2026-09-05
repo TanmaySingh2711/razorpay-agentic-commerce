@@ -1,4 +1,4 @@
-import { DomainRuleError, InfrastructureError, ValidationError } from "@/domain/errors";
+import { DomainRuleError, InfrastructureError } from "@/domain/errors";
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
 
 /**
@@ -43,24 +43,6 @@ export class QuoteCreationFailureError extends InfrastructureError {
       publicMessage: "We could not prepare your order. Please try again.",
       details: { reason },
       ...(cause === undefined ? {} : { cause }),
-    });
-  }
-}
-
-/**
- * The agent proposed a product the server will not quote.
- *
- * Its own type because it is the hallucination guard firing, not an ordinary
- * validation slip: the id either never appeared in the server's own candidate
- * set, or the product it names fails a check the model was told about.
- */
-export class SelectionNotEligibleError extends ValidationError {
-  constructor(productId: string, reasons: readonly string[]) {
-    super({
-      code: "AI_SELECTION_NOT_ELIGIBLE",
-      message: `The proposed product ${productId} is not an eligible candidate: ${reasons.join(", ")}`,
-      publicMessage: "That product cannot be purchased under your requirements.",
-      details: { productId, reasons: [...reasons] },
     });
   }
 }

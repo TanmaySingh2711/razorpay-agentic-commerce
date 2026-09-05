@@ -355,7 +355,7 @@ describe("quote DTO", () => {
     expect(serialised).not.toMatch(/\d+n/);
   });
 
-  it("carries freshness information for later objectives", () => {
+  it("carries the freshness information a requote depends on", () => {
     const dto = toQuoteDto(SNAPSHOT);
     expect(dto.productVersion).toBe(3);
     expect(dto.expiresAt).toBe(EXPIRES.toISOString());

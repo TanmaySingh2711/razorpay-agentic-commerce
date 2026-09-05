@@ -9,6 +9,9 @@ directories: a folder appears when its first real file does.
 
 ```
 razorpay-agentic-commerce/
+├── .github/
+│   └── workflows/
+│       └── verify.yml          CI: the same local commands on a cold runner
 ├── docs/                       architecture record (this directory)
 ├── prisma/
 │   ├── migrations/             reviewable, committed schema history

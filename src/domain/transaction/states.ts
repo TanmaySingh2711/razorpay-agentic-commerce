@@ -75,13 +75,6 @@ export const TERMINAL_TRANSACTION_STATES = [
   "EXPIRED",
 ] as const;
 
-/** States that represent an unsuccessful outcome, terminal or not. */
-export const FAILURE_TRANSACTION_STATES = [
-  "PAYMENT_FAILED",
-  "BLOCKED",
-  "EXPIRED",
-] as const;
-
 /**
  * States in which stock is held and must eventually be committed or released.
  * Any exit from one of these toward a terminal failure state releases the hold.
@@ -135,10 +128,6 @@ export function isAiActor(actor: TransactionActor): boolean {
 
 export function isTerminalState(state: TransactionState): boolean {
   return (TERMINAL_TRANSACTION_STATES as readonly TransactionState[]).includes(state);
-}
-
-export function isFailureState(state: TransactionState): boolean {
-  return (FAILURE_TRANSACTION_STATES as readonly TransactionState[]).includes(state);
 }
 
 export function holdsInventory(state: TransactionState): boolean {

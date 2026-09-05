@@ -559,8 +559,8 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       ).toHaveLength(1);
       const attempt = await attemptOf(transactionId);
       expect(attempt.status).toBe("FAILED");
-      // Structured failure information survives for a later objective, and it
-      // is a mapped code rather than the provider's prose.
+      // Structured failure information survives for the retry gate to read, and
+      // it is a mapped code rather than the provider's prose.
       expect(attempt.failureCode).toBe("BANK_DECLINED");
     });
 

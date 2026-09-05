@@ -18,7 +18,7 @@ loadEnv({ path: ".env.local", quiet: true });
  * What is deliberately NOT seeded: transactions, quotes, payment attempts,
  * approvals or audit events. Fabricating completed purchases would make the
  * demo look finished while proving nothing, and every one of those rows is
- * supposed to be produced by the flow later objectives build.
+ * supposed to be produced by running the flow for real.
  *
  * Seeding is bulk administrative work, so it uses the DIRECT connection, the
  * same endpoint migrations use.
