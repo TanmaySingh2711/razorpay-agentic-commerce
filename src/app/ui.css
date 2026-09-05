@@ -775,54 +775,6 @@ button[aria-busy="true"]::after {
   }
 }
 
-/* --- The trust flow, stated in one line ----------------------------------
-   A reviewer should understand the architecture within seconds of landing,
-   before they have read a single card. This is deliberately a strip, not a
-   diagram: three short claims and two arrows, sized to be noticed without
-   competing with the heading above it or the console below it. */
-
-.flow-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.6rem;
-  background: var(--accent-quiet);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 999px;
-  padding: 0.55rem 1.1rem;
-  margin: 1.1rem 0 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--accent);
-  width: fit-content;
-}
-
-.flow-strip span[aria-hidden] {
-  color: color-mix(in srgb, var(--accent) 55%, var(--muted));
-  font-weight: 400;
-}
-
-@media (max-width: 30rem) {
-  .flow-strip {
-    width: 100%;
-    border-radius: var(--radius);
-    font-size: 0.8rem;
-  }
-}
-
-/* --- The quiet proof line -------------------------------------------------
-   Five words, not five more cards. This exists to be skimmed, not read - if
-   it ever needs its own heading or its own section, it has stopped being
-   subtle and should be cut instead. */
-
-.proof-strip {
-  color: var(--muted);
-  font-size: 0.82rem;
-  letter-spacing: 0.01em;
-  text-align: center;
-  margin: 1.75rem 0 0;
-}
-
 /* --- Secondary call to action ---------------------------------------------
    Replaces a footer text link that a reviewer could - and did - miss
    entirely. A real button earns a place in the layout; a link at the bottom

@@ -93,7 +93,18 @@ function toAuthority(decision: BuyerAgentDecision): PurchaseAuthority {
     currency: budget === null ? null : (budget.currency as CurrencyCode),
     budgetScope: constraints.budgetScope,
     hardRequirements: constraints.hardRequirements,
-    category: null,
+    // The shopper's stated category, enforced by `assessCandidate` as the hard
+    // constraint it is. This was `null` - not because category did not matter,
+    // but because `NormalizedUserConstraints` had nowhere to carry it, so the
+    // `WRONG_CATEGORY` check could never fire here however clearly somebody
+    // asked for a mouse. Null still means "no category stated", which leaves
+    // the search open rather than narrowing it to a guess.
+    //
+    // Coerced rather than passed through: a decision reaching this boundary may
+    // have been deserialised, and an *absent* category must mean "none stated",
+    // never `undefined` leaking into a comparison that only guards against
+    // null. Failing open into a crash is not a safe way to discover that.
+    category: constraints.category ?? null,
   };
 }
 

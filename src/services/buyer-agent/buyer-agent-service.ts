@@ -13,6 +13,7 @@ import {
   type ClarificationField,
   type NormalizedUserConstraints,
 } from "@/domain/buyer-agent/decision";
+import { canonicalCategory } from "@/domain/catalog/categories";
 import { messageStatesACeiling, verifyBudgetClaim } from "@/domain/buyer-agent/budget";
 import {
   deriveNoMatchReasons,
@@ -414,6 +415,11 @@ function toConstraints(
             currency: authority.currency,
           },
     budgetScope: authority.budgetScope,
+    // Canonicalised once, here, so everything downstream compares the catalog's
+    // own spelling. The model may say "mice" or "gaming mouse"; the merchant
+    // sells "mouse". A term this merchant does not stock passes through
+    // unchanged and correctly matches nothing.
+    category: canonicalCategory(authority.category),
     hardRequirements: authority.hardRequirements,
     softPreferences: intent.softPreferences,
   };

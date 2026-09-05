@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { assertServerOnly } from "@/lib/server-only";
 import { SUPPORTED_CURRENCIES } from "@/domain/money";
+import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
 import { parseProductId } from "@/domain/catalog/query";
 import type { CatalogReader } from "@/services/buyer-agent/catalog-reader";
 import { InvalidToolArgumentsError, UnknownToolError } from "@/domain/buyer-agent/errors";
@@ -141,7 +142,16 @@ export const CATALOG_TOOL_DECLARATIONS: readonly AiToolDeclaration[] = [
     parameters: {
       type: "object",
       properties: {
-        category: { type: "string", description: "Catalog category slug." },
+        category: {
+          type: "string",
+          // Enumerated rather than described, because this value is compared by
+          // equality: "mice" and "gaming-mouse" are not near-misses, they are
+          // zero results. Constraining generation is a convenience - the Zod
+          // schema below still validates whatever actually arrives.
+          enum: [...MERCHANT_CATEGORIES],
+          description:
+            "Catalog category slug. Must be one of the merchant's own categories.",
+        },
         maxAmountMinor: {
           type: "string",
           description: "Inclusive maximum unit price in whole minor units (paise).",

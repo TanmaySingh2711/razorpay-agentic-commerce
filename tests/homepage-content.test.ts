@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest";
  *
  * This is a presentation regression suite, added alongside the demo-polish
  * pass that: gave the page a slim product header carrying the Test Mode
- * badge, added a one-line trust-flow strip, replaced a text link that was
- * easy to miss with a visible secondary link, and reordered the submit button
+ * badge, replaced a text link that was easy to miss with a visible secondary
+ * link, and reordered the submit button
  * ahead of the character counter. None of that touches a server action, a
  * service, or the database - so these assertions are about words and markup
  * shape, not behaviour, and stay separate from `tests/db/` and the
@@ -41,13 +41,13 @@ describe("the homepage reads as a product, not a submission banner", () => {
     expect(markup).toMatch(/Razorpay Agentic Commerce/);
   });
 
-  it("states the trust flow without ever putting an AI actor before it executes", async () => {
+  it("never puts an AI actor in front of a verb that means it made this happen", async () => {
     const { default: HomePage } = await import("@/app/page");
     const markup = renderToStaticMarkup(HomePage());
-    expect(markup).toMatch(/AI proposes/);
-    expect(markup).toMatch(/Razorpay executes/);
-    // The one sentence this strip must never become: an AI actor with a verb
-    // that means "made this happen".
+    // The trust flow itself is asserted below, against the numbered steps.
+    // This is the claim the page must never make anywhere, in any wording:
+    // an AI actor holding a verb that means it caused, cleared or blessed
+    // something. It outlived the one-line strip it was written for.
     expect(markup).not.toMatch(/AI (executes|authorizes|approves|verifies)/i);
   });
 

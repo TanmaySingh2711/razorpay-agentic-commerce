@@ -214,6 +214,7 @@ async function arrangeQuoted(): Promise<{ transactionId: string; productId: stri
       quantity: 1,
       maxBudget: { amountMinor: "300000", currency: "INR" },
       budgetScope: "PER_UNIT",
+      category: null,
       hardRequirements: [],
       softPreferences: [],
     },

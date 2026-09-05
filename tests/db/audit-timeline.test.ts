@@ -83,8 +83,8 @@ const OPEN_AUTHORITY: PurchaseAuthority = {
   maxAmountMinor: null,
   currency: null,
   budgetScope: null,
-  hardRequirements: [],
   category: null,
+  hardRequirements: [],
 };
 
 async function seedPolicy(
@@ -617,6 +617,7 @@ describe.skipIf(!databaseConfigured)("the audit timeline", () => {
           quantity: 1,
           maxBudget: { amountMinor: "300000", currency: "INR" },
           budgetScope: "PER_UNIT",
+          category: null,
           hardRequirements: [],
           softPreferences: [],
         },
@@ -685,6 +686,7 @@ describe.skipIf(!databaseConfigured)("the audit timeline", () => {
           quantity: 1,
           maxBudget: { amountMinor: "300000", currency: "INR" },
           budgetScope: "PER_UNIT",
+          category: null,
           hardRequirements: [],
           softPreferences: [],
         },

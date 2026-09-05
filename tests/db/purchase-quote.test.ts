@@ -46,6 +46,8 @@ interface Fixture {
   readonly overBudgetId: string;
   readonly outOfStockId: string;
   readonly cheapId: string;
+  /** A different category entirely, so cross-category leakage is testable. */
+  readonly mouseId: string;
 }
 
 let fixture: Fixture;
@@ -67,6 +69,7 @@ function decision(overrides: Partial<BuyerAgentDecision> = {}): BuyerAgentDecisi
       quantity: 1,
       maxBudget: { amountMinor: "300000", currency: "INR" },
       budgetScope: "PER_UNIT",
+      category: null,
       hardRequirements: [],
       softPreferences: [],
     },
@@ -94,14 +97,15 @@ async function seedFixture(): Promise<Fixture> {
     inventory: number,
     status: "AVAILABLE" | "OUT_OF_STOCK",
     attributes: Record<string, string | number | boolean> = { switchType: "mechanical" },
+    category = "mechanical-keyboard",
   ): Promise<string> => {
     const created = await db.product.create({
       data: {
         merchantId: merchant.id,
         sku: uid("SKU"),
         name: `Product ${uid("n")}`,
-        description: "A keyboard.",
-        category: "mechanical-keyboard",
+        description: `A ${category}.`,
+        category,
         unitAmount,
         currency: "INR",
         inventory,
@@ -119,6 +123,10 @@ async function seedFixture(): Promise<Fixture> {
     overBudgetId: await product(349_900n, 5, "AVAILABLE"),
     outOfStockId: await product(275_000n, 0, "OUT_OF_STOCK"),
     cheapId: await product(149_900n, 9, "AVAILABLE"),
+    // Priced above `cheapId` on purpose: the substitution test above asserts the
+    // cheapest eligible alternative is chosen when no category is stated, and a
+    // cheaper mouse would silently change what that test is measuring.
+    mouseId: await product(199_900n, 12, "AVAILABLE", { use: "office" }, "mouse"),
   };
 }
 
@@ -209,6 +217,7 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
             quantity: 2,
             maxBudget: { amountMinor: "300000", currency: "INR" },
             budgetScope: "PER_UNIT",
+            category: null,
             hardRequirements: [],
             softPreferences: [],
           },
@@ -234,6 +243,7 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
               quantity: 1,
               maxBudget: { amountMinor: "300000", currency: "INR" },
               budgetScope: "PER_UNIT",
+              category: null,
               hardRequirements: [],
               softPreferences: [],
             },
@@ -248,6 +258,92 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
   });
 
   describe("the server's own candidate set decides", () => {
+    /**
+     * The category the shopper stated, enforced end to end.
+     *
+     * This is the path the pure eligibility tests cannot reach. `category` used
+     * to be dropped between the agent and the decision engine -
+     * `NormalizedUserConstraints` had no field for it, so `toAuthority` passed
+     * `category: null` and `WRONG_CATEGORY` could never fire however plainly
+     * somebody asked for a mouse. With one category in the catalog nobody could
+     * see it. These run the real `decidePurchase`, so they fail if that wiring
+     * is ever removed again.
+     */
+    it("refuses a keyboard when the shopper asked for a mouse", async () => {
+      const result = await decidePurchase(
+        decision({
+          selectedProductId: fixture.inBudgetId, // a keyboard, in budget, in stock
+          constraints: {
+            requestType: "PURCHASE",
+            quantity: 1,
+            maxBudget: { amountMinor: "300000", currency: "INR" },
+            budgetScope: "PER_UNIT",
+            category: "mouse",
+            hardRequirements: [],
+            softPreferences: [],
+          },
+        } as Partial<BuyerAgentDecision>),
+        deps,
+      );
+
+      expect(result.kind).toBe("AI_SELECTION_REJECTED");
+      if (result.kind !== "AI_SELECTION_REJECTED") return;
+      expect(result.reasons).toContain("WRONG_CATEGORY");
+      expect(await testDb().purchaseQuote.count()).toBe(0);
+    });
+
+    it("never substitutes across a category when the proposal is refused", async () => {
+      // A mouse exists, is in stock and is well within budget. It must still
+      // not be reached for to rescue a headphone request, because answering a
+      // question the shopper did not ask is worse than answering none.
+      const result = await decidePurchase(
+        decision({
+          selectedProductId: fixture.outOfStockId,
+          constraints: {
+            requestType: "PURCHASE",
+            quantity: 1,
+            maxBudget: { amountMinor: "300000", currency: "INR" },
+            budgetScope: "PER_UNIT",
+            category: "headphones",
+            hardRequirements: [],
+            softPreferences: [],
+          },
+        } as Partial<BuyerAgentDecision>),
+        deps,
+      );
+
+      // Nothing in the requested category exists at all, so this is the honest
+      // empty answer rather than a refusal of one particular product.
+      expect(result.kind).toBe("NO_VALID_CANDIDATE");
+      expect(await testDb().purchaseQuote.count()).toBe(0);
+    });
+
+    it("quotes the mouse when the shopper asked for a mouse", async () => {
+      const result = await decidePurchase(
+        decision({
+          selectedProductId: fixture.mouseId,
+          constraints: {
+            requestType: "PURCHASE",
+            quantity: 1,
+            maxBudget: { amountMinor: "300000", currency: "INR" },
+            budgetScope: "PER_UNIT",
+            category: "mouse",
+            hardRequirements: [],
+            softPreferences: [],
+          },
+        } as Partial<BuyerAgentDecision>),
+        deps,
+      );
+
+      expect(result.kind).toBe("QUOTE_CREATED");
+      if (result.kind !== "QUOTE_CREATED") return;
+      const quoted = await testDb().product.findUniqueOrThrow({
+        where: { id: result.quote.productId },
+        select: { category: true },
+      });
+      expect(quoted.category).toBe("mouse");
+    });
+
     it("rejects a product that is over budget, whatever the agent proposed", async () => {
       const result = await decidePurchase(
         decision({ selectedProductId: fixture.overBudgetId }),
@@ -365,6 +461,7 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
             quantity: 1,
             maxBudget: { amountMinor: "300000", currency: "INR" },
             budgetScope: "PER_UNIT",
+            category: null,
             hardRequirements: [
               { attribute: "goodForGaming", operator: "EQUALS", value: "true" },
             ],
@@ -385,6 +482,7 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
             quantity: 2,
             maxBudget: { amountMinor: "300000", currency: "INR" },
             budgetScope: null,
+            category: null,
             hardRequirements: [],
             softPreferences: [],
           },
@@ -585,8 +683,8 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
               maxAmountMinor: 400_000n,
               currency: "INR",
               budgetScope: "PER_UNIT",
-              hardRequirements: [],
               category: null,
+              hardRequirements: [],
             },
             idempotencyKey: "x".repeat(200),
             replaceExisting: true,
@@ -709,8 +807,8 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
       maxAmountMinor: 400_000n,
       currency: "INR" as const,
       budgetScope: "PER_UNIT" as const,
-      hardRequirements: [],
       category: null,
+      hardRequirements: [],
     };
 
     it("issues a replacement quote and retires the old one, keeping both", async () => {

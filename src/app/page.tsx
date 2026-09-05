@@ -94,17 +94,6 @@ export default function HomePage() {
           </p>
         </header>
 
-        {/* The whole trust model in one line, seen before the input is even
-            reached. No AI actor appears between "verifies" and "executes" -
-            that gap is the entire point of the architecture. */}
-        <p className="flow-strip" aria-label="How authority moves through this system">
-          <span>AI proposes</span>
-          <span aria-hidden="true">→</span>
-          <span>Server verifies &amp; authorizes</span>
-          <span aria-hidden="true">→</span>
-          <span>Razorpay executes</span>
-        </p>
-
         <BuyerConsole />
 
         <section className="how" aria-labelledby="how-heading">
@@ -130,10 +119,6 @@ export default function HomePage() {
           authoritative price, approve a purchase, retry a payment, advance transaction
           state, or declare a payment successful.
         </div>
-
-        <p className="proof-strip">
-          Explainable · Bounded · Human-gated · Auditable · Failure-safe
-        </p>
 
         <p className="cta-row">
           <Link href="/about" className="secondary">

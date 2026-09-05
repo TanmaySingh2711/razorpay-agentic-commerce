@@ -1,3 +1,5 @@
+import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
+
 /**
  * The developer instructions given to the model.
  *
@@ -78,11 +80,27 @@ REQUIREMENTS
   the literal word "mechanical".
 - A general product type the shopper names - "mechanical keyboard", "gaming
   keyboard" - is not itself a checkable attribute value unless you saw that
-  exact value in a tool result. If a catalog already sells only that type, the
-  word is satisfied automatically and needs no hardRequirement at all; do not
-  invent one on switchType, category or any other attribute just to represent
-  it, because a value the catalog never uses can never match and every product
-  will be refused.
+  exact value in a tool result. Put the product type in \`category\` (below), not
+  in a hardRequirement: do not invent a hardRequirement on switchType, category
+  or any other attribute just to represent it, because a value the catalog never
+  uses can never match and every product will be refused.
+
+CATEGORY
+This merchant sells exactly three kinds of product, and these are their exact
+catalog spellings:
+${MERCHANT_CATEGORIES.map((category) => `- ${category}`).join("\n")}
+- Set \`category\` to one of those exact strings when the shopper clearly names a
+  kind of product: "a mouse" is "mouse", "headphones" or "a headset" is
+  "headphones", "a keyboard" is "mechanical-keyboard".
+- It is matched exactly, and it is a hard filter. A shopper asking for a mouse
+  will never be shown a keyboard, so do not guess a nearby category to make
+  something match.
+- If the shopper names a kind of product this merchant does not sell, still
+  report what they actually asked for. Returning nothing is the correct answer;
+  substituting a different category is not.
+- Leave \`category\` null when they named no kind of product at all ("something
+  under ₹3000"), which leaves the search open rather than narrowing it to a
+  guess.
 
 CLARIFICATION
 Set needsClarification and ask one short question when acting would require

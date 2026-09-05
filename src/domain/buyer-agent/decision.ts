@@ -79,6 +79,22 @@ export interface NormalizedUserConstraints {
   readonly maxBudget: MoneyDto | null;
   /** Whether that limit applies per unit or to the whole order. */
   readonly budgetScope: BudgetScope | null;
+  /**
+   * The catalog category the shopper asked for, in the catalog's own spelling.
+   *
+   * Carried here because it is a *hard* constraint and the deterministic
+   * eligibility check is downstream of this type. It used to stop at the agent:
+   * the intent held a category, these constraints did not, and
+   * `toAuthority` in the product-decision service had no choice but to pass
+   * `category: null` — so `WRONG_CATEGORY` could never fire on the real
+   * purchase path. With one category in the catalog that was invisible. With
+   * keyboards, mice and headphones it is the difference between "find me a
+   * mouse" returning a mouse and it returning whatever ranked best.
+   *
+   * Null when the shopper named no category, which leaves the search open
+   * rather than narrowing it to a guess.
+   */
+  readonly category: string | null;
   readonly hardRequirements: readonly Constraint[];
   readonly softPreferences: readonly Constraint[];
 }
