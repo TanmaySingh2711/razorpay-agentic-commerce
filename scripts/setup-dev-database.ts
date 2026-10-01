@@ -50,7 +50,7 @@ const DEV_ENV_FILE = ".env.development.local";
 /**
  * The development database inside the container `npm run db:test:up` starts.
  *
- * These credentials are the ones already committed in `docker-compose.yml`, and
+ * These credentials are the ones already committed in `docker/docker-compose.yml`, and
  * they are safe there for the same reason: they belong to a throwaway container
  * listening on loopback, and they authorise nothing else. Writing them out here
  * is what lets a clone follow the README without inventing a connection string.

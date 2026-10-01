@@ -18,11 +18,11 @@ workflow, and the test isolation strategy.
 
 Three PostgreSQL databases, deliberately separate, all reached through Prisma:
 
-| Environment                 | Database                                                              | Reached by                                          |
-| --------------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| Local development           | **Docker PostgreSQL** (`docker-compose.yml`), `razorpay_agentic_dev`  | `npm run dev`, `db:migrate`, `db:seed`, `db:studio` |
-| Automated tests             | **Docker PostgreSQL**, `razorpay_agentic_test`, schema `agentic_test` | `TEST_DIRECT_URL`, `db:test:*`                      |
-| Vercel production / staging | **Neon PostgreSQL**                                                   | `DATABASE_URL`, and the `db:*:staging` commands     |
+| Environment                 | Database                                                                    | Reached by                                          |
+| --------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------- |
+| Local development           | **Docker PostgreSQL** (`docker/docker-compose.yml`), `razorpay_agentic_dev` | `npm run dev`, `db:migrate`, `db:seed`, `db:studio` |
+| Automated tests             | **Docker PostgreSQL**, `razorpay_agentic_test`, schema `agentic_test`       | `TEST_DIRECT_URL`, `db:test:*`                      |
+| Vercel production / staging | **Neon PostgreSQL**                                                         | `DATABASE_URL`, and the `db:*:staging` commands     |
 
 Nothing in the application is specific to Neon: it is a PostgreSQL server with
 separate pooled and direct endpoints, which is all the connection architecture
@@ -63,7 +63,7 @@ Wiring:
 
 - **Runtime** — [`src/integrations/persistence/client.ts`](../src/integrations/persistence/client.ts)
   builds `PrismaPg` from `DATABASE_URL`, via the typed config boundary.
-- **CLI** — [`prisma.config.ts`](../prisma.config.ts) sets `datasource.url` from
+- **CLI** — [`.config/prisma.ts`](../.config/prisma.ts) sets `datasource.url` from
   `DIRECT_URL`. In Prisma 7 the URL lives here, not in `schema.prisma`.
 
 ## The persistence boundary

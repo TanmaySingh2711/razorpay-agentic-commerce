@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -38,6 +39,10 @@ import { defineConfig } from "vitest/config";
  * database suites stay serial until that trade changes.
  */
 export default defineConfig({
+  // This file lives in `.config/`; the project it tests is one level up. Every
+  // path below - the test globs, the setup file, the `@/*` alias - is resolved
+  // from that root, exactly as when this file sat beside package.json.
+  root: fileURLToPath(new URL("..", import.meta.url)),
   resolve: { tsconfigPaths: true },
   test: {
     environment: "node",

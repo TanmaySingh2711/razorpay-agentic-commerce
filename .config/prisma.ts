@@ -57,9 +57,13 @@ function migrationUrl(): string {
 }
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
+  // Prisma resolves these two paths relative to this file, which lives in
+  // `.config/` - one of the locations the CLI discovers on its own, so no
+  // command needs a `--config` flag. The seed is a shell command and runs from
+  // the project root, like the `.env.local` load above.
+  schema: "../prisma/schema.prisma",
   migrations: {
-    path: "prisma/migrations",
+    path: "../prisma/migrations",
     seed: "tsx prisma/seed.ts",
   },
   datasource: {

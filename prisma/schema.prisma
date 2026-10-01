@@ -2,7 +2,7 @@
 //
 // PostgreSQL, accessed through Prisma 7 with the `pg` driver adapter.
 //
-// In Prisma 7 the connection URL lives in `prisma.config.ts`, not here: the CLI
+// In Prisma 7 the connection URL lives in `.config/prisma.ts`, not here: the CLI
 // uses the DIRECT (unpooled) connection for migrations, while the application
 // runtime uses the POOLED connection through the driver adapter. See
 // docs/16-database.md.

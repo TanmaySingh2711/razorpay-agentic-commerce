@@ -2,6 +2,7 @@
   "name": "razorpay-agentic-commerce",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "setup": "node scripts/setup.ts",
     "dev": "next dev",
@@ -10,8 +11,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config .config/vitest.config.mts",
+    "test:watch": "vitest --config .config/vitest.config.mts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "prisma generate",
@@ -27,13 +28,13 @@
     "db:studio:staging": "tsx scripts/prisma-cli.ts staging studio",
     "db:verify:staging": "tsx scripts/db-verify.ts",
     "db:test:setup": "tsx scripts/setup-test-schema.ts",
-    "db:test:up": "docker compose up -d --wait postgres",
-    "db:test:health": "docker compose ps postgres && docker compose exec -T postgres pg_isready -U razorpay -d razorpay_agentic_test",
-    "db:test:down": "docker compose down",
-    "db:test:reset": "docker compose down -v && npm run db:test:up && npm run db:test:setup",
+    "db:test:up": "docker compose -f docker/docker-compose.yml up -d --wait postgres",
+    "db:test:health": "docker compose -f docker/docker-compose.yml ps postgres && docker compose -f docker/docker-compose.yml exec -T postgres pg_isready -U razorpay -d razorpay_agentic_test",
+    "db:test:down": "docker compose -f docker/docker-compose.yml down",
+    "db:test:reset": "docker compose -f docker/docker-compose.yml down -v && npm run db:test:up && npm run db:test:setup",
     "db:dev:setup": "tsx scripts/setup-dev-database.ts",
     "db:dev:demo": "tsx scripts/dev-demo-activity.ts",
-    "db:dev:health": "docker compose exec -T postgres pg_isready -U razorpay -d razorpay_agentic_dev",
+    "db:dev:health": "docker compose -f docker/docker-compose.yml exec -T postgres pg_isready -U razorpay -d razorpay_agentic_dev",
     "postinstall": "prisma generate",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "gemini:smoke": "tsx scripts/gemini-smoke.ts",
@@ -66,6 +67,13 @@
     "vitest": "^5.0.0"
   },
   "description": "Agent-transactable commerce with deterministic financial controls (Razorpay AI Buildathon 2026, Track 01).",
+  "prettier": {
+    "semi": true,
+    "singleQuote": false,
+    "trailingComma": "all",
+    "printWidth": 90,
+    "tabWidth": 2
+  },
   "engines": {
     "node": ">=24.0.0 <25"
   },

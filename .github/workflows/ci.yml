@@ -173,7 +173,7 @@ jobs:
           cache: npm
 
       - name: Start a disposable PostgreSQL 17
-        # Pinned to the major version docker-compose.yml runs locally, so a
+        # Pinned to the major version docker/docker-compose.yml runs locally, so a
         # constraint, enum or unique index behaves here exactly as it does on a
         # developer machine.
         uses: ikalnytskyi/action-setup-postgres@v8
@@ -227,11 +227,19 @@ jobs:
           database: razorpay_agentic_test
           port: 5432
 
-      - name: npm run setup
-        # The single command the README promises. Installs, writes .env.local,
-        # prepares the test schema, then creates, migrates and seeds the
-        # development database.
-        run: npm run setup
+      # The entry points the README promises, run the way a person would: the
+      # shell script on macOS and Linux, the batch file on Windows. Both check
+      # for Node.js and then hand over to `npm run setup`, which installs,
+      # writes .env.local, prepares the test schema, and creates, migrates and
+      # seeds the development database.
+      - name: ./setup.sh
+        if: runner.os != 'Windows'
+        run: ./setup.sh
+
+      - name: setup.bat
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: .\setup.bat
 
       - name: Production build
         run: npm run build

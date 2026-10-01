@@ -199,7 +199,7 @@ const eslintConfig = defineConfig([
     // to them, and stdout IS their user interface. The exemption is deliberately
     // scoped to these paths and must not widen to src/.
     name: "agentic-commerce/cli-tooling",
-    files: ["scripts/**/*.ts", "prisma/**/*.ts", "prisma.config.ts"],
+    files: ["scripts/**/*.ts", "prisma/**/*.ts", ".config/prisma.ts"],
     rules: {
       "no-restricted-syntax": "off",
       "no-console": "off",

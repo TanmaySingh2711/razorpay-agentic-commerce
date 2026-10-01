@@ -2,7 +2,7 @@
 
 ## The runner
 
-**Vitest**, configured in [`vitest.config.mts`](../vitest.config.mts).
+**Vitest**, configured in [`.config/vitest.config.mts`](../.config/vitest.config.mts).
 
 Chosen over Jest because this project's testable core is deliberately
 framework-free TypeScript. Vitest runs it with no transform configuration, no
@@ -84,7 +84,7 @@ foundation tests still pass on a fresh clone with zero credentials. See
 [16](./16-database.md).
 
 The schema lives in the local Docker PostgreSQL described by
-`docker-compose.yml`, addressed by `TEST_DIRECT_URL`. That is not a preference,
+`docker/docker-compose.yml`, addressed by `TEST_DIRECT_URL`. That is not a preference,
 it is roughly a fortyfold difference: the same five suites took **616s** against
 the hosted database and **15s** locally, because every fixture makes dozens of
 sequential round trips and a hosted database charges network latency for each
@@ -232,7 +232,7 @@ client; the same commands on a cold runner prove it passes without any of that.
 **Why no Docker service container.** GitHub offers service containers on Linux
 runners only - macOS runners have no Docker, and Windows runners cannot run
 Linux images. `ikalnytskyi/action-setup-postgres` installs PostgreSQL **17**
-natively on all three, the same major version `docker-compose.yml` pins, so the
+natively on all three, the same major version `docker/docker-compose.yml` pins, so the
 three operating systems test the same database.
 
 **What CI is not allowed to reach.** No Neon, no Gemini, no Razorpay, no Vercel,

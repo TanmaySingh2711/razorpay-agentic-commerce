@@ -203,7 +203,7 @@ work. Reaching the hosted database requires saying so.
 `scripts/prisma-cli.ts` is what makes this true. It loads only the env file
 belonging to the chosen target, asserts the target, prints where the command is
 going - and for staging, that it is staging - then puts the connection into the
-child process's environment. `prisma.config.ts` still loads `.env.local`, but
+child process's environment. `.config/prisma.ts` still loads `.env.local`, but
 `dotenv` does not overwrite a variable that is already set, so the chosen target
 wins and the staging path through that file behaves exactly as it always did.
 

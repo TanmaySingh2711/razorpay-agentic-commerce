@@ -12,7 +12,7 @@ import { runPackageBin } from "./run-package-bin";
  *
  * ## Why this exists
  *
- * `prisma.config.ts` loads `.env.local`, so every Prisma CLI command used to
+ * `.config/prisma.ts` loads `.env.local`, so every Prisma CLI command used to
  * resolve to the hosted staging database - including `db:migrate`, `db:seed`
  * and `db:studio`, which read like ordinary development commands and are the
  * ones a person types without thinking. A migration or a seed is not something
@@ -27,9 +27,9 @@ import { runPackageBin } from "./run-package-bin";
  * ## How the target is applied
  *
  * The chosen connection is placed into the child process's environment. Prisma
- * runs `prisma.config.ts`, which calls `dotenv` on `.env.local` - and dotenv
+ * runs `.config/prisma.ts`, which calls `dotenv` on `.env.local` - and dotenv
  * does not overwrite a variable that is already set. So the value chosen here
- * wins, `prisma.config.ts` needs no change, and the staging path through it
+ * wins, `.config/prisma.ts` needs no change, and the staging path through it
  * still behaves exactly as it always did.
  *
  * Both `DIRECT_URL` and `DATABASE_URL` are set to the same connection. The

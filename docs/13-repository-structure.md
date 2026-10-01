@@ -13,6 +13,11 @@ razorpay-agentic-commerce/
 │   └── workflows/
 │       └── ci.yml              CI: lint, type check, tests + one-click setup on 3 OSes
 ├── .cache/                     regenerated tool caches (git-ignored)
+├── .config/                    tool configuration that does not have to sit in the root
+│   ├── prisma.ts               Prisma 7 CLI config (direct connection), auto-discovered
+│   └── vitest.config.mts       the two test projects; passed with --config
+├── docker/
+│   └── docker-compose.yml      the local PostgreSQL for dev and tests
 ├── docs/                       architecture record (this directory)
 │   └── history/                superseded plans, kept for their reasoning
 ├── prisma/
@@ -150,15 +155,35 @@ razorpay-agentic-commerce/
 │   ├── support/                fakes + the offline guard
 │   └── unit/                   everything that needs no database, run in parallel
 ├── .env.example                tracked, credential-free template
+├── .gitattributes              line endings for the .sh and .bat entry points
 ├── .nvmrc                      Node.js 24 LTS selection
-├── docker-compose.yml          the local PostgreSQL for dev and tests
-├── prisma.config.ts            Prisma 7 CLI config (direct connection)
+├── LICENSE                     MIT
 ├── eslint.config.mjs           lint rules incl. the process.env ban
 ├── next.config.ts
-├── package.json
+├── package.json                scripts, dependencies and the Prettier settings
 ├── tsconfig.json               strict settings
-└── vitest.config.mts
+├── setup.sh / setup.bat        one-click setup (macOS, Linux / Windows)
+└── run_dashboard.bat           starts the app and opens it in a browser (Windows)
 ```
+
+## What is left in the root, and why
+
+Only files a tool insists on finding there, or a person is meant to run:
+
+| File                                             | Why it cannot move                                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`, `package-lock.json`              | npm reads them from the project root.                                                                                              |
+| `tsconfig.json`, `next.config.ts`                | Next.js loads both from the root, and writes `next-env.d.ts` there (not configurable).                                             |
+| `eslint.config.mjs`                              | ESLint, and every editor's ESLint integration, look for the flat config in the root only.                                          |
+| `.gitignore`, `.gitattributes`, `.nvmrc`         | Git and Node version managers read them from the root.                                                                             |
+| `.env.example`                                   | Sits beside the `.env.local` it is copied to, which Next.js loads from the root.                                                   |
+| `README.md`, `LICENSE`, `AGENTS.md`, `CLAUDE.md` | GitHub renders the first and detects the second; `next dev` rewrites `AGENTS.md` in place; assistants read the last two from here. |
+| `setup.sh`, `setup.bat`, `run_dashboard.bat`     | Entry points meant to be double-clicked or run first, so they are where a person looks.                                            |
+
+Everything else that used to sit here moved: the Prisma and Vitest configs to
+`.config/`, the compose file to `docker/`, the Prettier settings into
+`package.json`. `.prettierignore` was deleted - every entry in it was already
+covered by `.gitignore` or ignored by Prettier on its own.
 
 ## Why each area exists
 

@@ -485,7 +485,7 @@ describe("dependency CLIs are spawned without a shell", () => {
  * A fresh clone must install without any environment file.
  *
  * `package.json` runs `prisma generate` from `postinstall`, and Prisma loads
- * `prisma.config.ts` for every CLI command - including that one, which needs no
+ * `.config/prisma.ts` for every CLI command - including that one, which needs no
  * database at all. The config used to throw when neither `DIRECT_URL` nor
  * `DATABASE_URL` was set, so `npm install` on a clone with no `.env.local`
  * failed at exit code 1: the first command in the README, and the first command
@@ -507,19 +507,19 @@ describe("installing on a clone with no environment file", () => {
     // config file's own location.
     const result = spawnSync(
       process.execPath,
-      [resolvePackageBin("tsx"), resolve("prisma.config.ts")],
+      [resolvePackageBin("tsx"), resolve(".config/prisma.ts")],
       { cwd: tmpdir(), env: withoutDatabase, encoding: "utf8" },
     );
 
     expect(result.stderr).not.toMatch(/Neither DIRECT_URL nor DATABASE_URL/);
-    expect(result.status, `prisma.config.ts exited ${String(result.status)}`).toBe(0);
+    expect(result.status, `.config/prisma.ts exited ${String(result.status)}`).toBe(0);
   });
 
   it("points nowhere real when nothing is configured, rather than guessing", async () => {
     // The placeholder must be unreachable by construction. `.invalid` is
     // reserved by RFC 2606 and can never resolve, so a command that does try to
     // connect fails closed instead of finding some other database.
-    const source = await readFile("prisma.config.ts", "utf8");
+    const source = await readFile(".config/prisma.ts", "utf8");
     const placeholder = /const NO_DATABASE_CONFIGURED =\s*"([^"]+)"/.exec(source);
     expect(placeholder?.[1], "the placeholder connection must be named").toBeDefined();
     expect(new URL(placeholder?.[1] ?? "").hostname).toMatch(/\.invalid$/);

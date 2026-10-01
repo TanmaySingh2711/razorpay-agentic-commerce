@@ -17,7 +17,7 @@ import { PrismaClient } from "@/generated/prisma/client";
  *
  *  2. **The pooled connection.** Runtime queries use `DATABASE_URL`, the pooled
  *     endpoint. Migrations use `DIRECT_URL` and are configured separately in
- *     `prisma.config.ts` - the CLI never comes through this file.
+ *     `.config/prisma.ts` - the CLI never comes through this file.
  *
  *  3. **One client per process.** Next.js dev hot-reload re-evaluates modules
  *     on every edit; without memoisation that opens a new pool each time until

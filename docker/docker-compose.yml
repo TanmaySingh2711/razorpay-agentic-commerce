@@ -27,6 +27,12 @@
 # `npm run db:verify:staging` - but the pin should be raised to 18 the next time
 # the local database is rebuilt, so the parity argument holds again.
 
+# Pinned, because Compose otherwise names a project after the folder its file
+# is in. This file moved from the repository root into `docker/`; without the
+# pin the project - and with it the data volume - would have been renamed, and
+# an existing local database would have looked empty.
+name: razorpay-agentic-commerce
+
 services:
   postgres:
     image: postgres:17

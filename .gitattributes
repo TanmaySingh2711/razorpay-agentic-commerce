@@ -1,0 +1,7 @@
+# Line endings that must not depend on who checked the file out.
+#
+# A shell script with CRLF fails on macOS and Linux ("bad interpreter"), and a
+# batch file with LF misparses labels and blocks on Windows. Git's autocrlf
+# would otherwise rewrite both to whatever the local machine prefers.
+*.sh  text eol=lf
+*.bat text eol=crlf
