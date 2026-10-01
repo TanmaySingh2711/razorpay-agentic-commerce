@@ -1,7 +1,0 @@
-.next
-node_modules
-coverage
-package-lock.json
-src/generated
-prisma/migrations
-.cache
