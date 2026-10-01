@@ -25,7 +25,7 @@ import {
   intentJson,
   productDto,
   selectionJson,
-} from "./support/fake-ai-provider";
+} from "../support/fake-ai-provider";
 
 /**
  * The request's own execution budget - and, separately, that it holds even

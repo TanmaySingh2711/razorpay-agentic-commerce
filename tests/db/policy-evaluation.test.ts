@@ -32,7 +32,7 @@ import {
 /**
  * The policy boundary against real PostgreSQL.
  *
- * The pure decision is proved exhaustively in `tests/policy-engine.test.ts`.
+ * The pure decision is proved exhaustively in `tests/unit/policy-engine.test.ts`.
  * What only a database can settle is proved here: that a decision and its audit
  * record commit together, that the lifecycle moves through the state machine
  * and not around it, that a repeat of the same operation converges instead of

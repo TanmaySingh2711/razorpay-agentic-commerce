@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "setup": "node scripts/setup.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -31,6 +32,7 @@
     "db:test:down": "docker compose down",
     "db:test:reset": "docker compose down -v && npm run db:test:up && npm run db:test:setup",
     "db:dev:setup": "tsx scripts/setup-dev-database.ts",
+    "db:dev:demo": "tsx scripts/dev-demo-activity.ts",
     "db:dev:health": "docker compose exec -T postgres pg_isready -U razorpay -d razorpay_agentic_dev",
     "postinstall": "prisma generate",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",

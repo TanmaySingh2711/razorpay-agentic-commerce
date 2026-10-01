@@ -11,8 +11,10 @@ directories: a folder appears when its first real file does.
 razorpay-agentic-commerce/
 ├── .github/
 │   └── workflows/
-│       └── verify.yml          CI: the same local commands on a cold runner
+│       └── ci.yml              CI: lint, type check, tests + one-click setup on 3 OSes
+├── .cache/                     regenerated tool caches (git-ignored)
 ├── docs/                       architecture record (this directory)
+│   └── history/                superseded plans, kept for their reasoning
 ├── prisma/
 │   ├── migrations/             reviewable, committed schema history
 │   ├── schema.prisma           the single schema definition
@@ -23,10 +25,12 @@ razorpay-agentic-commerce/
 │   ├── checkout-smoke-check.ts inspects the result of that checkout
 │   ├── database-target-guard.ts refuses a command aimed at the wrong database
 │   ├── db-verify.ts            verifies the live DB matches the design
+│   ├── dev-demo-activity.ts    real-service shopper sessions for the local dev DB
 │   ├── gemini-smoke.ts         the one live Gemini call, outside npm test
 │   ├── pooled-endpoint.ts      pooled-vs-direct connection recognition
 │   ├── prisma-cli.ts           the guarded entry point for every db:* script
 │   ├── razorpay-smoke.ts       one live Razorpay Test Mode call
+│   ├── setup.ts                `npm run setup`: the one-click setup, no dependencies
 │   ├── setup-dev-database.ts   local development DB, loopback only
 │   └── setup-test-schema.ts    creates + migrates the isolated test schema
 ├── src/
@@ -41,13 +45,15 @@ razorpay-agentic-commerce/
 │   │   ├── checkout/[transactionId]/    the page that offers Pay
 │   │   ├── transaction/[transactionId]/ the authoritative purchase view
 │   │   ├── about/page.tsx      how the system works, for a reviewer
+│   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
 │   │   ├── globals.css         design tokens + element defaults
 │   │   ├── ui.css              component styles, loaded after globals.css
 │   │   ├── icon.tsx            generated tab icon (Next file convention)
 │   │   ├── layout.tsx          root layout
 │   │   └── page.tsx            landing page
 │   ├── components/
-│   │   ├── buyer/buyer-console.tsx       the shopping input
+│   │   ├── site-header.tsx               brand, navigation, Test Mode badge
+│   │   ├── buyer/buyer-console.tsx       the shopping input and conversation
 │   │   ├── payments/pay-button.tsx       the one place a person spends money
 │   │   └── transaction/
 │   │       ├── awaiting-provider.tsx  polls while the webhook is outstanding
@@ -72,6 +78,9 @@ razorpay-agentic-commerce/
 │   │   │   ├── catalog-reader.ts        read-only catalog port
 │   │   │   ├── catalog-tools.ts         the allowlisted tool registry
 │   │   │   └── instructions.ts          developer instructions
+│   │   ├── insights/
+│   │   │   ├── agent-request-log.ts         one structured row per agent request
+│   │   │   └── merchant-insights-service.ts the merchant dashboard's read model
 │   │   ├── inventory/reservation-service.ts stock holds, rebinds, commits
 │   │   ├── merchant/
 │   │   │   ├── catalog-repository.ts    the catalog's ONLY Prisma read boundary
@@ -90,12 +99,15 @@ razorpay-agentic-commerce/
 │   │   ├── quote/
 │   │   │   ├── quote-reader.ts          quote read boundary
 │   │   │   └── quote-service.ts         trusted quote creation + validation
+│   │   ├── rate-limit/rate-limit-service.ts abuse and cost ceilings (PostgreSQL)
+│   │   ├── refund/refund-service.ts     refunds: once, server-derived, reconciled
 │   │   ├── safety/passport-service.ts   safety passport rows, read-only
 │   │   └── transaction/
 │   │       ├── creation-service.ts      the ONLY creator of Transaction rows
 │   │       ├── overview-service.ts      the read model the pages render
 │   │       └── transition-service.ts    the ONLY writer of Transaction.status
 │   ├── domain/                 pure, framework-free core
+│   │   ├── agent-request/      request outcomes + category normalisation
 │   │   ├── approval/           token minting, hashing, binding contracts
 │   │   ├── audit-event.ts      audit event contract
 │   │   ├── audit/              payload schemas + human-readable explanations
@@ -103,6 +115,7 @@ razorpay-agentic-commerce/
 │   │   ├── catalog/            public DTOs, bounded query contract, errors
 │   │   ├── decision-record.ts  explainability contract
 │   │   ├── errors.ts           error taxonomy
+│   │   ├── insights/metrics.ts the merchant dashboard's arithmetic (pure)
 │   │   ├── inventory/          reservation contracts + pure rules
 │   │   ├── money.ts            integer minor units + currency
 │   │   ├── payment/            provider port, checkout, webhook, retry, rules
@@ -112,6 +125,8 @@ razorpay-agentic-commerce/
 │   │   │   └── errors.ts          policy error types
 │   │   ├── product-decision/   deterministic candidate rules (pure)
 │   │   ├── quote/              contracts, errors, expiry/validity rules (pure)
+│   │   ├── rate-limit/rules.ts fixed windows + anonymous client keys (pure)
+│   │   ├── refund/contracts.ts refund eligibility, statuses, receipts (pure)
 │   │   ├── safety/passport.ts  the deterministic safety passport (pure)
 │   │   ├── transaction/
 │   │   │   ├── errors.ts          lifecycle-specific error types
@@ -124,6 +139,7 @@ razorpay-agentic-commerce/
 │       ├── api-response.ts     the shared HTTP success/error envelope
 │       ├── checkout-script.ts  provider script loading, browser side
 │       ├── clock.ts            injectable time, so expiry is testable
+│       ├── http/rate-limited.ts wraps a route in the rate limiter (429 + Retry-After)
 │       ├── http/same-origin.ts refuses cross-site state-changing requests
 │       ├── json.ts             JSON value model
 │       ├── logger.ts           structured operational logging
@@ -131,7 +147,8 @@ razorpay-agentic-commerce/
 │       └── server-only.ts      module-scope browser-bundle guard
 ├── tests/                      Vitest suites, mirroring src by concern
 │   ├── db/                     integration suites against local PostgreSQL
-│   └── support/                fakes + the offline guard
+│   ├── support/                fakes + the offline guard
+│   └── unit/                   everything that needs no database, run in parallel
 ├── .env.example                tracked, credential-free template
 ├── .nvmrc                      Node.js 24 LTS selection
 ├── docker-compose.yml          the local PostgreSQL for dev and tests

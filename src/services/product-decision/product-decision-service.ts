@@ -427,6 +427,29 @@ export async function decidePurchase(
         candidatesConsidered: candidates.length,
         reasons: [...selectionReasons],
         ...(substitutedFor === null ? {} : { substitutedForProductId: substitutedFor }),
+        // What else met every rule. `eligible` keeps the catalog's cheapest-
+        // first order, so these are the closest alternatives by price, each
+        // at the price the catalog stated - the buyer's answer to "why this
+        // one?", written from the server's own candidate list.
+        eligibleCount: eligible.length,
+        alternatives: eligible
+          .filter((product) => product.id !== selected.id)
+          .slice(0, 3)
+          .map((product) => ({
+            productId: product.id,
+            unitAmountMinor: product.amount.amountMinor,
+            currency: product.amount.currency,
+          })),
+        ...(decision.trace === undefined
+          ? {}
+          : {
+              agentModelCalls: decision.trace.modelCalls,
+              agentToolCalls: decision.trace.toolCalls,
+              agentProductsObserved: decision.trace.productsObserved,
+              agentDurationMs: Math.round(decision.trace.durationMs),
+              agentPrefetched: decision.trace.prefetched,
+              agentTurn: decision.trace.turn,
+            }),
       },
       correlationId,
       operationKey: `product-selected:${correlationId}`,

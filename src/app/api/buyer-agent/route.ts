@@ -1,4 +1,6 @@
 import { handleBuyerAgentRequest } from "@/app/api/buyer-agent/handler";
+import { withRateLimit } from "@/lib/http/rate-limited";
+import { limitAgentRequest } from "@/services/rate-limit/rate-limit-service";
 
 /**
  * The Buyer Agent endpoint.
@@ -26,5 +28,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export function POST(request: Request): Promise<Response> {
-  return handleBuyerAgentRequest(request);
+  // Every request here spends model quota, so the abuse and cost ceilings are
+  // consumed before the handler - and the model - is reached at all.
+  return withRateLimit(
+    request,
+    (client) => limitAgentRequest(client),
+    () => handleBuyerAgentRequest(request),
+  );
 }

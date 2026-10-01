@@ -7,7 +7,7 @@ explainable and impossible for anything other than a person to start.
 **Code:** `src/domain/payment/retry.ts` (the rules),
 `src/services/payment/retry-service.ts` (the gate),
 `src/app/api/payments/retry/route.ts` (the boundary).
-**Tests:** `tests/payment-retry-rules.test.ts`, `tests/db/payment-retry.test.ts`.
+**Tests:** `tests/unit/payment-retry-rules.test.ts`, `tests/db/payment-retry.test.ts`.
 
 ---
 

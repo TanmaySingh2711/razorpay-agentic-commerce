@@ -154,6 +154,48 @@ export type ProviderLookupOutcome =
   | { readonly kind: "FAILED"; readonly failure: ProviderFailure };
 
 /**
+ * What the application asks a provider to return. Entirely server-derived:
+ * the payment id and amount come from the captured PaymentAttempt row.
+ */
+export interface RefundRequest {
+  readonly providerPaymentId: string;
+  /** Integer minor units - the full captured amount. */
+  readonly amountMinor: bigint;
+  readonly currency: CurrencyCode;
+  /** Our reference, and the provider's idempotency identity for this refund. */
+  readonly receipt: string;
+  readonly notes?: Readonly<Record<string, string>>;
+}
+
+/** A provider refund, reduced to the fields this application relies on. */
+export interface ProviderRefund {
+  readonly providerRefundId: string;
+  readonly providerPaymentId: string;
+  readonly amountMinor: bigint;
+  readonly currency: string;
+  readonly receipt: string | null;
+  /** The provider's own word, e.g. `pending`, `processed`, `failed`. */
+  readonly status: string;
+}
+
+/**
+ * The outcome of asking for a refund. The same three-way shape as creating an
+ * order, for the same reason: "we do not know" must be written down as its
+ * own answer, or the natural next line is a second refund.
+ */
+export type ProviderRefundOutcome =
+  | { readonly kind: "CREATED"; readonly refund: ProviderRefund }
+  | { readonly kind: "ALREADY_EXISTS"; readonly refund: ProviderRefund }
+  | { readonly kind: "FAILED"; readonly failure: ProviderFailure }
+  | { readonly kind: "UNKNOWN"; readonly failure: ProviderFailure };
+
+/** Looking a refund up by our receipt. Read-only, and therefore always safe. */
+export type ProviderRefundLookupOutcome =
+  | { readonly kind: "FOUND"; readonly refund: ProviderRefund }
+  | { readonly kind: "NOT_FOUND" }
+  | { readonly kind: "FAILED"; readonly failure: ProviderFailure };
+
+/**
  * The port. One implementation in production, one fake in tests.
  *
  * `createOrder` is expected to resolve its own ambiguity where it safely can —
@@ -166,6 +208,15 @@ export interface PaymentProvider {
   readonly name: "RAZORPAY";
   createOrder(request: PaymentOrderRequest): Promise<ProviderOrderOutcome>;
   findOrderByReceipt(receipt: string): Promise<ProviderLookupOutcome>;
+  /**
+   * Returns a captured payment's money. Like `createOrder`, it calls the
+   * create endpoint at most once and resolves any ambiguity by reading.
+   */
+  createRefund(request: RefundRequest): Promise<ProviderRefundOutcome>;
+  findRefundByReceipt(
+    providerPaymentId: string,
+    receipt: string,
+  ): Promise<ProviderRefundLookupOutcome>;
   /**
    * Decides whether a checkout callback genuinely came from the provider.
    *

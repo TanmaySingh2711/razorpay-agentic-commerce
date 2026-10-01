@@ -8,7 +8,7 @@ import {
   refusedOnlyForAvailability,
   type PurchaseAuthority,
 } from "@/domain/product-decision/eligibility";
-import { productDto } from "./support/fake-ai-provider";
+import { productDto } from "../support/fake-ai-provider";
 import {
   AVAILABILITY_STATUSES,
   PUBLICLY_LISTED_PRODUCT_STATUSES,

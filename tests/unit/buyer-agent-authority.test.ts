@@ -32,7 +32,7 @@ import {
   nextBestAlternative,
   refusedOnlyForAvailability,
 } from "@/domain/product-decision/eligibility";
-import { productDto } from "./support/fake-ai-provider";
+import { productDto } from "../support/fake-ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 
 /**

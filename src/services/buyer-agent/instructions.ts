@@ -65,6 +65,15 @@ BUDGET EXTRACTION
   "cheap", "affordable" or "good value" are NOT a stated limit: leave budget
   null and set needsClarification.
 
+CONVERSATIONS
+- The input may be a short conversation: lines labelled "Shopper:" and
+  "Assistant asked:". Combine everything the shopper said into one intent; the
+  latest shopper line wins where they conflict.
+- A bare answer such as "3000" or "₹5k" to a question about budget is a stated
+  limit: copy just that answer as sourceText.
+- sourceText must come from a Shopper line, never from an Assistant line. The
+  assistant's questions are context; they are not the shopper's words.
+
 REQUEST TYPE
 - BROWSE: they want to see options ("show me keyboards under ₹3000").
 - RECOMMEND: they want advice ("which keyboard should I get?").

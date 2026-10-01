@@ -152,6 +152,23 @@ const catalogEnvSchema = z.object({
 });
 
 /**
+ * An optional integer setting whose blank value means "use the default".
+ *
+ * `.env.example` lists every tunable as `NAME=` so that the rules are visible,
+ * and `npm run setup` copies that file to `.env.local` verbatim. A dotenv loader
+ * turns `NAME=` into the empty string, not into "unset" - and `z.coerce.number`
+ * reads `""` as `0`, which every bound below rejects. Without this, a fresh
+ * clone configured exactly as documented failed its first quote with
+ * CONFIG_INVALID. Blank is now what it looks like: not set.
+ */
+function optionalInteger(min: number, max: number, fallback: number) {
+  return z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.coerce.number().int().min(min).max(max).default(fallback),
+  );
+}
+
+/**
  * How long a trusted PurchaseQuote stays usable.
  *
  * One place, one value. A quote freezes a price the merchant is standing
@@ -163,7 +180,7 @@ const catalogEnvSchema = z.object({
  * checks it.
  */
 const quoteEnvSchema = z.object({
-  QUOTE_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  QUOTE_TTL_SECONDS: optionalInteger(30, 3600, 300),
 });
 
 /**
@@ -175,7 +192,7 @@ const quoteEnvSchema = z.object({
  * expire on their own clock, so this window is about the person, not the price.
  */
 const approvalEnvSchema = z.object({
-  APPROVAL_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(900),
+  APPROVAL_TTL_SECONDS: optionalInteger(30, 86400, 900),
 });
 
 /**
@@ -186,7 +203,42 @@ const approvalEnvSchema = z.object({
  * buyers; too short and a genuine payment fails at the last step.
  */
 const reservationEnvSchema = z.object({
-  RESERVATION_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(600),
+  RESERVATION_TTL_SECONDS: optionalInteger(30, 3600, 600),
+});
+
+/**
+ * Abuse and cost limits on the public surface.
+ *
+ * The deployment is a public URL, and the Buyer Agent spends real model quota
+ * on every request - so without a ceiling, one script could exhaust the day's
+ * quota and leave every genuine visitor with an error. Three ceilings, counted
+ * in PostgreSQL (see `src/services/rate-limit/rate-limit-service.ts`):
+ *
+ *  - per client per minute, which stops bursts;
+ *  - per client per day, which stops a patient loop;
+ *  - globally per day, which caps total model spend no matter how many
+ *    addresses the traffic arrives from.
+ *
+ * The payment ceiling is separate and more generous, because it guards money
+ * endpoints against hammering rather than model quota against exhaustion.
+ * All defaulted, so a fresh clone needs to set nothing.
+ */
+const rateLimitEnvSchema = z.object({
+  RATE_LIMIT_AGENT_PER_MINUTE: optionalInteger(1, 1_000, 5),
+  RATE_LIMIT_AGENT_PER_DAY: optionalInteger(1, 100_000, 60),
+  RATE_LIMIT_AGENT_GLOBAL_PER_DAY: optionalInteger(1, 1_000_000, 1_500),
+  RATE_LIMIT_PAYMENT_PER_MINUTE: optionalInteger(1, 1_000, 20),
+});
+
+/**
+ * How long after completion a purchase may still be refunded by the buyer.
+ *
+ * A merchant policy, stated as configuration rather than buried in a service,
+ * for the same reason the timing windows above are: a financial rule nobody
+ * can find is a rule nobody can review.
+ */
+const refundEnvSchema = z.object({
+  REFUND_WINDOW_DAYS: optionalInteger(1, 365, 7),
 });
 
 export type RuntimeConfig = Readonly<z.infer<typeof runtimeEnvSchema>>;
@@ -199,6 +251,8 @@ export type CatalogConfig = Readonly<z.infer<typeof catalogEnvSchema>>;
 export type QuoteConfig = Readonly<z.infer<typeof quoteEnvSchema>>;
 export type ApprovalConfig = Readonly<z.infer<typeof approvalEnvSchema>>;
 export type ReservationConfig = Readonly<z.infer<typeof reservationEnvSchema>>;
+export type RateLimitConfig = Readonly<z.infer<typeof rateLimitEnvSchema>>;
+export type RefundConfig = Readonly<z.infer<typeof refundEnvSchema>>;
 
 /**
  * Describes one failed variable without ever quoting its value.
@@ -338,6 +392,16 @@ export function getReservationConfig(
   source: EnvSource = currentEnv(),
 ): ReservationConfig {
   return Object.freeze(parseSection(reservationEnvSchema, "reservation", source));
+}
+
+/** Abuse and cost ceilings. Always available; needs no secret. */
+export function getRateLimitConfig(source: EnvSource = currentEnv()): RateLimitConfig {
+  return Object.freeze(parseSection(rateLimitEnvSchema, "rate limit", source));
+}
+
+/** Refund policy. Always available; needs no secret. */
+export function getRefundConfig(source: EnvSource = currentEnv()): RefundConfig {
+  return Object.freeze(parseSection(refundEnvSchema, "refund", source));
 }
 
 export type OptionalConfigSection =

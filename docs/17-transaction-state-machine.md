@@ -249,7 +249,7 @@ a transaction that does not exist fails instead of conjuring one.
 
 The exemptions are written as _reduced rule lists_, never `"off"`. A blanket
 `"no-restricted-syntax": "off"` would silently drop every other restriction with
-it, including the `process.env` boundary. `tests/lint-architecture.test.ts` runs
+it, including the `process.env` boundary. `tests/unit/lint-architecture.test.ts` runs
 the real ESLint configuration over fixture source and asserts exactly which
 files it lets through, so the rules cannot quietly stop matching.
 

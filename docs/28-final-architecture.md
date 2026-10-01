@@ -578,7 +578,7 @@ Concurrency is handled with two idioms throughout, both of which fail closed:
 Both run inside `prisma.$transaction`, so a partial write is not a state the
 system can be left in.
 
-Full detail: [16 — Database](./16-database.md), [08 — Data model](./08-data-model.md).
+Full detail: [16 — Database](./16-database.md), [08 — Data model](./history/08-data-model.md).
 
 ---
 

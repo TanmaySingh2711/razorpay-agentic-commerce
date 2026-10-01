@@ -2,7 +2,7 @@
 
 > **Historical record.** This is the original forward plan. The objectives it describes have since been delivered. It is kept for the reasoning, not as a
 > description of the current system — for that, see
-> [28 — Final architecture](./28-final-architecture.md).
+> [28 — Final architecture](../28-final-architecture.md).
 
 Later objectives, ordered so each one lands against a working system and none
 requires revisiting the architecture. No feature here is an invention beyond
@@ -49,11 +49,11 @@ human-approved.
 6. **New provider integrations go behind an adapter** that returns domain
    shapes, never raw provider objects.
 7. **Razorpay behaviour is verified against current documentation** when
-   implemented — the assumptions flagged in [02](./02-architecture.md) and
-   [06](./06-security-and-trust-boundaries.md) as _to be verified during the
+   implemented — the assumptions flagged in [02](../02-architecture.md) and
+   [06](../06-security-and-trust-boundaries.md) as _to be verified during the
    Razorpay integration objective_ must be checked, not inherited.
 8. **A new module means a new folder with a real file in it**, in the home named
-   by [13](./13-repository-structure.md). No placeholder directories.
+   by [13](../13-repository-structure.md). No placeholder directories.
 9. **PostgreSQL everywhere.** No SQLite tier, no "migrate later" plan. Tests run
    on PostgreSQL too.
 10. **Money stays BIGINT minor units + explicit currency.** Cross the bigint

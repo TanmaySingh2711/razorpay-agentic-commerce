@@ -12,9 +12,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Automated verification runs entirely on this machine. It must stay that way.
 
-- **Database tests use local Docker PostgreSQL 17**, addressed by
-  `TEST_DIRECT_URL`. Start it with `npm run db:test:up`, prepare the schema once
-  with `npm run db:test:setup`. There is no fallback to `DIRECT_URL`, because the
+- **Database tests use local PostgreSQL 17**, addressed by `TEST_DIRECT_URL`.
+  `npm run setup` does everything on a fresh clone (install, `.env.local`, both
+  databases); it starts the Docker container, or uses a PostgreSQL 17 already
+  listening on `localhost:5432` with the same credentials. By hand: start it with
+  `npm run db:test:up`, prepare the schema once with `npm run db:test:setup`.
+  Re-run `npm run db:test:setup` after adding a migration. There is no fallback to `DIRECT_URL`, because the
   suite truncates its schema between tests and that fallback would aim it at
   staging; `tests/db/test-database-url.ts` fails the run instead.
 - **Never point automated tests at the hosted Neon database.** The suite reads

@@ -30,6 +30,8 @@ export const ERROR_CATEGORIES = [
   "infrastructure",
   /** A bug: an unexpected, unclassified condition. */
   "internal",
+  /** Refused by an abuse or cost ceiling. Retryable later; nothing was done. */
+  "rate_limited",
 ] as const;
 
 export type ErrorCategory = (typeof ERROR_CATEGORIES)[number];
@@ -44,6 +46,7 @@ const DEFAULT_PUBLIC_MESSAGE: Record<ErrorCategory, string> = {
   configuration: "The service is not correctly configured.",
   infrastructure: "The service is temporarily unavailable.",
   internal: "Something went wrong.",
+  rate_limited: "Too many requests. Please wait a moment and try again.",
 };
 
 const DEFAULT_HTTP_STATUS: Record<ErrorCategory, number> = {
@@ -56,6 +59,7 @@ const DEFAULT_HTTP_STATUS: Record<ErrorCategory, number> = {
   configuration: 500,
   infrastructure: 503,
   internal: 500,
+  rate_limited: 429,
 };
 
 export interface AppErrorOptions {
@@ -191,4 +195,26 @@ export function toAppError(thrown: unknown): AppError {
     message,
     cause: thrown,
   });
+}
+
+/**
+ * Turned away by an abuse or cost ceiling, before any work was done.
+ *
+ * Its own category because it is neither the caller's mistake (`validation`)
+ * nor a refusal on the merits (`authorization`): the same request will succeed
+ * later, and `retryAfterSeconds` says when. Nothing was charged and no model
+ * was called.
+ */
+export class RateLimitedError extends AppError {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number, details: JsonObject = {}) {
+    super("rate_limited", {
+      code: "RATE_LIMITED",
+      message: "The request was refused by a rate limit.",
+      retryable: true,
+      details: { ...details, retryAfterSeconds },
+    });
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
 }

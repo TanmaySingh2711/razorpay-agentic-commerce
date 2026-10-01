@@ -67,6 +67,8 @@ export const WEBHOOK_MISMATCHES = [
   "PAYMENT_ID_CONFLICT",
   "AMOUNT_MISMATCH",
   "CURRENCY_MISMATCH",
+  /** A refund event naming a refund this system never asked for. */
+  "REFUND_NOT_FOUND",
 ] as const;
 
 export type WebhookMismatch = (typeof WEBHOOK_MISMATCHES)[number];
@@ -112,6 +114,42 @@ export const razorpayWebhookSchema = z.object({
 });
 
 export type RazorpayWebhookEvent = z.infer<typeof razorpayWebhookSchema>;
+
+/**
+ * Refund events this system acts on.
+ *
+ * Deliberately separate from `SUPPORTED_WEBHOOK_EVENTS`: a refund event moves
+ * a Refund row, never a transaction state, so it must never reach the payment
+ * path's event-to-transition mapping. `refund.created` is not listed - the
+ * create call already told us that, and acting on it twice adds nothing.
+ */
+export const REFUND_WEBHOOK_EVENTS = ["refund.processed", "refund.failed"] as const;
+
+export type RefundWebhookEvent = (typeof REFUND_WEBHOOK_EVENTS)[number];
+
+export function isRefundWebhookEvent(event: string): event is RefundWebhookEvent {
+  return (REFUND_WEBHOOK_EVENTS as readonly string[]).includes(event);
+}
+
+const refundEntitySchema = z.object({
+  id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH),
+  payment_id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH),
+  amount: z.number().int().nonnegative(),
+  currency: z.string().min(3).max(8),
+  receipt: z.string().max(40).nullish(),
+  status: z.string().min(1).max(40),
+});
+
+/** The part of a refund webhook this system reads. Extra keys are tolerated. */
+export const razorpayRefundWebhookSchema = z.object({
+  event: z.string().min(1).max(80),
+  payload: z.object({
+    refund: z.object({ entity: refundEntitySchema }),
+  }),
+});
+
+/** Only the event name, read before deciding which schema the body must meet. */
+export const webhookEventNameSchema = z.object({ event: z.string().min(1).max(80) });
 
 /** The facts a verified event asserts, after parsing and before correlation. */
 export interface AuthenticatedWebhookFacts {
@@ -163,6 +201,13 @@ export type WebhookOutcome =
        * It is a signal for reconciliation, not a decision.
        */
       readonly anomaly: "MULTIPLE_CAPTURE" | null;
+    }
+  | {
+      /** A refund event, applied to the Refund row it names. */
+      readonly kind: "REFUND_RECONCILED";
+      readonly providerEventId: string;
+      readonly transactionId: string;
+      readonly alreadyAccountedFor: boolean;
     }
   | {
       readonly kind: "DUPLICATE";

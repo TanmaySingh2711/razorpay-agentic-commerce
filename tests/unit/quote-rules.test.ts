@@ -15,7 +15,7 @@ import {
   type PurchaseAuthority,
 } from "@/domain/product-decision/eligibility";
 import { fixedClock } from "@/lib/clock";
-import { productDto } from "./support/fake-ai-provider";
+import { productDto } from "../support/fake-ai-provider";
 
 /**
  * The trusted-quote rules, without a database and without waiting.

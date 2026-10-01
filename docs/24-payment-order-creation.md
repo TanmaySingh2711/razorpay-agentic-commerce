@@ -311,7 +311,7 @@ verified outcome, not on this call's own failure to create an order.
 
 ## Testing
 
-`tests/payment-order-rules.test.ts` (27) drives the adapter through an injected
+`tests/unit/payment-order-rules.test.ts` (27) drives the adapter through an injected
 `fetch`: lost responses, unparsable `200`s, duplicate receipts, and 5xx. Each one
 asserts the **count of create calls**, because the property that matters is
 negative.

@@ -20,7 +20,6 @@ retry design — and it links onward to whichever document owns each detail.
 | [05 — State model](./05-transaction-state-machine.md)           | The states themselves; the engine is [17](./17-transaction-state-machine.md)         |
 | [06 — Security & trust](./06-security-and-trust-boundaries.md)  | Trust zones and the conventions per zone                                             |
 | [07 — API boundaries](./07-api-boundaries.md)                   | The HTTP and server-action surface                                                   |
-| [08 — Data model](./08-data-model.md)                           | Entities, money representation, relationships                                        |
 | [09 — Configuration](./09-configuration.md)                     | Environment variables and the config boundary                                        |
 | [10 — Errors & logging](./10-errors-and-logging.md)             | Error taxonomy, log conventions                                                      |
 | [11 — Explainability & audit](./11-explainability-and-audit.md) | Decision-record contract; the trail itself is [23](./23-audit-and-explainability.md) |
@@ -45,6 +44,18 @@ retry design — and it links onward to whichever document owns each detail.
 | [28 — Final architecture](./28-final-architecture.md)               | **The whole system in one document**                        |
 | [29 — Safety passport](./29-safety-passport.md)                     | The deterministic reviewer summary on the transaction page  |
 
+## Growth and hardening
+
+Added after the final architecture was written. Each extends it without
+changing a guarantee it states.
+
+| Document                                                       | What it settles                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [30 — Abuse and cost limits](./30-abuse-and-cost-limits.md)    | PostgreSQL-backed rate limits that protect the public demo's model quota  |
+| [31 — Conversation and prefetch](./31-conversational-agent.md) | Answering a clarifying question, two round trips instead of three, traces |
+| [32 — Refunds](./32-refunds.md)                                | Buyer refunds: at most once, server-derived, reconciled by reading        |
+| [33 — Merchant insights](./33-merchant-insights.md)            | The merchant dashboard: conversion, unmet demand, recovery                |
+
 ## Testing
 
 | Document                        | What it settles                                          |
@@ -53,14 +64,16 @@ retry design — and it links onward to whichever document owns each detail.
 
 ## Historical record
 
-These describe an earlier point in the build. They are kept because the
-reasoning is still useful, but **they do not describe the current system** —
+These describe an earlier point in the build and live in [`history/`](./history/).
+They are kept because the reasoning is still useful, but **they do not describe
+the current system** —
 where they disagree with the documents above, the documents above are right.
 
-| Document                                            | What it records                                             |
-| --------------------------------------------------- | ----------------------------------------------------------- |
-| [14 — Objective 1 scope](./14-objective-1-scope.md) | What the first objective did and deliberately did not build |
-| [15 — Roadmap](./15-roadmap.md)                     | The order later objectives were planned in                  |
+| Document                                                    | What it records                                                         |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [08 — Data model](./history/08-data-model.md)               | The pre-implementation schema sketch; [16](./16-database.md) is current |
+| [14 — Objective 1 scope](./history/14-objective-1-scope.md) | What the first objective did and deliberately did not build             |
+| [15 — Roadmap](./history/15-roadmap.md)                     | The order later objectives were planned in                              |
 
 ## Reading order for a new contributor
 

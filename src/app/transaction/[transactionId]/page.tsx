@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { approvePurchase, rejectPurchase, reserveStock } from "@/app/actions/purchase";
+import {
+  approvePurchase,
+  checkRefundStatus,
+  refundPurchase,
+  rejectPurchase,
+  reserveStock,
+} from "@/app/actions/purchase";
+import { SiteHeader } from "@/components/site-header";
+import { describeRefundStatus } from "@/domain/refund/contracts";
 import { AwaitingProvider } from "@/components/transaction/awaiting-provider";
 import { DecisionForm } from "@/components/transaction/decision-form";
 import { PayButton } from "@/components/payments/pay-button";
@@ -126,6 +134,178 @@ function QuoteCard({ overview }: { readonly overview: TransactionOverview }) {
         The assistant suggested this product. This price was read from the merchant&apos;s
         own records by the server and frozen — it is the only amount that can be charged.
       </p>
+    </section>
+  );
+}
+
+/** Plain words for the eligibility codes the decision engine records. */
+const REASON_WORDS: Readonly<Record<string, string>> = {
+  MATCHES_CATEGORY: "the category you asked for",
+  MATCHES_HARD_REQUIREMENTS: "every requirement you stated",
+  WITHIN_BUDGET: "your budget",
+  CURRENCY_MATCH: "your currency",
+  IN_STOCK: "being in stock",
+  SUFFICIENT_INVENTORY: "enough stock for your quantity",
+};
+
+/**
+ * How the assistant chose - from the server's record, not the model's story.
+ *
+ * The comparison is the point: a buyer can see what else met every rule and
+ * what it cost, so "why this one?" has an answer they can check. Every figure
+ * is one the server counted or read from the catalog when it decided.
+ */
+function SelectionCard({ overview }: { readonly overview: TransactionOverview }) {
+  const { selection, product } = overview;
+  if (selection === null || product === null) return null;
+
+  const checked = selection.reasons
+    .map((reason) => REASON_WORDS[reason])
+    .filter((words): words is string => words !== undefined);
+  const chosen = BigInt(product.unitAmount.amountMinor);
+
+  return (
+    <section className="card" aria-labelledby="chose-heading">
+      <div className="card-head">
+        <h2 id="chose-heading">How the assistant chose</h2>
+        {selection.substituted ? <Badge tone="warning">substituted</Badge> : null}
+      </div>
+
+      {selection.agent === null ? null : (
+        <dl className="facts agent-facts">
+          <div>
+            <dt>Products looked at</dt>
+            <dd>{selection.agent.productsObserved}</dd>
+          </div>
+          <div>
+            <dt>Met every rule</dt>
+            <dd>{selection.eligibleCount ?? "–"}</dd>
+          </div>
+          <div>
+            <dt>Model calls</dt>
+            <dd>{selection.agent.modelCalls}</dd>
+          </div>
+          <div>
+            <dt>Time to decide</dt>
+            <dd>{(selection.agent.durationMs / 1000).toFixed(1)}s</dd>
+          </div>
+        </dl>
+      )}
+
+      {checked.length === 0 ? null : (
+        <p>
+          The server checked this product against {checked.join(", ")} before pricing it.
+        </p>
+      )}
+      {selection.substituted ? (
+        <p className="hint">
+          The product the assistant proposed was out of stock, so the server chose the
+          closest in-stock product that meets the same rules.
+        </p>
+      ) : null}
+
+      {selection.alternatives.length === 0 ? (
+        <p className="hint">
+          No other product met every rule, so this was the only option.
+        </p>
+      ) : (
+        <>
+          <h3 className="subhead">Also met every rule</h3>
+          <ul className="alternatives">
+            {selection.alternatives.map((alternative) => {
+              const difference = BigInt(alternative.unitAmount.amountMinor) - chosen;
+              const magnitude = formatMoney({
+                amountMinor: (difference < 0n ? -difference : difference).toString(),
+                currency: alternative.unitAmount.currency,
+              });
+              return (
+                <li key={alternative.name}>
+                  <span className="alt-name">{alternative.name}</span>
+                  <span className="alt-price">{formatMoney(alternative.unitAmount)}</span>
+                  <span className="hint">
+                    {difference === 0n
+                      ? "same price"
+                      : `${magnitude} ${difference > 0n ? "more" : "less"}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="hint">
+            Prices as the catalog stated them when the choice was made. The assistant
+            weighed your preferences between these; the server only allowed candidates
+            that passed every rule.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Money going back. Offered only once the purchase completed, and only ever
+ * as a transaction id sent to a server action - the amount is the captured
+ * one, decided by the refund service.
+ */
+function RefundCard({ overview }: { readonly overview: TransactionOverview }) {
+  if (overview.state !== "COMPLETED") return null;
+  const { refund } = overview;
+
+  if (refund === null || refund.status === "FAILED") {
+    return (
+      <section className="card action" aria-labelledby="refund-heading">
+        <h2 id="refund-heading">Changed your mind?</h2>
+        {refund?.status === "FAILED" ? (
+          <p className="field-error">{describeRefundStatus("FAILED")}</p>
+        ) : null}
+        <p>
+          You can refund this purchase in full to the original payment method. The amount
+          is the one that was captured - it cannot be changed here.
+        </p>
+        <DecisionForm
+          action={refundPurchase}
+          transactionId={overview.transactionId}
+          label="Refund this purchase"
+          busyLabel="Requesting refund…"
+          variant="secondary"
+        />
+      </section>
+    );
+  }
+
+  const open = refund.status !== "PROCESSED";
+  return (
+    <section className="card" aria-labelledby="refund-heading">
+      <div className="card-head">
+        <h2 id="refund-heading">Refund</h2>
+        <Badge tone={refund.status === "PROCESSED" ? "positive" : "warning"}>
+          {refund.status.replace(/_/g, " ").toLowerCase()}
+        </Badge>
+      </div>
+      <p>{describeRefundStatus(refund.status)}</p>
+      <dl className="facts">
+        <div>
+          <dt>Amount</dt>
+          <dd className="total">{formatMoney(refund.amount)}</dd>
+        </div>
+        <div>
+          <dt>Requested</dt>
+          <dd>
+            <time dateTime={refund.requestedAt}>
+              {formatDateTime(refund.requestedAt)}
+            </time>
+          </dd>
+        </div>
+      </dl>
+      {open ? (
+        <DecisionForm
+          action={checkRefundStatus}
+          transactionId={overview.transactionId}
+          label="Check refund status"
+          busyLabel="Checking…"
+          variant="secondary"
+        />
+      ) : null}
     </section>
   );
 }
@@ -380,57 +560,64 @@ export default async function TransactionPage({
   const narrative = describeState(overview.state);
 
   return (
-    <main className="wide">
-      <p className="breadcrumb">
-        <Link href="/" className="secondary">
-          ← Start another purchase
-        </Link>
-      </p>
+    <>
+      <SiteHeader current={null} />
+      <main className="wide">
+        <p className="breadcrumb">
+          <Link href="/" className="secondary">
+            ← Start another purchase
+          </Link>
+        </p>
 
-      <header className="page-head">
-        <h1>{narrative.label}</h1>
-        <p className="lead">{narrative.meaning}</p>
-        {awaitsProvider(overview.state) ? <AwaitingProvider /> : null}
-      </header>
+        <header className="page-head">
+          <h1>{narrative.label}</h1>
+          <p className="lead">{narrative.meaning}</p>
+          {awaitsProvider(overview.state) ? <AwaitingProvider /> : null}
+        </header>
 
-      <Journey overview={overview} />
-      <ActionCard overview={overview} />
-      <QuoteCard overview={overview} />
-      <PolicyCard overview={overview} />
-      <InventoryCard overview={overview} />
-      <SafetyPassport passport={overview.passport} />
-      <Timeline overview={overview} />
+        <Journey overview={overview} />
+        <ActionCard overview={overview} />
+        <RefundCard overview={overview} />
+        <QuoteCard overview={overview} />
+        <SelectionCard overview={overview} />
+        {/* Right after the facts it vouches for: the thirty-second answer to
+          "why was this allowed?", ahead of the detail cards below it. */}
+        <SafetyPassport passport={overview.passport} />
+        <PolicyCard overview={overview} />
+        <InventoryCard overview={overview} />
+        <Timeline overview={overview} />
 
-      <details className="technical">
-        <summary>Technical detail</summary>
-        <dl className="facts">
-          <div>
-            <dt>Transaction state</dt>
-            <dd>
-              <code>{overview.state}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>Transaction id</dt>
-            <dd>
-              <code>{overview.transactionId}</code>
-            </dd>
-          </div>
-          {overview.policy === null ? null : (
+        <details className="technical">
+          <summary>Technical detail</summary>
+          <dl className="facts">
             <div>
-              <dt>Policy reason code</dt>
+              <dt>Transaction state</dt>
               <dd>
-                <code>{overview.policy.reasonCode}</code>
+                <code>{overview.state}</code>
               </dd>
             </div>
-          )}
-        </dl>
-        <p className="hint">
-          <code>PAYMENT_VERIFIED</code> means the browser&apos;s confirmation was
-          authentic. <code>PAYMENT_CAPTURED</code> means the provider confirmed the money.
-          They are different facts and this system never treats one as the other.
-        </p>
-      </details>
-    </main>
+            <div>
+              <dt>Transaction id</dt>
+              <dd>
+                <code>{overview.transactionId}</code>
+              </dd>
+            </div>
+            {overview.policy === null ? null : (
+              <div>
+                <dt>Policy reason code</dt>
+                <dd>
+                  <code>{overview.policy.reasonCode}</code>
+                </dd>
+              </div>
+            )}
+          </dl>
+          <p className="hint">
+            <code>PAYMENT_VERIFIED</code> means the browser&apos;s confirmation was
+            authentic. <code>PAYMENT_CAPTURED</code> means the provider confirmed the
+            money. They are different facts and this system never treats one as the other.
+          </p>
+        </details>
+      </main>
+    </>
   );
 }

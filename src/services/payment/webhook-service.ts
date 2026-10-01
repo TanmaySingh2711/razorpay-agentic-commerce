@@ -8,9 +8,14 @@ import { recordAuditEvent } from "@/services/audit/audit-service";
 import { classifyPaymentFailure, describePaymentFailure } from "@/domain/payment/failure";
 import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
 import { commitReservationWithin } from "@/services/inventory/reservation-service";
+import { applyRefundWebhook } from "@/services/refund/refund-service";
 import {
+  isRefundWebhookEvent,
   isSupportedWebhookEvent,
+  razorpayRefundWebhookSchema,
   razorpayWebhookSchema,
+  webhookEventNameSchema,
+  type RefundWebhookEvent,
   type AuthenticatedWebhookFacts,
   type SupportedWebhookEvent,
   type WebhookMismatch,
@@ -402,6 +407,108 @@ async function finalizeCapturedPayment(
   return { kind: "COMPLETED" };
 }
 
+/** The event name alone, from an already-authenticated body. */
+function readEventName(rawBody: string): string | null {
+  try {
+    const parsed = webhookEventNameSchema.safeParse(JSON.parse(rawBody));
+    return parsed.success ? parsed.data.event : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A refund event, authenticated by the caller: claim the delivery, then settle
+ * the Refund row it names.
+ *
+ * The same ledger and the same duplicate rule as payment events - the delivery
+ * id is claimed by a unique index in the same database transaction as the
+ * effect, so a redelivery changes nothing.
+ */
+async function processRefundWebhook(
+  rawBody: string,
+  providerEventId: string,
+  eventType: RefundWebhookEvent,
+  deps: WebhookServiceDeps,
+): Promise<WebhookOutcome> {
+  let parsed: ReturnType<typeof razorpayRefundWebhookSchema.safeParse>;
+  try {
+    parsed = razorpayRefundWebhookSchema.safeParse(JSON.parse(rawBody));
+  } catch {
+    return { kind: "REJECTED", rejection: "BODY_MALFORMED" };
+  }
+  if (!parsed.success) return { kind: "REJECTED", rejection: "BODY_MALFORMED" };
+  const entity = parsed.data.payload.refund.entity;
+
+  try {
+    return await deps.prisma.$transaction(async (tx): Promise<WebhookOutcome> => {
+      await tx.webhookEvent.create({
+        data: {
+          provider: "RAZORPAY",
+          externalEventId: providerEventId,
+          eventType,
+          status: "RECEIVED",
+          payloadDigest: digestOf(rawBody),
+        },
+      });
+
+      const applied = await applyRefundWebhook(tx, {
+        providerEventId,
+        eventType,
+        refund: {
+          providerRefundId: entity.id,
+          providerPaymentId: entity.payment_id,
+          amountMinor: BigInt(entity.amount),
+          currency: entity.currency.toUpperCase(),
+          receipt: entity.receipt ?? null,
+          status: entity.status,
+        },
+        now: deps.clock.now(),
+      });
+
+      if (applied.kind === "NOT_FOUND") {
+        await markRejected(tx, providerEventId, "REFUND_NOT_FOUND");
+        return {
+          kind: "MISMATCHED",
+          providerEventId,
+          mismatch: "REFUND_NOT_FOUND",
+          transactionId: null,
+        };
+      }
+      if (applied.kind === "MISMATCH") {
+        await markRejected(tx, providerEventId, "AMOUNT_MISMATCH", applied.transactionId);
+        return {
+          kind: "MISMATCHED",
+          providerEventId,
+          mismatch: "AMOUNT_MISMATCH",
+          transactionId: applied.transactionId,
+        };
+      }
+
+      await tx.webhookEvent.update({
+        where: eventKey(providerEventId),
+        data: {
+          status: "PROCESSED",
+          processedAt: new Date(),
+          transactionId: applied.transactionId,
+        },
+      });
+      return {
+        kind: "REFUND_RECONCILED",
+        providerEventId,
+        transactionId: applied.transactionId,
+        alreadyAccountedFor: applied.kind === "ALREADY_SETTLED",
+      };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      await recordDuplicate(deps.prisma, providerEventId);
+      return { kind: "DUPLICATE", providerEventId };
+    }
+    throw error;
+  }
+}
+
 /**
  * Processes one inbound webhook.
  *
@@ -441,6 +548,13 @@ export async function processWebhook(
     return { kind: "REJECTED", rejection: "EVENT_ID_MISSING" };
   }
   const providerEventId = inbound.providerEventId;
+
+  // --- 2a. Refund events take their own path. They move a Refund row and
+  // never a transaction state, so they must not reach the mapping below. ---
+  const eventName = readEventName(inbound.rawBody);
+  if (eventName !== null && isRefundWebhookEvent(eventName)) {
+    return processRefundWebhook(inbound.rawBody, providerEventId, eventName, deps);
+  }
 
   // --- 2. Parse, now that the bytes are known to be the provider's. ---
   const facts = readFacts(inbound.rawBody, providerEventId);

@@ -706,8 +706,8 @@ button[aria-busy="true"]::after {
 }
 
 /* --- Product header ------------------------------------------------------
-   A slim identity bar, not a navigation system - there is nowhere else in
-   this demo to go from here. Full-bleed on purpose: it is the one element
+   A slim identity bar with three destinations (see .site-nav below), not a
+   navigation system. Full-bleed on purpose: it is the one element
    allowed to ignore `main`'s max-width, the way a real product's top bar
    would sit above its content column rather than inside it. */
 
@@ -1078,4 +1078,394 @@ button[aria-busy="true"]::after {
 
 .recovery-row {
   margin: 0.75rem 0 0;
+}
+
+/* --- Site navigation ------------------------------------------------------
+   Three destinations for three audiences: the shopper, the merchant and the
+   reviewer. The current page carries aria-current, and that attribute - not
+   a class - is what styles it, so what is announced and what is shown can
+   never disagree. */
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.nav-link {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.nav-link:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.nav-link[aria-current="page"] {
+  color: var(--accent);
+  background: var(--accent-quiet);
+}
+
+/* --- The assistant at work ------------------------------------------------ */
+
+.agent-progress {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.agent-progress ol {
+  list-style: none;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.agent-progress li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.agent-progress li.current {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.agent-progress .dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+}
+
+.agent-progress li.done .dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.agent-progress li.current .dot {
+  border-color: var(--accent);
+  animation: pulse 1.2s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-progress li.current .dot {
+    animation: none;
+    background: var(--accent);
+  }
+}
+
+/* --- The conversation ----------------------------------------------------- */
+
+.thread {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+}
+
+.thread-turn {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bubble {
+  margin: 0;
+  max-width: 85%;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius);
+  font-size: 0.93rem;
+  overflow-wrap: anywhere;
+}
+
+.bubble.shopper {
+  justify-self: end;
+  background: var(--accent-quiet);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.bubble.assistant {
+  justify-self: start;
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+/* A text-weight action that still looks pressable: underline plus hover. */
+.link-button {
+  justify-self: start;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--foreground);
+}
+
+.chip-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  vertical-align: 0.05em;
+}
+
+/* --- How the assistant chose ---------------------------------------------- */
+
+.subhead {
+  font-size: 0.85rem;
+  margin: 1.1rem 0 0.4rem;
+  color: var(--muted);
+}
+
+.agent-facts {
+  margin: 0.9rem 0;
+}
+
+.alternatives {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.alternatives li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.alt-name {
+  font-weight: 600;
+}
+
+.alt-price {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 30rem) {
+  .alternatives li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .alternatives li .hint {
+    grid-column: 1 / -1;
+  }
+}
+
+/* --- Merchant insights ----------------------------------------------------
+   Figures before charts: a handful of headline numbers is a row of stat
+   tiles, not a chart. The charts below are single-series bar lists in the
+   accent - one hue, so no legend - with the value written at every bar's tip.
+   Bars are capped in thickness and rounded only at their data end. */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0;
+}
+
+.stat-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+}
+
+.stat-label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.stat-value {
+  margin: 0.15rem 0 0.1rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+.hero-row .stat-tile:first-child .stat-value {
+  font-size: 2rem;
+}
+
+.bar-list {
+  list-style: none;
+  margin: 0.9rem 0 0.4rem;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.bar-list li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 13rem) 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.bar-label {
+  color: var(--foreground);
+}
+
+.bar-track {
+  display: block;
+  height: 14px;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-list li:hover .bar-fill {
+  background: color-mix(in srgb, var(--accent) 80%, var(--foreground));
+}
+
+.bar-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .bar-list li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .bar-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.insight-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.insight-list li {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.insight-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.2rem;
+  text-transform: capitalize;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin: 0.75rem 0 0.4rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.data-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Forced colours (Windows high contrast) repaint backgrounds with the system
+   canvas colour, which would erase every bar and leave the charts looking
+   empty. The bars are data, so they opt out and draw in the system's text
+   colour instead; the progress dots do the same. */
+@media (forced-colors: active) {
+  .bar-fill,
+  .agent-progress li.done .dot {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
+
+/* --- A recommendation ----------------------------------------------------
+   Advice, not a purchase: quieter than the action card, with the price set
+   apart so it reads as the catalog's figure rather than part of the prose. */
+
+.notice.recommendation {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.recommendation-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.recommendation-price {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 500;
 }

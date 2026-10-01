@@ -7,7 +7,7 @@
 > `<name>Currency` columns as this document specifies; see the correction after
 > the next section. For the field names, constraints and indexes actually in
 > `prisma/schema.prisma` today, see
-> [16 — Database](./16-database.md) and the schema file itself. This document
+> [16 — Database](../16-database.md) and the schema file itself. This document
 > is kept for the entities' purpose and relationships, which are still accurate.
 
 **Design only, as first written.** No schema, model or migration existed when
@@ -55,13 +55,13 @@ present, never a float or `numeric` column — but the column shape is one
 per row**, not a currency column per amount. A row with two amounts (like
 `PurchaseQuote`'s `unitAmount` and `totalAmount`) has one `currency` column
 covering both, because both are always denominated the same way. See
-[16 — Database](./16-database.md#money) for the exact columns and the CHECK
+[16 — Database](../16-database.md#money) for the exact columns and the CHECK
 constraints that enforce this.
 
 Never a decimal, float, `numeric`, or `numeric(p,s)` column — in PostgreSQL or
 anywhere else. Never an amount without a currency somewhere on its row.
 
-The application type is [`Money`](../src/domain/money.ts), which enforces the
+The application type is [`Money`](../../src/domain/money.ts), which enforces the
 integer constraint at construction and refuses to combine mismatched currencies.
 This is also what Razorpay's API expects, so the authoritative price reaches the
 payment provider with no conversion step in which a rounding error could live.
@@ -135,7 +135,7 @@ erDiagram
 | Primary id    | `transactionId`                                                                                                                                                                                                                                                                                                                                     |
 | Fields        | `userId`, `merchantId`, `productId` (nullable until selected), `intent` (structured), `purchaseQuoteId` (nullable until quoted), `authorizedAmountMinorUnits`, `authorizedAmountCurrency`, `policyId`, `policyVersion`, `currentState`, `correlationId`, `createdAt`, `updatedAt`, `completedAt`                                                    |
 | Relationships | Has one quote, one reservation, many transitions, many payment attempts and audit events; may have one approval request.                                                                                                                                                                                                                            |
-| Status enum   | `TransactionState` — the 17 states in [05](./05-transaction-state-machine.md).                                                                                                                                                                                                                                                                      |
+| Status enum   | `TransactionState` — the 17 states in [05](../05-transaction-state-machine.md).                                                                                                                                                                                                                                                                     |
 | Security      | `currentState` is written only by the Transaction Service, only via `evaluateTransition`, and every change also appends a `TransactionStateTransition`. The authorized amount is stored separately from the quote on purpose: if a re-verification disagrees with what was authorized, the discrepancy is visible rather than silently overwritten. |
 
 ### PurchaseQuote
@@ -162,14 +162,14 @@ erDiagram
 
 ### TransactionStateTransition
 
-|               |                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Purpose       | Append-only history of how a transaction reached its current state.                                                                                                                                                                                                                                                                                                                                                      |
-| Primary id    | `stateTransitionId`                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Fields        | `transactionId`, `fromState`, `toState`, `actor`, `trigger`, `reason`, `idempotencyKey`, `occurredAt`                                                                                                                                                                                                                                                                                                                    |
-| Relationships | Belongs to one transaction; ordered by `occurredAt`.                                                                                                                                                                                                                                                                                                                                                                     |
-| Status enum   | — each row _is_ a transition.                                                                                                                                                                                                                                                                                                                                                                                            |
-| Security      | Written only for **accepted** transitions, only by the Transaction Service, only after `evaluateTransition` approves. Never updated, never deleted. `fromState` and `toState` use the names from [`states.ts`](../src/domain/transaction/states.ts) — the schema must not declare a competing enum. Purpose: debugging, auditability, judge-visible evidence, and safe reconciliation when webhooks arrive out of order. |
+|               |                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Purpose       | Append-only history of how a transaction reached its current state.                                                                                                                                                                                                                                                                                                                                                         |
+| Primary id    | `stateTransitionId`                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Fields        | `transactionId`, `fromState`, `toState`, `actor`, `trigger`, `reason`, `idempotencyKey`, `occurredAt`                                                                                                                                                                                                                                                                                                                       |
+| Relationships | Belongs to one transaction; ordered by `occurredAt`.                                                                                                                                                                                                                                                                                                                                                                        |
+| Status enum   | — each row _is_ a transition.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Security      | Written only for **accepted** transitions, only by the Transaction Service, only after `evaluateTransition` approves. Never updated, never deleted. `fromState` and `toState` use the names from [`states.ts`](../../src/domain/transaction/states.ts) — the schema must not declare a competing enum. Purpose: debugging, auditability, judge-visible evidence, and safe reconciliation when webhooks arrive out of order. |
 
 ### PaymentAttempt
 
@@ -197,7 +197,7 @@ erDiagram
 
 |               |                                                                                                                           |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Purpose       | The append-only, user-facing record. See [11](./11-explainability-and-audit.md).                                          |
+| Purpose       | The append-only, user-facing record. See [11](../11-explainability-and-audit.md).                                         |
 | Primary id    | `eventId`                                                                                                                 |
 | Fields        | `transactionId`, `eventType`, `actor`, `result`, `details` (structured JSON), `decisionId`, `correlationId`, `occurredAt` |
 | Relationships | Belongs to a transaction; may reference a decision record.                                                                |
@@ -226,7 +226,7 @@ erDiagram
   as dead code; nothing today stops a plain `string` from one entity's id being
   passed where another's belongs except naming discipline and tests.
 - **Enums**: transaction state names come from
-  [`states.ts`](../src/domain/transaction/states.ts). The Prisma schema must
+  [`states.ts`](../../src/domain/transaction/states.ts). The Prisma schema must
   match that list; it must not declare a second, drifting definition.
 - **Correlation**: `correlationId` appears on transactions, audit events and log
   lines, so one logical request can be reassembled across all three.

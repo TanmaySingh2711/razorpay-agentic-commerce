@@ -8,7 +8,7 @@ Implemented in:
 [`states.ts`](../src/domain/transaction/states.ts),
 [`transitions.ts`](../src/domain/transaction/transitions.ts),
 [`state-machine.ts`](../src/domain/transaction/state-machine.ts), and
-[`tests/transaction-state-machine.test.ts`](../tests/transaction-state-machine.test.ts).
+[`tests/unit/transaction-state-machine.test.ts`](../tests/unit/transaction-state-machine.test.ts).
 
 `states.ts` is the **single authoritative definition** of transaction states.
 No competing enum may exist anywhere — including the Prisma schema in Objective

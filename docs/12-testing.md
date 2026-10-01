@@ -142,10 +142,10 @@ Gemini, real hosted catalog, no writes of any kind. See
 
 The runner is split so each half gets the scheduling it needs:
 
-| Project | Files         | Parallel | Why                                                    |
-| ------- | ------------- | -------- | ------------------------------------------------------ |
-| `unit`  | `tests/*`     | yes      | No shared state. 811 tests, seconds.                   |
-| `db`    | `tests/db/**` | **no**   | 429 tests sharing one schema, truncated between tests. |
+| Project | Files           | Parallel | Why                                                    |
+| ------- | --------------- | -------- | ------------------------------------------------------ |
+| `unit`  | `tests/unit/**` | yes      | No shared state. 811 tests, seconds.                   |
+| `db`    | `tests/db/**`   | **no**   | 429 tests sharing one schema, truncated between tests. |
 
 Per-worker schemas would let the database files run concurrently too, but that
 means provisioning and migrating N schemas per run and teaching the disposable-
@@ -214,30 +214,37 @@ First-time setup:
 
 ## Continuous integration
 
-`.github/workflows/verify.yml` runs the same two commands on every push and pull
-request, on a machine that has never seen this repository:
+`.github/workflows/ci.yml` (workflow name **CI**) runs eight checks on every
+push and pull request, each on a machine that has never seen this repository:
 
-```
-npm ci  ->  npm run db:test:setup  ->  npm run verify  ->  npm run format:check
-```
+| Check                                        | What it proves                                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `Lint (eslint)`                              | ESLint (style and architecture rules), Prettier, and a production-dependency audit                        |
+| `Type check (tsc)`                           | `npm run typecheck` - route types, then strict `tsc`                                                      |
+| `Tests (ubuntu / macos / windows)`           | The whole suite, unit and PostgreSQL, on all three operating systems                                      |
+| `One-click setup (ubuntu / macos / windows)` | `npm run setup` takes a cold clone to a migrated, seeded app, which then builds and answers `/api/health` |
 
-That is deliberately not a CI-specific pipeline. A green local run proves the
-suite passes with one developer's `.env.local`, their already-migrated database
-and their warm Prisma client; the same commands on a cold runner prove it passes
-without any of that.
+That is deliberately not a CI-specific pipeline. Every step is a command a
+developer runs locally. A green local run proves the suite passes with one
+developer's `.env.local`, their already-migrated database and their warm Prisma
+client; the same commands on a cold runner prove it passes without any of that.
+
+**Why no Docker service container.** GitHub offers service containers on Linux
+runners only - macOS runners have no Docker, and Windows runners cannot run
+Linux images. `ikalnytskyi/action-setup-postgres` installs PostgreSQL **17**
+natively on all three, the same major version `docker-compose.yml` pins, so the
+three operating systems test the same database.
 
 **What CI is not allowed to reach.** No Neon, no Gemini, no Razorpay, no Vercel,
 and no secret of any kind - the workflow references none, because it needs none.
-The database is a `postgres:17` service container pinned to the same major
-version as `docker-compose.yml`, alive for the length of one job. `TEST_DIRECT_URL`
-points at `localhost`, which the database-target guard's allow-list already
-accepts, so **no guard was relaxed to make CI work** - and `DATABASE_URL` and
-`DIRECT_URL` are left unset precisely so `tests/db/test-database-url.ts` has
-nothing to fall back to even in principle.
+`TEST_DIRECT_URL` points at `localhost`, which the database-target guard's
+allow-list already accepts, so **no guard was relaxed to make CI work** - and
+`DATABASE_URL` and `DIRECT_URL` are left unset in the test jobs precisely so
+`tests/db/test-database-url.ts` has nothing to fall back to even in principle.
 
-The dependency audit is a **separate job** on purpose. `npm audit` consults a
-registry this repository does not control, so an outage there must not make
-correct application code look broken. It retries only when no report comes back
-at all, and reads the verdict out of the JSON rather than from an exit code, so
-"found a high advisory" and "could not run" stay distinguishable. A genuine
-high or critical finding fails the job; it is never retried away.
+**The dependency audit** consults a registry this repository does not control,
+so an outage there must not make correct application code look broken. It
+retries only when no report comes back at all, and reads the verdict out of the
+JSON rather than from an exit code, so "found a high advisory" and "could not
+run" stay distinguishable. A genuine high or critical finding fails the lint
+check; it is never retried away.

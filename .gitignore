@@ -48,7 +48,9 @@ yarn-error.log*
 .env.*
 !.env.example
 
-# local tooling caches
+# local tooling caches. Everything a tool regenerates on its own goes under
+# /.cache (the TypeScript build info, for example) rather than loose in the root.
+/.cache
 /.vitest
 
 # Prisma client is generated from prisma/schema.prisma at install/build time.
@@ -58,6 +60,7 @@ yarn-error.log*
 # vercel
 .vercel
 
-# typescript
+# typescript. `next-env.d.ts` is written by Next.js into the project root and
+# its location is not configurable; the build info goes to /.cache (tsconfig).
 *.tsbuildinfo
 next-env.d.ts

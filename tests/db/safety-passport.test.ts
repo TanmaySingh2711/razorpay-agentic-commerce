@@ -42,7 +42,7 @@ import {
 /**
  * The Safety Passport, proved against the rows it claims to summarise.
  *
- * `tests/safety-passport.test.ts` proves the mapping from facts to claims. This
+ * `tests/unit/safety-passport.test.ts` proves the mapping from facts to claims. This
  * file proves the other half, which no pure test can: that the facts the
  * passport is handed are the ones the real boundaries actually write. Every
  * transaction below is driven through the genuine services against real

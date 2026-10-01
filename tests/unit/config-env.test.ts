@@ -252,3 +252,46 @@ describe("deployment configuration", () => {
     expect(filesContaining("NEXT_PUBLIC_")).toEqual([]);
   });
 });
+
+describe("a blank numeric setting means the default", () => {
+  // `.env.example` lists every tunable as `NAME=`, and `npm run setup` copies it
+  // verbatim. A dotenv loader turns that into "", which `z.coerce.number` reads
+  // as 0 - so a fresh clone configured exactly as documented used to fail its
+  // first quote with CONFIG_INVALID.
+  it("reads NAME= as unset for every timing window", async () => {
+    const env = await import("@/config/env");
+    expect(env.getQuoteConfig({ QUOTE_TTL_SECONDS: "" }).QUOTE_TTL_SECONDS).toBe(300);
+    expect(
+      env.getApprovalConfig({ APPROVAL_TTL_SECONDS: "  " }).APPROVAL_TTL_SECONDS,
+    ).toBe(900);
+    expect(
+      env.getReservationConfig({ RESERVATION_TTL_SECONDS: "" }).RESERVATION_TTL_SECONDS,
+    ).toBe(600);
+    expect(env.getRefundConfig({ REFUND_WINDOW_DAYS: "" }).REFUND_WINDOW_DAYS).toBe(7);
+  });
+
+  it("accepts every blank line .env.example actually ships", async () => {
+    const env = await import("@/config/env");
+    const blanks = Object.fromEntries(
+      readFileSync(".env.example", "utf8")
+        .split(/\r?\n/)
+        .filter((line) => /^[A-Z0-9_]+=$/.test(line))
+        .map((line) => [line.slice(0, -1), ""]),
+    );
+    expect(() => env.getQuoteConfig(blanks)).not.toThrow();
+    expect(() => env.getApprovalConfig(blanks)).not.toThrow();
+    expect(() => env.getReservationConfig(blanks)).not.toThrow();
+    expect(() => env.getRefundConfig(blanks)).not.toThrow();
+    expect(() => env.getRateLimitConfig(blanks)).not.toThrow();
+  });
+
+  it("still refuses a value that is present and out of range", async () => {
+    const env = await import("@/config/env");
+    expect(() => env.getQuoteConfig({ QUOTE_TTL_SECONDS: "5" })).toThrow(
+      /QUOTE_TTL_SECONDS/,
+    );
+    expect(() => env.getRefundConfig({ REFUND_WINDOW_DAYS: "0" })).toThrow(
+      /REFUND_WINDOW_DAYS/,
+    );
+  });
+});

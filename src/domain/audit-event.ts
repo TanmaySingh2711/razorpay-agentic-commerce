@@ -93,6 +93,11 @@ export const AUDIT_EVENT_TYPES = [
   "transaction_blocked",
   "transaction_cancelled",
   "transaction_expired",
+  "refund_requested",
+  "refund_denied",
+  "refund_processed",
+  "refund_failed",
+  "refund_unresolved",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];

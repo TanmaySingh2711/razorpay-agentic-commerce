@@ -2,7 +2,7 @@
 
 **Implemented.** [`src/config/env.ts`](../src/config/env.ts),
 [`.env.example`](../.env.example),
-[`tests/config-env.test.ts`](../tests/config-env.test.ts).
+[`tests/unit/config-env.test.ts`](../tests/unit/config-env.test.ts).
 
 ## The rule
 
@@ -82,16 +82,31 @@ present. They are documented because three of them are **financial rules** —
 how long a frozen price stands, how long a person has to answer, how long stock
 is held — and a rule nobody can find is a rule nobody can review.
 
-| Variable                  | Default           | Bounds     | What it governs                                                                                                                                                                    |
-| ------------------------- | ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CATALOG_MERCHANT_SLUG`   | `keebworks-india` | 1–80 chars | Which merchant the public catalog serves. Configuration, never a request parameter — a caller who could name the merchant could enumerate other merchants' products. Not a secret. |
-| `QUOTE_TTL_SECONDS`       | `300` (5 min)     | 30–3600    | How long a trusted `PurchaseQuote` stays usable. See [20](./20-trusted-purchase-quote.md).                                                                                         |
-| `APPROVAL_TTL_SECONDS`    | `900` (15 min)    | 30–86400   | How long a human has to answer an approval request. The approval also expires with its quote, whichever comes first. See [22](./22-approval-and-inventory.md).                     |
-| `RESERVATION_TTL_SECONDS` | `600` (10 min)    | 30–3600    | How long reserved stock is held — the checkout window. Deliberately **longer** than the quote TTL, which is why a retry commonly re-quotes; see [27](./27-payment-retry.md).       |
+| Variable                          | Default           | Bounds     | What it governs                                                                                                                                                                    |
+| --------------------------------- | ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CATALOG_MERCHANT_SLUG`           | `keebworks-india` | 1–80 chars | Which merchant the public catalog serves. Configuration, never a request parameter — a caller who could name the merchant could enumerate other merchants' products. Not a secret. |
+| `QUOTE_TTL_SECONDS`               | `300` (5 min)     | 30–3600    | How long a trusted `PurchaseQuote` stays usable. See [20](./20-trusted-purchase-quote.md).                                                                                         |
+| `APPROVAL_TTL_SECONDS`            | `900` (15 min)    | 30–86400   | How long a human has to answer an approval request. The approval also expires with its quote, whichever comes first. See [22](./22-approval-and-inventory.md).                     |
+| `RESERVATION_TTL_SECONDS`         | `600` (10 min)    | 30–3600    | How long reserved stock is held — the checkout window. Deliberately **longer** than the quote TTL, which is why a retry commonly re-quotes; see [27](./27-payment-retry.md).       |
+| `REFUND_WINDOW_DAYS`              | `7`               | 1–365      | How long after completion the buyer may refund a purchase themselves. See [32](./32-refunds.md).                                                                                   |
+| `RATE_LIMIT_AGENT_PER_MINUTE`     | `5`               | 1–1000     | Assistant requests one client may make per minute. See [30](./30-abuse-and-cost-limits.md).                                                                                        |
+| `RATE_LIMIT_AGENT_PER_DAY`        | `60`              | 1–100000   | Assistant requests one client may make per day.                                                                                                                                    |
+| `RATE_LIMIT_AGENT_GLOBAL_PER_DAY` | `1500`            | 1–1000000  | Assistant requests the whole deployment may make per day - the ceiling on total model spend.                                                                                       |
+| `RATE_LIMIT_PAYMENT_PER_MINUTE`   | `20`              | 1–1000     | Payment and refund requests one client may make per minute.                                                                                                                        |
 
-Read through `getCatalogConfig()`, `getQuoteConfig()`, `getApprovalConfig()` and
-`getReservationConfig()`. The bounds are enforced at the config boundary, so an
-out-of-range value is a startup-time refusal rather than a surprising expiry.
+Read through `getCatalogConfig()`, `getQuoteConfig()`, `getApprovalConfig()`,
+`getReservationConfig()`, `getRefundConfig()` and `getRateLimitConfig()`. The
+bounds are enforced at the config boundary, so an out-of-range value is a
+startup-time refusal rather than a surprising expiry.
+
+**A blank value means "use the default".** `.env.example` lists every one of
+these as `NAME=` so the rules are visible, and `npm run setup` copies it
+verbatim. A dotenv loader turns `NAME=` into the empty string, which
+`z.coerce.number` would read as `0` and every bound above rejects - so a fresh
+clone configured exactly as documented used to fail its first quote with
+`CONFIG_INVALID`. Every numeric setting now treats blank as unset
+(`optionalInteger` in `src/config/env.ts`); a value that is present and out of
+range is still refused.
 
 ## Test Mode is enforced, not requested
 

@@ -59,6 +59,14 @@ Try a request above ₹3000 too. That crosses the automatic spending limit, so
 the system stops and asks a human to approve it before any payment screen
 appears.
 
+Leave out the budget ("Find me a wireless mouse") and the assistant asks for
+one - answer with just a number and it carries on in the same conversation.
+
+After a purchase completes you can **refund it** from the purchase page, and
+**Merchant insights** (top bar) shows the seller's side: conversion, what
+shoppers asked for that the shop does not sell, and payments recovered by
+retry.
+
 ---
 
 # Section 2 — Run it on your own machine
@@ -85,6 +93,21 @@ node --version
 ```
 
 You should see `v24.x.x`. If you see anything else, install Node 24.
+
+## The fast path: one command
+
+After cloning (Step 1), with Docker Desktop running:
+
+```bash
+npm run setup
+```
+
+That single command does Steps 2 to 5 for you: installs the dependencies,
+creates `.env.local`, starts the local PostgreSQL container, prepares the test
+database, and creates, migrates and seeds the development database. It works on
+Windows, macOS and Linux (CI runs it on all three), and if a PostgreSQL is
+already listening on `localhost:5432` it uses that instead of Docker. Then jump
+to Step 6. The steps below are the same thing done by hand.
 
 ---
 
@@ -306,7 +329,9 @@ npm run format:check
 | `npm run db:test:up`     | Start the local PostgreSQL container                    |
 | `npm run db:test:health` | Check that the container is accepting connections       |
 | `npm run db:test:down`   | Stop the container                                      |
+| `npm run setup`          | One-click setup: install, env file, both databases      |
 | `npm run db:dev:setup`   | Create + migrate + seed your local development database |
+| `npm run db:dev:demo`    | Fill the local dev database with real-service purchases |
 | `npm run db:seed`        | Re-seed the catalog locally (safe to repeat)            |
 | `npm run db:studio`      | Open a browser UI to inspect your local database        |
 
@@ -349,6 +374,9 @@ stops the test suite from ever being pointed at a real database.
 | Inventory hold       | Stock is reserved before payment, so nothing oversells        |
 | Razorpay payment     | Server-controlled amount, Test Mode only                      |
 | Retry                | Up to 3 tries if a payment fails, never silently repeated     |
+| Refund               | Buyer-initiated, full amount, at most once, reconciled        |
+| Rate limits          | Protect the public demo's AI quota from scripts and floods    |
+| Merchant insights    | Conversion, unmet demand and payment recovery for the seller  |
 | Audit trail          | Every decision is logged with a reason — readable by a human  |
 | Safety Passport      | A plain-English summary of why each purchase was allowed      |
 
@@ -364,6 +392,8 @@ complete system in one document — diagrams, the payment flow, and how safety i
 enforced.
 
 The full set of design docs is indexed in [docs/README.md](./docs/README.md).
+What was added after that document - rate limits, the conversational agent,
+refunds and merchant insights - is in [docs 30 to 33](./docs/README.md#growth-and-hardening).
 
 ## Built with
 

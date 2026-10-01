@@ -19,7 +19,7 @@ import { defineConfig } from "vitest/config";
  * requirements, and collapsing them into one setting penalises whichever half
  * loses the argument.
  *
- * **`unit`** is every test outside `tests/db/`. These touch no shared mutable
+ * **`unit`** is every test under `tests/unit/`. These touch no shared mutable
  * state at all - pure domain rules, signature arithmetic, Zod contracts, route
  * handlers called as functions. They can run in parallel, and measured on this
  * machine doing so takes them from 10.5s to 5.9s across 21 files and 557 tests.
@@ -51,7 +51,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["tests/*.test.ts"],
+          include: ["tests/unit/**/*.test.ts"],
           fileParallelism: true,
         },
       },

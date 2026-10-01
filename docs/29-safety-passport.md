@@ -101,7 +101,7 @@ useless — it would be confidently wrong.
 
 ## Tests
 
-- `tests/safety-passport.test.ts` — the pure mapping from records to claims,
+- `tests/unit/safety-passport.test.ts` — the pure mapping from records to claims,
   including every negative case above.
 - `tests/db/safety-passport.test.ts` — the same claims against real PostgreSQL,
   driven through the genuine boundaries (product decision, policy, approval,

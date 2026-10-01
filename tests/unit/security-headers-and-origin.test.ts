@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig from "../next.config";
+import nextConfig from "../../next.config";
 import { checkRequestOrigin } from "@/lib/http/same-origin";
 import { handleCreatePaymentOrder, handleRetryPayment } from "@/app/api/payments/handler";
 
@@ -58,6 +58,8 @@ describe("security response headers", () => {
     // Stops a form posting anything off-site.
     expect(csp).toContain("form-action 'self'");
     expect(csp).toContain("default-src 'self'");
+    // Development-only allowances never reach a built deployment.
+    expect(csp).not.toContain("unsafe-eval");
   });
 
   it("still allows everything Razorpay Checkout needs", async () => {

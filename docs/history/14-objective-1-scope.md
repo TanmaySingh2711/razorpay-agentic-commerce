@@ -2,7 +2,7 @@
 
 > **Historical record.** This records what the _first_ objective built and deliberately left out. Almost everything listed here as absent has since been implemented. It is kept for the reasoning, not as a
 > description of the current system — for that, see
-> [28 — Final architecture](./28-final-architecture.md).
+> [28 — Final architecture](../28-final-architecture.md).
 
 ## What Objective 1 implemented
 
@@ -24,23 +24,23 @@
 
 ### Financial core (pure, tested)
 
-| Module                                                   | What it guarantees                                                                                                                        |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [`money.ts`](../src/domain/money.ts)                     | Integer minor units with explicit currency. No float can become a charge; currencies cannot be mixed.                                     |
-| [`transaction/`](../src/domain/transaction/)             | 17 typed states, a complete actor-scoped transition table, and a pure adjudicator with idempotent replay handling. Vendor-neutral actors. |
-| [`errors.ts`](../src/domain/errors.ts)                   | Eight-category taxonomy with separate internal and public faces.                                                                          |
-| `identifiers.ts` _(removed — see below)_                 | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs. Covers quote, reservation and transition ids.             |
-| [`decision-record.ts`](../src/domain/decision-record.ts) | The explainability contract, with a hard cap on the reason field.                                                                         |
-| [`audit-event.ts`](../src/domain/audit-event.ts)         | The audit contract, over a closed event vocabulary.                                                                                       |
+| Module                                                      | What it guarantees                                                                                                                        |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [`money.ts`](../../src/domain/money.ts)                     | Integer minor units with explicit currency. No float can become a charge; currencies cannot be mixed.                                     |
+| [`transaction/`](../../src/domain/transaction/)             | 17 typed states, a complete actor-scoped transition table, and a pure adjudicator with idempotent replay handling. Vendor-neutral actors. |
+| [`errors.ts`](../../src/domain/errors.ts)                   | Eight-category taxonomy with separate internal and public faces.                                                                          |
+| `identifiers.ts` _(removed — see below)_                    | Branded ids, so a `ProductId` cannot be passed where a `TransactionId` belongs. Covers quote, reservation and transition ids.             |
+| [`decision-record.ts`](../../src/domain/decision-record.ts) | The explainability contract, with a hard cap on the reason field.                                                                         |
+| [`audit-event.ts`](../../src/domain/audit-event.ts)         | The audit contract, over a closed event vocabulary.                                                                                       |
 
 ### Supporting foundation
 
-- [`config/env.ts`](../src/config/env.ts) — typed, Zod-validated, tiered
+- [`config/env.ts`](../../src/config/env.ts) — typed, Zod-validated, tiered
   configuration. The app boots on an empty environment.
-- [`lib/logger.ts`](../src/lib/logger.ts) and
-  [`lib/redact.ts`](../src/lib/redact.ts) — structured operational logging with
+- [`lib/logger.ts`](../../src/lib/logger.ts) and
+  [`lib/redact.ts`](../../src/lib/redact.ts) — structured operational logging with
   secret and chain-of-thought scrubbing.
-- `lib/result.ts` _(removed — see below)_, [`lib/json.ts`](../src/lib/json.ts).
+- `lib/result.ts` _(removed — see below)_, [`lib/json.ts`](../../src/lib/json.ts).
 - `GET /api/health` — the only route.
 - A landing page that states the architectural rule. No product UI.
 
@@ -96,10 +96,10 @@ Confirmed absent from the codebase:
   state machine it will use.
 - **Audit service** — the contract only; no writer, no store, no UI timeline.
 - **Payment failure handling** — designed in
-  [04](./04-transaction-flow.md) and expressible in the state machine; not
+  [04](../04-transaction-flow.md) and expressible in the state machine; not
   implemented.
 - **Authentication, rate limiting, CSRF** — conventions documented in
-  [06](./06-security-and-trust-boundaries.md); not built.
+  [06](../06-security-and-trust-boundaries.md); not built.
 - **Any "innovation" feature.**
 
 ## Validation performed

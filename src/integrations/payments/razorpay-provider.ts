@@ -13,6 +13,10 @@ import type {
   ProviderLookupOutcome,
   ProviderOrder,
   ProviderOrderOutcome,
+  ProviderRefund,
+  ProviderRefundLookupOutcome,
+  ProviderRefundOutcome,
+  RefundRequest,
 } from "@/domain/payment/provider";
 import { assessPayableAmount, toProviderAmount } from "@/domain/payment/rules";
 
@@ -75,6 +79,32 @@ const razorpayOrderSchema = z.object({
 const razorpayOrderListSchema = z.object({
   items: z.array(razorpayOrderSchema),
 });
+
+/**
+ * A refund, as `POST /v1/payments/:id/refund` and `GET /v1/payments/:id/refunds`
+ * return it. Same posture as the order schema: extra keys tolerated, the fields
+ * that carry money required.
+ */
+const razorpayRefundSchema = z.object({
+  id: z.string().min(1).max(128),
+  payment_id: z.string().min(1).max(128),
+  amount: z.number().int().nonnegative(),
+  currency: z.string().min(3).max(3),
+  receipt: z.string().max(40).nullish(),
+  status: z.string().min(1).max(32),
+});
+
+const razorpayRefundListSchema = z.object({
+  items: z.array(razorpayRefundSchema),
+});
+
+/**
+ * A payment id is interpolated into a URL path, so it is held to the shape
+ * Razorpay issues (`pay_` + alphanumerics) before it gets there. It comes from
+ * our own database, but "it came from our database" is not a URL-encoding
+ * strategy.
+ */
+const PROVIDER_PAYMENT_ID_PATTERN = /^pay_[A-Za-z0-9]{1,60}$/;
 
 const razorpayErrorSchema = z.object({
   error: z.object({
@@ -186,10 +216,137 @@ export function createRazorpayProvider(
       : { kind: "FOUND", order: toProviderOrder(match) };
   }
 
+  async function findRefundByReceipt(
+    providerPaymentId: string,
+    receipt: string,
+  ): Promise<ProviderRefundLookupOutcome> {
+    if (!PROVIDER_PAYMENT_ID_PATTERN.test(providerPaymentId)) {
+      return {
+        kind: "FAILED",
+        failure: failure("INVALID_REQUEST", null, "PAYMENT_ID_MALFORMED"),
+      };
+    }
+    // A payment carries very few refunds; one page of the maximum size covers
+    // every case this application can create (one live refund, plus failures).
+    const outcome = await call(`/payments/${providerPaymentId}/refunds?count=100`, {
+      method: "GET",
+    });
+    if (outcome.kind === "NO_ANSWER") {
+      return { kind: "FAILED", failure: failure(outcome.category, null, null) };
+    }
+    if (outcome.status !== 200) {
+      return { kind: "FAILED", failure: classifyStatus(outcome.status, outcome.text) };
+    }
+    const parsed = parseJson(outcome.text, razorpayRefundListSchema);
+    if (parsed === null) {
+      return {
+        kind: "FAILED",
+        failure: failure("UNREADABLE_RESPONSE", 200, "REFUND_LIST_UNPARSABLE"),
+      };
+    }
+    const match = parsed.items.find((item) => item.receipt === receipt);
+    return match === undefined
+      ? { kind: "NOT_FOUND" }
+      : { kind: "FOUND", refund: toProviderRefund(match) };
+  }
+
+  /**
+   * Turns a failed refund create into a definite answer wherever possible -
+   * the refund twin of `resolveByLookup`, with the same rules: credentials
+   * refused or rate limited means nothing was created; anything else is
+   * settled by looking the receipt up, and only a failed lookup is UNKNOWN.
+   * Razorpay answers a repeated receipt with an error rather than the
+   * existing refund, which is exactly the case the lookup resolves.
+   */
+  async function resolveRefundByLookup(
+    initial: ProviderFailure,
+    request: RefundRequest,
+  ): Promise<ProviderRefundOutcome> {
+    if (
+      initial.category === "AUTHENTICATION_FAILED" ||
+      initial.category === "RATE_LIMITED"
+    ) {
+      return { kind: "FAILED", failure: initial };
+    }
+    const lookup = await findRefundByReceipt(request.providerPaymentId, request.receipt);
+    if (lookup.kind === "FOUND") {
+      const matches =
+        lookup.refund.amountMinor === request.amountMinor &&
+        lookup.refund.currency === request.currency;
+      if (!matches) {
+        log.error("recovered provider refund does not match the request", {
+          receipt: request.receipt,
+          providerRefundId: lookup.refund.providerRefundId,
+        });
+        return {
+          kind: "UNKNOWN",
+          failure: failure(initial.category, initial.httpStatus, "RECOVERED_MISMATCH"),
+        };
+      }
+      return { kind: "ALREADY_EXISTS", refund: lookup.refund };
+    }
+    if (lookup.kind === "NOT_FOUND") return { kind: "FAILED", failure: initial };
+    return { kind: "UNKNOWN", failure: initial };
+  }
+
   return {
     name: "RAZORPAY",
 
     findOrderByReceipt,
+
+    findRefundByReceipt,
+
+    /**
+     * `POST /v1/payments/:id/refund`, called at most once per refund.
+     *
+     * Always the full captured amount, stated explicitly rather than omitted:
+     * Razorpay reads a missing amount as "refund everything", which is the
+     * same number today but would silently become a different one the day a
+     * partial capture exists. `speed: normal` is the default settlement path
+     * every payment method supports.
+     */
+    async createRefund(request: RefundRequest): Promise<ProviderRefundOutcome> {
+      if (!PROVIDER_PAYMENT_ID_PATTERN.test(request.providerPaymentId)) {
+        return {
+          kind: "FAILED",
+          failure: failure("INVALID_REQUEST", null, "PAYMENT_ID_MALFORMED"),
+        };
+      }
+      const amount = assessPayableAmount(request.amountMinor, request.currency);
+      if (amount.kind !== "PAYABLE") {
+        return {
+          kind: "FAILED",
+          failure: failure("INVALID_REQUEST", null, `AMOUNT_${amount.refusal}`),
+        };
+      }
+
+      const body = JSON.stringify({
+        amount: toProviderAmount(amount),
+        speed: "normal",
+        receipt: request.receipt,
+        ...(request.notes === undefined ? {} : { notes: request.notes }),
+      });
+      const outcome = await call(`/payments/${request.providerPaymentId}/refund`, {
+        method: "POST",
+        body,
+      });
+
+      if (outcome.kind === "ANSWERED" && outcome.status === 200) {
+        const parsed = parseJson(outcome.text, razorpayRefundSchema);
+        if (parsed !== null) {
+          return { kind: "CREATED", refund: toProviderRefund(parsed) };
+        }
+      }
+
+      const initialFailure =
+        outcome.kind === "NO_ANSWER"
+          ? failure(outcome.category, null, null)
+          : outcome.status === 200
+            ? failure("UNREADABLE_RESPONSE", 200, "REFUND_UNPARSABLE")
+            : classifyStatus(outcome.status, outcome.text);
+
+      return resolveRefundByLookup(initialFailure, request);
+    },
 
     /**
      * Razorpay's documented checkout-callback signature.
@@ -370,6 +527,17 @@ function toProviderOrder(order: z.infer<typeof razorpayOrderSchema>): ProviderOr
     currency: order.currency,
     receipt: order.receipt ?? null,
     status: order.status,
+  };
+}
+
+function toProviderRefund(refund: z.infer<typeof razorpayRefundSchema>): ProviderRefund {
+  return {
+    providerRefundId: refund.id,
+    providerPaymentId: refund.payment_id,
+    amountMinor: BigInt(refund.amount),
+    currency: refund.currency.toUpperCase(),
+    receipt: refund.receipt ?? null,
+    status: refund.status,
   };
 }
 

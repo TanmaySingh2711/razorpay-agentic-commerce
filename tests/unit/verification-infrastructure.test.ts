@@ -8,12 +8,12 @@ import {
   REMOTE_TEST_DATABASE_OPT_IN,
   TestDatabaseUrlError,
   resolveTestDatabaseUrl,
-} from "./db/test-database-url";
-import { NetworkAccessInTestError } from "./support/no-network";
+} from "../db/test-database-url";
+import { NetworkAccessInTestError } from "../support/no-network";
 import {
   DisposableSchemaGuardError,
   describeMarkerFailure,
-} from "./db/test-database-guard";
+} from "../db/test-database-guard";
 import {
   DISPOSABLE_TEST_DATABASE,
   DisposableTestDatabaseTargetError,
@@ -22,12 +22,12 @@ import {
   assertLocalHost,
   assertNotDisposableTestDatabase,
   assertRemoteHost,
-} from "../scripts/database-target-guard";
+} from "../../scripts/database-target-guard";
 import {
   POOLED_HOSTNAME_CONVENTIONS,
   isPooledHostname,
-} from "../scripts/pooled-endpoint";
-import { resolvePackageBin } from "../scripts/run-package-bin";
+} from "../../scripts/pooled-endpoint";
+import { resolvePackageBin } from "../../scripts/run-package-bin";
 
 /**
  * The verification infrastructure, tested like anything else.

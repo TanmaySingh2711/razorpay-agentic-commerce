@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getPrismaClient } from "@/integrations/persistence/client";
@@ -11,7 +12,25 @@ import { reserveInventory } from "@/services/inventory/reservation-service";
 import { describeReservationRefusal } from "@/domain/inventory/contracts";
 import { evaluateQuotePolicy } from "@/services/policy/policy-service";
 import { decidePurchase } from "@/services/product-decision/product-decision-service";
-import { runBuyerAgent } from "@/services/buyer-agent/buyer-agent-service";
+import {
+  MAX_ASSISTANT_QUESTION_LENGTH,
+  MAX_PRIOR_TURNS,
+  runBuyerAgent,
+  type ConversationTurn,
+} from "@/services/buyer-agent/buyer-agent-service";
+import {
+  limitAgentRequest,
+  limitPaymentRequest,
+  type RateLimitDecision,
+} from "@/services/rate-limit/rate-limit-service";
+import { recordAgentRequest } from "@/services/insights/agent-request-log";
+import { reconcileRefund, requestRefund } from "@/services/refund/refund-service";
+import { describeRefundDenial } from "@/domain/refund/contracts";
+import { clientKeyFromHeaders } from "@/domain/rate-limit/rules";
+import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
+import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
+import type { MoneyDto } from "@/domain/money";
+import { formatMoney } from "@/domain/ui/journey";
 
 /**
  * The buyer's actions, as server actions.
@@ -48,11 +67,100 @@ const transactionIdSchema = z.string().uuid();
  */
 export type RequestOutcome =
   | { readonly kind: "IDLE" }
-  | { readonly kind: "CLARIFICATION"; readonly question: string }
+  | {
+      readonly kind: "CLARIFICATION";
+      readonly question: string;
+      /**
+       * The exchange so far, handed back so the next answer can continue it.
+       * The browser keeps it and returns it; the server re-validates it and
+       * trusts only the shopper's half (see `ConversationTurn`).
+       */
+      readonly conversation: readonly ConversationTurn[];
+    }
   | { readonly kind: "NO_MATCH"; readonly summary: string }
   | { readonly kind: "NOT_A_PURCHASE"; readonly summary: string }
+  | {
+      /**
+       * The shopper asked for advice or options, not a purchase, and the
+       * assistant's pick passed every deterministic check. Nothing is opened:
+       * the price shown is the catalog's price at this moment, and buying it
+       * means sending `buyPrompt` as a new request - which the server prices,
+       * checks and quotes from scratch like any other.
+       */
+      readonly kind: "RECOMMENDATION";
+      readonly productName: string;
+      readonly price: MoneyDto;
+      readonly summary: string;
+      readonly buyPrompt: string;
+    }
   | { readonly kind: "REFUSED"; readonly summary: string }
   | { readonly kind: "ERROR"; readonly message: string };
+
+/** What a browser may send back as the conversation so far. Bounded like the agent's own check. */
+const conversationSchema = z
+  .array(
+    z.strictObject({
+      shopper: z.string().trim().min(1).max(1000),
+      assistantQuestion: z.string().trim().max(MAX_ASSISTANT_QUESTION_LENGTH),
+    }),
+  )
+  .max(MAX_PRIOR_TURNS);
+
+/** Reads the hidden conversation field. Absent or blank means a fresh request. */
+function readConversation(
+  raw: FormDataEntryValue | null,
+): readonly ConversationTurn[] | null {
+  if (raw === null || (typeof raw === "string" && raw.trim() === "")) return [];
+  if (typeof raw !== "string") return null;
+  try {
+    const parsed = conversationSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The categories this shop sells, in words a person reads. */
+const SOLD_HERE = MERCHANT_CATEGORIES.map((category) => category.replace(/-/g, " ")).join(
+  ", ",
+);
+
+/**
+ * A browse or advice answer, turned into something the shopper can act on.
+ *
+ * The suggested follow-up restates the shopper's own verified ceiling in
+ * words the budget check reads back exactly ("under ₹3,000.00"), so buying
+ * the recommendation keeps the limit they set rather than dropping it.
+ */
+function recommendationFrom(
+  decision: Extract<BuyerAgentDecision, { kind: "PRODUCT_SELECTED" }>,
+): Extract<RequestOutcome, { kind: "RECOMMENDATION" }> {
+  const budget = decision.constraints.maxBudget;
+  return {
+    kind: "RECOMMENDATION",
+    productName: decision.observedProduct.name,
+    price: decision.observedProduct.amount,
+    summary: decision.summary,
+    buyPrompt: `Buy the ${decision.observedProduct.name}${
+      budget === null ? "" : ` under ${formatMoney(budget)}`
+    }`,
+  };
+}
+
+/** The caller's rate-limit identity, from the request this action is serving. */
+async function clientKey(): Promise<string> {
+  return clientKeyFromHeaders(await headers());
+}
+
+/** One sentence for a refusal by the abuse ceilings. */
+function rateLimitedMessage(decision: RateLimitDecision): string {
+  if (decision.kind !== "LIMITED") return "";
+  return decision.rule === "agent-global-day"
+    ? "The assistant has reached today's usage limit for this demo. Please come back tomorrow - nothing was charged."
+    : `You are sending requests faster than this demo allows. Please wait ${String(
+        Math.min(decision.retryAfterSeconds, 3600),
+      )} seconds and try again - nothing was charged.`;
+}
 
 /**
  * Interprets a sentence and, if it describes a purchase, opens one.
@@ -73,25 +181,86 @@ export async function submitRequest(
       message: "Type what you are looking for, in a sentence or two.",
     };
   }
+  const conversation = readConversation(formData.get("conversation"));
+  if (conversation === null) {
+    return {
+      kind: "ERROR",
+      message: "That conversation could not be continued. Please start a new request.",
+    };
+  }
+  const turn = conversation.length + 1;
+  const startedAt = Date.now();
+
+  // The abuse and cost ceilings come before the model does. A refusal here
+  // spends no quota, and it is still worth a row: a merchant seeing a wall of
+  // rate-limited requests is looking at an attack, not at demand.
+  let limited: RateLimitDecision;
+  try {
+    limited = await limitAgentRequest(await clientKey());
+  } catch (error: unknown) {
+    log.error("the rate limiter could not answer", {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return {
+      kind: "ERROR",
+      message:
+        "The assistant is unavailable just now. Nothing was charged. Please try again.",
+    };
+  }
+  if (limited.kind === "LIMITED") {
+    await recordAgentRequest({ outcome: "RATE_LIMITED", durationMs: 0, turn });
+    return { kind: "ERROR", message: rateLimitedMessage(limited) };
+  }
 
   let transactionId: string;
+  let decision: BuyerAgentDecision | undefined;
   try {
-    const decision = await runBuyerAgent({ message: parsed.data });
+    decision = await runBuyerAgent({ message: parsed.data, priorTurns: conversation });
     const result = await decidePurchase(decision);
+    const insight = (
+      outcome: Parameters<typeof recordAgentRequest>[0]["outcome"],
+      opened: string | null = null,
+    ) =>
+      recordAgentRequest({
+        outcome,
+        ...(decision === undefined ? {} : { decision }),
+        transactionId: opened,
+        durationMs: Date.now() - startedAt,
+        turn,
+      });
 
     switch (result.kind) {
       case "QUOTE_CREATED":
         transactionId = result.transactionId;
+        await insight("PURCHASE_OPENED", transactionId);
         break;
-      case "CLARIFICATION_REQUIRED":
-        return { kind: "CLARIFICATION", question: result.question };
+      case "CLARIFICATION_REQUIRED": {
+        await insight("CLARIFICATION");
+        // The conversation continues only while there is room for another
+        // turn; past that, the next message starts fresh rather than being
+        // refused for carrying too much history.
+        const next = [
+          ...conversation,
+          { shopper: parsed.data, assistantQuestion: result.question },
+        ];
+        return {
+          kind: "CLARIFICATION",
+          question: result.question,
+          conversation: next.length > MAX_PRIOR_TURNS ? [] : next,
+        };
+      }
       case "NO_QUOTE_REQUIRED":
+        await insight("NOT_A_PURCHASE");
+        if (decision.kind === "PRODUCT_SELECTED") {
+          return recommendationFrom(decision);
+        }
         return {
           kind: "NOT_A_PURCHASE",
           summary:
             "That reads as browsing rather than buying. Say what you would like to buy and I will price it.",
         };
       case "NO_VALID_CANDIDATE": {
+        await insight("NO_MATCH");
         // Being out of stock and being the wrong product are different
         // disappointments, and only one of them is worth coming back for. The
         // reasons come from the deterministic candidate check, so this is
@@ -103,10 +272,11 @@ export async function submitRequest(
           kind: "NO_MATCH",
           summary: soldOut
             ? "Nothing matching your request is in stock right now, so nothing was opened. Please try again later, or describe something a little different."
-            : "Nothing in this catalog matches what you asked for.",
+            : `Nothing in this catalog matches what you asked for. This shop sells ${SOLD_HERE}.`,
         };
       }
       case "AI_SELECTION_REJECTED":
+        await insight("REFUSED", result.transactionId);
         // The assistant proposed something the server would not stand behind.
         // Worth saying plainly: it is the safety property working, not a fault.
         return {
@@ -115,12 +285,14 @@ export async function submitRequest(
             "The assistant suggested a product the server could not verify against your request, so nothing was opened.",
         };
       case "HARD_REQUIREMENT_UNVERIFIABLE":
+        await insight("REFUSED");
         return {
           kind: "REFUSED",
           summary:
             "This catalog does not record enough about the products to confirm one of your requirements, so nothing was opened.",
         };
       case "REEVALUATION_REQUIRED":
+        await insight("REFUSED", result.transactionId);
         return {
           kind: "REFUSED",
           summary:
@@ -145,6 +317,12 @@ export async function submitRequest(
     // or provider failure must not reach a buyer as a stack trace.
     log.error("a buyer request could not be completed", {
       reason: error instanceof Error ? error.name : "unknown",
+    });
+    await recordAgentRequest({
+      outcome: "ERROR",
+      ...(decision === undefined ? {} : { decision }),
+      durationMs: Date.now() - startedAt,
+      turn,
     });
     return {
       kind: "ERROR",
@@ -322,5 +500,104 @@ export async function reserveStock(
       reason: error instanceof Error ? error.name : "unknown",
     });
     return { kind: "ERROR", message: "The item could not be held just now." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Refunds
+// ---------------------------------------------------------------------------
+
+/**
+ * Asks for a completed purchase's money back.
+ *
+ * Like every action here, the browser sends a transaction id and nothing
+ * else: which payment, how much and in which currency are all read from the
+ * captured attempt by the refund service. The payment ceiling applies, since
+ * this reaches the payment provider.
+ */
+export async function refundPurchase(
+  _previous: DecisionOutcome,
+  formData: FormData,
+): Promise<DecisionOutcome> {
+  const id = transactionIdSchema.safeParse(formData.get("transactionId"));
+  if (!id.success) return { kind: "ERROR", message: "Unknown purchase." };
+
+  try {
+    const limited = await limitPaymentRequest(await clientKey());
+    if (limited.kind === "LIMITED") {
+      return {
+        kind: "ERROR",
+        message: `Too many requests. Please wait ${String(limited.retryAfterSeconds)} seconds and try again.`,
+      };
+    }
+
+    const result = await requestRefund({
+      transactionId: id.data,
+      operationId: operation(),
+    });
+    revalidatePath(`/transaction/${id.data}`);
+    switch (result.kind) {
+      case "REFUND_STARTED":
+        return {
+          kind: "DONE",
+          message:
+            result.status === "PROCESSED"
+              ? "Refunded. The money is on its way back to your original payment method."
+              : "Refund accepted. The payment provider is returning the money.",
+        };
+      case "DENIED":
+        return { kind: "ERROR", message: describeRefundDenial(result.denial) };
+      case "PROVIDER_FAILED":
+        return {
+          kind: "ERROR",
+          message:
+            "The payment provider could not process the refund. Nothing changed; you can try again.",
+        };
+      case "RECONCILIATION_REQUIRED":
+        return {
+          kind: "DONE",
+          message:
+            "The refund was sent, but the payment provider has not confirmed it yet. It will never be sent twice - use Check refund status in a moment.",
+        };
+    }
+  } catch (error: unknown) {
+    log.error("a refund could not be requested", {
+      transactionId: id.data,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return { kind: "ERROR", message: "The refund could not be requested just now." };
+  }
+}
+
+/**
+ * Asks the provider where an open refund stands. Read-only towards the
+ * provider: this can settle a refund's status but never create one.
+ */
+export async function checkRefundStatus(
+  _previous: DecisionOutcome,
+  formData: FormData,
+): Promise<DecisionOutcome> {
+  const id = transactionIdSchema.safeParse(formData.get("transactionId"));
+  if (!id.success) return { kind: "ERROR", message: "Unknown purchase." };
+  try {
+    const limited = await limitPaymentRequest(await clientKey());
+    if (limited.kind === "LIMITED") {
+      return { kind: "ERROR", message: "Too many requests. Please wait a moment." };
+    }
+    const status = await reconcileRefund(id.data);
+    revalidatePath(`/transaction/${id.data}`);
+    return {
+      kind: "DONE",
+      message:
+        status === null
+          ? "There is no open refund on this purchase."
+          : `Refund status: ${status.replace(/_/g, " ").toLowerCase()}.`,
+    };
+  } catch (error: unknown) {
+    log.error("a refund status check failed", {
+      transactionId: id.data,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return { kind: "ERROR", message: "The refund status could not be checked just now." };
   }
 }

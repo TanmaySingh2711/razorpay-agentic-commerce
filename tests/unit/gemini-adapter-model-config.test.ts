@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `AbortSignal` wiring must all still reach the SDK exactly as before.
  *
  * The SDK is stubbed at the module boundary, as in
- * `tests/gemini-adapter-continuation.test.ts` - no network call is made.
+ * `tests/unit/gemini-adapter-continuation.test.ts` - no network call is made.
  */
 
 const create = vi.fn();

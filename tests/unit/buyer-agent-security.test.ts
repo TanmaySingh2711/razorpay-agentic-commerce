@@ -12,7 +12,7 @@ import {
 } from "@/services/buyer-agent/instructions";
 import { UnknownToolError } from "@/domain/buyer-agent/errors";
 import { AppError } from "@/domain/errors";
-import { captureError, unreachableCatalogReader } from "./support/fake-ai-provider";
+import { captureError, unreachableCatalogReader } from "../support/fake-ai-provider";
 
 /**
  * The security properties, tested where they actually live.

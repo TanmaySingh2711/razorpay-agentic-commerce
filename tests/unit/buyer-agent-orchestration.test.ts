@@ -24,7 +24,7 @@ import {
   createInMemoryCatalogReader,
   selectionJson,
   type ScriptedTurn,
-} from "./support/fake-ai-provider";
+} from "../support/fake-ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 
 /**
@@ -806,7 +806,21 @@ describe("no chain-of-thought is retained", () => {
       "reasonCodes",
       "selectedProductId",
       "summary",
+      "trace",
     ]);
+    // The trace is counters the orchestrator kept, and nothing else: every
+    // field is a number or a flag, so there is nowhere in it for model text.
+    expect(Object.keys(decision.trace ?? {}).sort()).toEqual([
+      "durationMs",
+      "modelCalls",
+      "prefetched",
+      "productsObserved",
+      "toolCalls",
+      "turn",
+    ]);
+    for (const value of Object.values(decision.trace ?? {})) {
+      expect(["number", "boolean"]).toContain(typeof value);
+    }
     // No field anywhere for reasoning, thoughts, or provider state.
     const serialised = JSON.stringify(decision).toLowerCase();
     for (const forbidden of [

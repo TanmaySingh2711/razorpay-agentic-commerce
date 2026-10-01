@@ -6,6 +6,10 @@ import type {
   ProviderLookupOutcome,
   ProviderOrder,
   ProviderOrderOutcome,
+  ProviderRefund,
+  ProviderRefundLookupOutcome,
+  ProviderRefundOutcome,
+  RefundRequest,
 } from "@/domain/payment/provider";
 
 /**
@@ -31,6 +35,9 @@ export interface FakePaymentProvider extends PaymentProvider {
   readonly verifyInputs: CheckoutSignatureInput[];
   /** Every webhook check, so a test can assert the raw body was passed through. */
   readonly webhookInputs: WebhookSignatureInput[];
+  /** Every refund creation, so a test can assert a second one was *not* made. */
+  readonly refundRequests: RefundRequest[];
+  readonly refundLookups: { providerPaymentId: string; receipt: string }[];
 }
 
 export interface FakePaymentProviderOptions {
@@ -50,6 +57,11 @@ export interface FakePaymentProviderOptions {
    * matter most vacuous.
    */
   readonly onVerifyWebhook?: (input: WebhookSignatureInput) => boolean;
+  readonly onRefund?: (request: RefundRequest) => ProviderRefundOutcome;
+  readonly onRefundLookup?: (
+    providerPaymentId: string,
+    receipt: string,
+  ) => ProviderRefundLookupOutcome;
   /** Fixes the order id, instead of issuing a distinct one per creation. */
   readonly providerOrderId?: string;
 }
@@ -73,6 +85,10 @@ export function fakePaymentProvider(
   const verifyInputs: CheckoutSignatureInput[] = [];
   const webhookInputs: WebhookSignatureInput[] = [];
   const store = new Map<string, ProviderOrder>();
+  const refundRequests: RefundRequest[] = [];
+  const refundLookups: { providerPaymentId: string; receipt: string }[] = [];
+  const refunds = new Map<string, ProviderRefund>();
+  let refundsIssued = 0;
   let issued = 0;
   const nextOrderId = (): string => {
     if (options.providerOrderId !== undefined) return options.providerOrderId;
@@ -88,6 +104,45 @@ export function fakePaymentProvider(
     lookupReceipts,
     verifyInputs,
     webhookInputs,
+    refundRequests,
+    refundLookups,
+
+    createRefund(request) {
+      refundRequests.push(request);
+      const outcome =
+        options.onRefund?.(request) ??
+        (() => {
+          refundsIssued += 1;
+          return {
+            kind: "CREATED",
+            refund: {
+              providerRefundId: `rfnd_TestMode${String(refundsIssued).padStart(7, "0")}`,
+              providerPaymentId: request.providerPaymentId,
+              amountMinor: request.amountMinor,
+              currency: request.currency,
+              receipt: request.receipt,
+              status: "processed",
+            },
+          } satisfies ProviderRefundOutcome;
+        })();
+      if (outcome.kind === "CREATED" || outcome.kind === "ALREADY_EXISTS") {
+        refunds.set(request.receipt, outcome.refund);
+      }
+      return Promise.resolve(outcome);
+    },
+
+    findRefundByReceipt(providerPaymentId, receipt) {
+      refundLookups.push({ providerPaymentId, receipt });
+      if (options.onRefundLookup !== undefined) {
+        return Promise.resolve(options.onRefundLookup(providerPaymentId, receipt));
+      }
+      const found = refunds.get(receipt);
+      return Promise.resolve(
+        found === undefined
+          ? ({ kind: "NOT_FOUND" } as const)
+          : ({ kind: "FOUND", refund: found } as const),
+      );
+    },
 
     createOrder(request) {
       createRequests.push(request);

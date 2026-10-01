@@ -185,7 +185,7 @@ const eslintConfig = defineConfig([
     // deliberately invalid foreign key to prove the constraint rejects it, and
     // manipulate a raw environment record to exercise config validation.
     // Forbidding that here would only push those proofs out of the suite.
-    // The rules themselves are proved instead by tests/lint-architecture.test.ts,
+    // The rules themselves are proved instead by tests/unit/lint-architecture.test.ts,
     // which runs ESLint over fixture source and asserts what it rejects.
     name: "agentic-commerce/test-exemption",
     files: ["tests/**/*.ts"],

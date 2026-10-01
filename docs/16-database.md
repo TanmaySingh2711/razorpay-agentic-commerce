@@ -1,7 +1,7 @@
 # 16 — Database and persistence
 
 **Implemented in Objective 2.** Entity _design_ rationale lives in
-[08 — Data model](./08-data-model.md); this document covers what actually
+[08 — Data model](./history/08-data-model.md); this document covers what actually
 exists: the Prisma setup, the connection architecture, the migration and seed
 workflow, and the test isolation strategy.
 

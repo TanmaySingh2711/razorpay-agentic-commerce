@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { AGENT_REQUEST_OUTCOMES } from "@/domain/agent-request/outcomes";
 import { PAYMENT_FAILURE_CATEGORIES } from "@/domain/payment/failure";
+import { REFUND_STATUSES } from "@/domain/refund/contracts";
 import { TRANSACTION_ACTORS, TRANSACTION_STATES } from "@/domain/transaction/states";
 import {
+  AgentRequestOutcome,
   PaymentFailureCategory,
+  RefundStatus,
   TransactionActor,
   TransactionStatus,
 } from "@/generated/prisma/enums";
@@ -47,6 +51,16 @@ describe("domain / database enum parity", () => {
     for (const category of Object.keys(PaymentFailureCategory)) {
       expect(category).not.toMatch(/razorpay|stripe|paypal|card|cvv|otp|upi|pin/i);
     }
+  });
+
+  it("declares exactly the same refund statuses in both places", () => {
+    expect(Object.keys(RefundStatus).sort()).toEqual([...REFUND_STATUSES].sort());
+  });
+
+  it("declares exactly the same agent request outcomes in both places", () => {
+    expect(Object.keys(AgentRequestOutcome).sort()).toEqual(
+      [...AGENT_REQUEST_OUTCOMES].sort(),
+    );
   });
 
   it("names no payment vendor in the shared actor vocabulary", () => {

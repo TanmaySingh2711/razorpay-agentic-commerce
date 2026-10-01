@@ -98,6 +98,35 @@ const selectionPayload = z.strictObject({
    * adjacent events.
    */
   substitutedForProductId: identifier.optional(),
+  /**
+   * How many products met every rule, and the cheapest few the server did
+   * not choose - each with the price the catalog stated at that moment.
+   *
+   * Recorded so "why this one?" has a checkable answer: the buyer can see
+   * what else was eligible and what it cost, from the record rather than from
+   * the model's say-so. Prices are the catalog's, never the model's.
+   */
+  eligibleCount: z.int().nonnegative().optional(),
+  alternatives: z
+    .array(
+      z.strictObject({
+        productId: identifier,
+        unitAmountMinor: minorAmount,
+        currency,
+      }),
+    )
+    .max(3)
+    .optional(),
+  /**
+   * The agent run that proposed this product, as the orchestrator counted it.
+   * Counters only: there is no field here a model could write prose into.
+   */
+  agentModelCalls: z.int().nonnegative().optional(),
+  agentToolCalls: z.int().nonnegative().optional(),
+  agentProductsObserved: z.int().nonnegative().optional(),
+  agentDurationMs: z.int().nonnegative().optional(),
+  agentPrefetched: z.boolean().optional(),
+  agentTurn: z.int().positive().optional(),
 });
 
 /** The authoritative product facts, re-read from PostgreSQL. */
@@ -297,6 +326,25 @@ const paymentPayload = z.strictObject({
   conflictingAttemptId: identifier.optional(),
 });
 
+/**
+ * Money going back. Every figure is copied from the captured attempt by the
+ * server; the provider's refund id is a reference, never a key, and its
+ * status word is kept verbatim only as a short code.
+ */
+const refundPayload = z.strictObject({
+  refundId: identifier.optional(),
+  paymentAttemptId: identifier.optional(),
+  amountMinor: minorAmount.optional(),
+  currency: currency.optional(),
+  receipt: identifier.optional(),
+  providerRefundId: providerReference.optional(),
+  providerStatus: shortCode.optional(),
+  providerEventId: providerReference.optional(),
+  failureCode: shortCode.optional(),
+  denial: shortCode.optional(),
+  operationId: identifier.optional(),
+});
+
 const genericPayload = z.strictObject({
   quoteId: identifier.optional(),
   amountMinor: minorAmount.optional(),
@@ -358,6 +406,11 @@ const PAYLOAD_SCHEMAS: Record<AuditEventType, z.ZodType> = {
   transaction_blocked: genericPayload,
   transaction_cancelled: genericPayload,
   transaction_expired: genericPayload,
+  refund_requested: refundPayload,
+  refund_denied: refundPayload,
+  refund_processed: refundPayload,
+  refund_failed: refundPayload,
+  refund_unresolved: refundPayload,
 };
 
 export function auditPayloadSchema(action: AuditEventType): z.ZodType {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BuyerConsole } from "@/components/buyer/buyer-console";
+import { SiteHeader } from "@/components/site-header";
 
 /**
  * The demo itself.
@@ -58,33 +59,10 @@ const STEPS = [
   },
 ];
 
-/**
- * The slim bar every page opens with.
- *
- * Not a navigation system - there is nowhere else in this demo to navigate to
- * from here - just enough identity and status that the page reads as a
- * product rather than a submission. `TEST MODE · NO REAL MONEY` is the one
- * fact that must survive no matter how the rest of the copy changes, so it is
- * a fixed badge rather than prose that could later be edited away.
- */
-function ProductBar() {
-  return (
-    <header className="product-bar">
-      <div className="product-bar-inner">
-        <span className="brand">Razorpay Agentic Commerce</span>
-        <span className="badge test-mode">
-          <span className="dot" aria-hidden="true" />
-          Test Mode · No real money
-        </span>
-      </div>
-    </header>
-  );
-}
-
 export default function HomePage() {
   return (
     <>
-      <ProductBar />
+      <SiteHeader current="shop" />
       <main className="wide">
         <header className="page-head">
           <h1>Shop by describing what you want</h1>

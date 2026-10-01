@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
 import { processWebhook } from "@/services/payment/webhook-service";
 import { systemClock } from "@/lib/clock";
-import { fakePaymentProvider } from "./support/fake-payment-provider";
+import { fakePaymentProvider } from "../support/fake-payment-provider";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 /**

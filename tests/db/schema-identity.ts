@@ -40,6 +40,9 @@ export const TEST_SCHEMA_MARKER_VALUE = "agentic-commerce:disposable-test-schema
  * destroy the proof that it was allowed to run.
  */
 export const TEST_TABLES = [
+  "refund",
+  "agent_request",
+  "rate_limit_window",
   "audit_event",
   "webhook_event",
   "transaction_state_transition",

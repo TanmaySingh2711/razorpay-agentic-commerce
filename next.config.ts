@@ -40,25 +40,42 @@ import type { NextConfig } from "next";
  */
 const RAZORPAY_HOSTS = "https://*.razorpay.com https://checkout.razorpay.com";
 
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  // See the note above: inline is required by the framework's streaming payload.
-  `script-src 'self' 'unsafe-inline' ${RAZORPAY_HOSTS}`,
-  // React and the checkout widget both inject style attributes at runtime.
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://cdn.razorpay.com https://*.rzp.io https://*.razorpay.com",
-  "font-src 'self' data: https://cdn.razorpay.com https://*.razorpay.com",
-  // Checkout reports telemetry and completes payments over these.
-  `connect-src 'self' ${RAZORPAY_HOSTS} https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com`,
-  // The payment frame. Without this, pressing Pay opens nothing.
-  `frame-src ${RAZORPAY_HOSTS}`,
-  // Nobody may frame us. The page carrying the Pay button is the one that must
-  // never be wrapped in someone else's chrome.
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
+/**
+ * `'unsafe-eval'` is added for `next dev` and for nothing else.
+ *
+ * React uses `eval` in development to rebuild readable call stacks, and
+ * without it every local page carries an error badge that has nothing to do
+ * with the application. A production build never asks for it, so the deployed
+ * policy is unchanged - `tests/unit/security-headers-and-origin.test.ts`
+ * asserts exactly that.
+ */
+function contentSecurityPolicy(development: boolean): string {
+  return [
+    "default-src 'self'",
+    // See the note above: inline is required by the framework's streaming payload.
+    `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""} ${RAZORPAY_HOSTS}`,
+    // React and the checkout widget both inject style attributes at runtime.
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://cdn.razorpay.com https://*.rzp.io https://*.razorpay.com",
+    "font-src 'self' data: https://cdn.razorpay.com https://*.razorpay.com",
+    // Checkout reports telemetry and completes payments over these.
+    `connect-src 'self' ${RAZORPAY_HOSTS} https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com`,
+    // The payment frame. Without this, pressing Pay opens nothing.
+    `frame-src ${RAZORPAY_HOSTS}`,
+    // Nobody may frame us. The page carrying the Pay button is the one that must
+    // never be wrapped in someone else's chrome.
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
+/** Whether this config is serving `next dev`. See `servesHttps` for the env read. */
+function isDevelopmentServer(): boolean {
+  // eslint-disable-next-line no-restricted-syntax -- same exemption as APP_URL below.
+  return process.env["NODE_ENV"] === "development";
+}
 
 /**
  * Sent only over HTTPS deployments.
@@ -104,7 +121,10 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy(isDevelopmentServer()),
+          },
           // No MIME sniffing. A JSON error body must never be executed as script.
           { key: "X-Content-Type-Options", value: "nosniff" },
           // Transaction ids live in URLs. They must not leak to third parties

@@ -116,6 +116,29 @@ export interface ObservedProduct {
   readonly updatedAt: string;
 }
 
+/**
+ * What one run of the agent cost, and how widely it looked.
+ *
+ * Counted by the orchestrator, never reported by the model, so it is a fact
+ * about this execution rather than a claim. Shown to the buyer ("looked at 12
+ * products in 1 search, 2.1s") and to the merchant (latency and model spend),
+ * and it is what makes a latency regression visible instead of anecdotal.
+ */
+export interface AgentTrace {
+  /** Provider calls actually made, retries included. */
+  readonly modelCalls: number;
+  /** Catalog tool calls the model asked for and the server executed. */
+  readonly toolCalls: number;
+  /** Distinct catalog products the model was shown. */
+  readonly productsObserved: number;
+  /** Whether the server pre-loaded catalog results for the model. */
+  readonly prefetched: boolean;
+  /** Wall-clock time for the whole run. */
+  readonly durationMs: number;
+  /** Which turn of a conversation this was: 1 for a fresh request. */
+  readonly turn: number;
+}
+
 export type BuyerAgentDecision =
   | {
       readonly kind: "PRODUCT_SELECTED";
@@ -127,6 +150,8 @@ export type BuyerAgentDecision =
       readonly summary: string;
       readonly constraints: NormalizedUserConstraints;
       readonly observedProduct: ObservedProduct;
+      /** Absent only on decisions built by hand, such as in tests. */
+      readonly trace?: AgentTrace;
     }
   | {
       readonly kind: "NEEDS_CLARIFICATION";
@@ -134,6 +159,7 @@ export type BuyerAgentDecision =
       readonly clarificationQuestion: string;
       readonly ambiguousFields: readonly ClarificationField[];
       readonly constraints: NormalizedUserConstraints;
+      readonly trace?: AgentTrace;
     }
   | {
       readonly kind: "NO_MATCH";
@@ -141,6 +167,7 @@ export type BuyerAgentDecision =
       readonly reasonCodes: readonly NoMatchReasonCode[];
       readonly summary: string;
       readonly constraints: NormalizedUserConstraints;
+      readonly trace?: AgentTrace;
     };
 
 export type BuyerAgentDecisionKind = BuyerAgentDecision["kind"];
@@ -217,7 +244,7 @@ export type ModelSelection = z.infer<typeof modelSelectionSchema>;
  * never told a limit has no way to respect it, and the resulting refusal is our
  * own contract's fault rather than the model's - which is precisely how an
  * over-long clarification question once became a live failure. The parity test
- * in `tests/model-schema-parity.test.ts` is what keeps the two in step.
+ * in `tests/unit/model-schema-parity.test.ts` is what keeps the two in step.
  */
 export const SELECTION_RESPONSE_JSON_SCHEMA = {
   type: "object",

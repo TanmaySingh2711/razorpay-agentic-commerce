@@ -1,4 +1,5 @@
 import { PayButton } from "@/components/payments/pay-button";
+import { SiteHeader } from "@/components/site-header";
 import { describePaymentFailure } from "@/domain/payment/failure";
 import { readRetryStatus } from "@/services/payment/retry-service";
 import { MAX_PAYMENT_ATTEMPTS, type RetryDenial } from "@/domain/payment/retry";
@@ -66,48 +67,51 @@ export default async function CheckoutPage({
   const failed = status?.transactionState === "PAYMENT_FAILED";
 
   return (
-    <main>
-      <h1>{failed ? "That payment did not go through" : "Complete your payment"}</h1>
+    <>
+      <SiteHeader current={null} />
+      <main>
+        <h1>{failed ? "That payment did not go through" : "Complete your payment"}</h1>
 
-      {failed ? (
-        <>
-          <p>
-            {status.lastFailure === null
-              ? "Your payment was not completed and no money has been taken by us."
-              : describePaymentFailure(status.lastFailure)}{" "}
-            Nothing about this purchase has changed — the item, the price and the order
-            are all still exactly as they were.
-          </p>
-          <p>
-            Payment attempt {String(Math.min(status.attemptsUsed, status.maxAttempts))} of{" "}
-            {String(status.maxAttempts)} used.
-          </p>
-          {status.available ? (
-            <PayButton
-              transactionId={transactionId}
-              mode="RETRY"
-              attemptsUsed={status.attemptsUsed}
-              maxAttempts={status.maxAttempts}
-            />
-          ) : (
-            <p role="status">
-              {status.denial === null
-                ? "This purchase cannot be paid again."
-                : explainDenial(status.denial)}
+        {failed ? (
+          <>
+            <p>
+              {status.lastFailure === null
+                ? "Your payment was not completed and no money has been taken by us."
+                : describePaymentFailure(status.lastFailure)}{" "}
+              Nothing about this purchase has changed — the item, the price and the order
+              are all still exactly as they were.
             </p>
-          )}
-        </>
-      ) : (
-        <>
-          <p>
-            The amount, the item and the order were all fixed by the server before you got
-            here. Nothing on this page can change what you are charged.
-          </p>
-          <PayButton transactionId={transactionId} mode="PAY" />
-        </>
-      )}
+            <p>
+              Payment attempt {String(Math.min(status.attemptsUsed, status.maxAttempts))}{" "}
+              of {String(status.maxAttempts)} used.
+            </p>
+            {status.available ? (
+              <PayButton
+                transactionId={transactionId}
+                mode="RETRY"
+                attemptsUsed={status.attemptsUsed}
+                maxAttempts={status.maxAttempts}
+              />
+            ) : (
+              <p role="status">
+                {status.denial === null
+                  ? "This purchase cannot be paid again."
+                  : explainDenial(status.denial)}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p>
+              The amount, the item and the order were all fixed by the server before you
+              got here. Nothing on this page can change what you are charged.
+            </p>
+            <PayButton transactionId={transactionId} mode="PAY" />
+          </>
+        )}
 
-      <p className="tagline">Razorpay Test Mode — no real money moves.</p>
-    </main>
+        <p className="tagline">Razorpay Test Mode — no real money moves.</p>
+      </main>
+    </>
   );
 }

@@ -9,6 +9,8 @@ import {
   readPassportRows,
 } from "@/services/safety/passport-service";
 import { toQuoteDto } from "@/domain/quote/rules";
+import { readRefund } from "@/services/refund/refund-service";
+import type { RefundView } from "@/domain/refund/contracts";
 import type { AuditTimelineEntry } from "@/services/audit/audit-service";
 import type { SafetyPassportViewModel } from "@/domain/safety/passport";
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -51,6 +53,34 @@ export interface OverviewPolicy {
   readonly autoApproveLimit: MoneyDto | null;
 }
 
+/** One product that met every rule but was not chosen, at the price it had then. */
+export interface SelectionAlternative {
+  readonly name: string;
+  readonly unitAmount: MoneyDto;
+}
+
+/**
+ * How the assistant arrived at this product, from the server's own record.
+ *
+ * Read from the `product_selected` audit event: the candidate counts and
+ * alternatives the decision engine wrote, and the counters the orchestrator
+ * kept. Nothing here is the model's account of itself.
+ */
+export interface SelectionInsight {
+  readonly eligibleCount: number | null;
+  readonly candidatesConsidered: number | null;
+  readonly alternatives: readonly SelectionAlternative[];
+  readonly reasons: readonly string[];
+  readonly substituted: boolean;
+  readonly agent: {
+    readonly modelCalls: number;
+    readonly toolCalls: number;
+    readonly productsObserved: number;
+    readonly durationMs: number;
+    readonly turn: number;
+  } | null;
+}
+
 export interface TransactionOverview {
   readonly transactionId: string;
   readonly state: TransactionState;
@@ -90,6 +120,10 @@ export interface TransactionOverview {
    * and no part of it comes from a language model.
    */
   readonly passport: SafetyPassportViewModel;
+  /** How the assistant chose, when a product was selected. */
+  readonly selection: SelectionInsight | null;
+  /** The most recent refund, when one was asked for. */
+  readonly refund: RefundView | null;
 }
 
 export interface OverviewDeps {
@@ -102,6 +136,78 @@ export function defaultOverviewDeps(): OverviewDeps {
 }
 
 /** Only the attribute values that are safe and useful to render as text. */
+const asNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+/** Reads the selection record, tolerating older rows that predate its fields. */
+async function readSelection(
+  prisma: PrismaClient,
+  transactionId: string,
+): Promise<SelectionInsight | null> {
+  const event = await prisma.auditEvent.findFirst({
+    where: { transactionId, eventType: "product_selected" },
+    orderBy: { createdAt: "desc" },
+    select: { metadata: true, reasonCode: true },
+  });
+  if (event === null) return null;
+  const facts = (
+    typeof event.metadata === "object" && event.metadata !== null ? event.metadata : {}
+  ) as Record<string, unknown>;
+
+  const rawAlternatives = Array.isArray(facts["alternatives"])
+    ? facts["alternatives"]
+    : [];
+  const alternativeRows = rawAlternatives.flatMap((entry: unknown) => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const record = entry as Record<string, unknown>;
+    const productId = record["productId"];
+    const amount = record["unitAmountMinor"];
+    const currency = record["currency"];
+    return typeof productId === "string" &&
+      typeof amount === "string" &&
+      typeof currency === "string"
+      ? [{ productId, amount, currency }]
+      : [];
+  });
+  const names = new Map(
+    (
+      await prisma.product.findMany({
+        where: { id: { in: alternativeRows.map((row) => row.productId) } },
+        select: { id: true, name: true },
+      })
+    ).map((product) => [product.id, product.name]),
+  );
+
+  const modelCalls = asNumber(facts["agentModelCalls"]);
+  return {
+    eligibleCount: asNumber(facts["eligibleCount"]),
+    candidatesConsidered: asNumber(facts["candidatesConsidered"]),
+    alternatives: alternativeRows.map((row) => ({
+      name: names.get(row.productId) ?? "Another product",
+      // The price the catalog stated when the decision was made - the
+      // comparison the server actually drew.
+      unitAmount: {
+        amountMinor: row.amount,
+        currency: row.currency as MoneyDto["currency"],
+      },
+    })),
+    reasons: Array.isArray(facts["reasons"])
+      ? facts["reasons"].filter((reason): reason is string => typeof reason === "string")
+      : [],
+    substituted: event.reasonCode === "PRODUCT_SUBSTITUTED_UNAVAILABLE",
+    agent:
+      modelCalls === null
+        ? null
+        : {
+            modelCalls,
+            toolCalls: asNumber(facts["agentToolCalls"]) ?? 0,
+            productsObserved: asNumber(facts["agentProductsObserved"]) ?? 0,
+            durationMs: asNumber(facts["agentDurationMs"]) ?? 0,
+            turn: asNumber(facts["agentTurn"]) ?? 1,
+          },
+  };
+}
+
 function readableAttributes(value: unknown): Readonly<Record<string, string>> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
   const out: Record<string, string> = {};
@@ -131,21 +237,31 @@ export async function loadTransactionOverview(
   if (transaction === null) return null;
 
   const now = deps.clock.now();
-  const [active, evaluation, reservation, retry, timeline, passportRows] =
-    await Promise.all([
-      readActiveQuote(deps.prisma, transactionId, now),
-      readRecordedEvaluation(deps.prisma, transactionId),
-      deps.prisma.inventoryReservation.findFirst({
-        where: { transactionId },
-        orderBy: { createdAt: "desc" },
-        select: { status: true, expiresAt: true },
-      }),
-      readRetryStatus(transactionId, { prisma: deps.prisma, clock: deps.clock }),
-      getTransactionAuditHistory(transactionId, { prisma: deps.prisma }),
-      // Runs alongside the rest rather than after it: the passport reads
-      // different tables from everything above, so it costs no extra latency.
-      readPassportRows(deps.prisma, transactionId),
-    ]);
+  const [
+    active,
+    evaluation,
+    reservation,
+    retry,
+    timeline,
+    passportRows,
+    selection,
+    refund,
+  ] = await Promise.all([
+    readActiveQuote(deps.prisma, transactionId, now),
+    readRecordedEvaluation(deps.prisma, transactionId),
+    deps.prisma.inventoryReservation.findFirst({
+      where: { transactionId },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, expiresAt: true },
+    }),
+    readRetryStatus(transactionId, { prisma: deps.prisma, clock: deps.clock }),
+    getTransactionAuditHistory(transactionId, { prisma: deps.prisma }),
+    // Runs alongside the rest rather than after it: the passport reads
+    // different tables from everything above, so it costs no extra latency.
+    readPassportRows(deps.prisma, transactionId),
+    readSelection(deps.prisma, transactionId),
+    readRefund(deps.prisma, transactionId),
+  ]);
 
   const quote = active === null ? null : toQuoteDto(active.snapshot);
 
@@ -214,5 +330,7 @@ export async function loadTransactionOverview(
       timeline,
       rows: passportRows,
     }),
+    selection,
+    refund,
   };
 }

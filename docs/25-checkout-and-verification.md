@@ -218,7 +218,7 @@ is `PAYMENT_VERIFIED`, the reservation is still `ACTIVE`, product `inventory` an
 
 ## Testing
 
-`tests/checkout-signature.test.ts` (14) runs against the **real adapter** with
+`tests/unit/checkout-signature.test.ts` (14) runs against the **real adapter** with
 signatures computed independently by Node's crypto — no fake anywhere. The
 central test signs the right payload with the _wrong_ order id and proves it is
 rejected here while verifying against the order it was really made for.
@@ -227,7 +227,7 @@ rejected here while verifying against the order it was really made for.
 cryptography, faking only the network. It proves the server verifies against its
 stored order id even when the callback posts none at all.
 
-`tests/checkout-script.test.ts` (6) covers the loader's failure paths against a
+`tests/unit/checkout-script.test.ts` (6) covers the loader's failure paths against a
 hand-written DOM stub — a blocked script, a `load` that defines no global, an
 in-flight tag, and server-side rendering. Only five browser APIs are used, so a
 stub that small keeps the test honest about what the code depends on without

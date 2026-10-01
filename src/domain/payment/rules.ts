@@ -6,7 +6,7 @@ import { SUPPORTED_CURRENCIES } from "@/domain/money";
  *
  * No database, no network, no clock. Everything here is a total function over
  * values, which is what makes the financial-authority tests in
- * `tests/payment-order-rules.test.ts` able to enumerate the boundary cases
+ * `tests/unit/payment-order-rules.test.ts` able to enumerate the boundary cases
  * rather than sample them.
  */
 

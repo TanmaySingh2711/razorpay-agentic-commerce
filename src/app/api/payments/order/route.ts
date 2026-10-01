@@ -1,4 +1,6 @@
 import { handleCreatePaymentOrder } from "@/app/api/payments/handler";
+import { withRateLimit } from "@/lib/http/rate-limited";
+import { limitPaymentRequest } from "@/services/rate-limit/rate-limit-service";
 
 /**
  * The payment-order endpoint.
@@ -14,5 +16,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export function POST(request: Request): Promise<Response> {
-  return handleCreatePaymentOrder(request);
+  // A money endpoint: hammering it is refused before any row is read.
+  return withRateLimit(
+    request,
+    (client) => limitPaymentRequest(client),
+    () => handleCreatePaymentOrder(request),
+  );
 }

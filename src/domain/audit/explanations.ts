@@ -322,6 +322,22 @@ export function explainAuditEvent(input: {
       return "A provider webhook that had already been processed arrived again, and was recorded without repeating its effect.";
     case "webhook_ignored":
       return `A genuine provider webhook was acknowledged without being acted on${reasonTail}, either because it reports something this system does not handle or because the transaction had already moved past what it describes.`;
+    case "refund_requested": {
+      const total = amount(facts, "amountMinor");
+      return total === null
+        ? "The buyer asked for this purchase to be refunded."
+        : `The buyer asked for ${total} to be refunded to the original payment method.`;
+    }
+    case "refund_denied":
+      return `A refund was not started${reasonTail}. Nothing was changed.`;
+    case "refund_processed":
+      return "The payment provider confirmed the refund was processed.";
+    case "refund_failed":
+      return "The payment provider could not process the refund. No money was returned, and the buyer may try again.";
+    case "refund_unresolved":
+      // The refund twin of an unknown order outcome: said plainly, because
+      // the one wrong response to it is asking for a second refund.
+      return "The refund request left an unresolved outcome with the payment provider. It will be checked by its reference and is never sent twice.";
     case "webhook_mismatch":
       return `A genuine provider webhook did not match this transaction's stored payment details${reasonTail}, so no payment state was changed.`;
   }
