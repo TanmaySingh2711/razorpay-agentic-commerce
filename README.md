@@ -173,7 +173,9 @@ razorpay-agentic-commerce/
 │   └── support/             Fake AI and payment providers for tests
 ├── setup.bat / setup.sh     One-click setup
 ├── run_dashboard.bat        Starts the app on Windows
-└── package.json
+├── .env.example             Template for your settings
+├── LICENSE                  MIT license
+└── package.json             Scripts and dependencies
 ```
 
 ## Requirements
@@ -372,13 +374,52 @@ Query parameters for `/api/catalog/products`:
 | `limit`            | 1 to 100. Default 50.                                                     |
 | `offset`           | Where to start. Default 0.                                                |
 
-Example:
+Example: the cheapest keyboard under ₹3000.
 
 ```bash
-curl "http://localhost:3000/api/catalog/products?category=mouse&maxAmountMinor=300000&currency=INR&sort=amount_asc"
+curl "http://localhost:3000/api/catalog/products?category=mechanical-keyboard&maxAmountMinor=300000&currency=INR&sort=amount_asc&limit=1"
 ```
 
-Each product has these fields: `id`, `merchantId`, `sku`, `name`, `description`, `category`, `amount` (`amountMinor` and `currency`), `availability` (`status`, `quantity`, `purchasable`), `attributes`, `version`, and `updatedAt`.
+Response (the ids and totals depend on your database):
+
+```json
+{
+  "data": [
+    {
+      "id": "01a06420-a3fb-7527-b4a3-34f29f7ba7f7",
+      "merchantId": "01a06420-a327-73fc-9228-77d6660dde13",
+      "sku": "KB-VOLT-60",
+      "name": "Volt Compact 60 Mechanical Keyboard",
+      "description": "Budget 60% mechanical keyboard with clicky blue switches and ABS keycaps. Wired, no software required.",
+      "category": "mechanical-keyboard",
+      "amount": { "amountMinor": "199900", "currency": "INR" },
+      "availability": { "status": "AVAILABLE", "quantity": 40, "purchasable": true },
+      "attributes": {
+        "colour": "black",
+        "layout": "compact-60",
+        "backlight": "none",
+        "switchType": "clicky-blue",
+        "ratingScore": 3.9,
+        "connectivity": "wired",
+        "hotSwappable": false,
+        "keycapMaterial": "abs"
+      },
+      "version": 1,
+      "updatedAt": "2026-09-03T11:32:04.850Z"
+    }
+  ],
+  "meta": {
+    "catalogVersion": "1",
+    "count": 1,
+    "total": 4,
+    "limit": 1,
+    "offset": 0,
+    "sort": "amount_asc"
+  }
+}
+```
+
+`amountMinor` is the price in paise, so `"199900"` means ₹1,999.00.
 
 Prices are whole numbers in paise. They are sent as strings, never as decimals.
 
