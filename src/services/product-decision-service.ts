@@ -1,14 +1,14 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
 import { systemClock, type Clock } from "@/lib/clock";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { createTransaction } from "@/services/transaction/creation-service";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { createTransaction } from "@/services/transaction-creation-service";
+import { applyTransactionEventWithin } from "@/services/transition-service";
 import {
   createServiceCatalogReader,
   type CatalogReader,
-} from "@/services/buyer-agent/catalog-reader";
-import { createTrustedQuote } from "@/services/quote/quote-service";
+} from "@/services/catalog-reader";
+import { createTrustedQuote } from "@/services/quote-service";
 import {
   assessCandidate,
   eligibleCandidates,
@@ -17,16 +17,16 @@ import {
   refusedOnlyForAvailability,
   unverifiableRequirements,
   type PurchaseAuthority,
-} from "@/domain/product-decision/eligibility";
+} from "@/domain/eligibility";
 import { toQuoteDto } from "@/domain/quote/rules";
 import { QuoteProductChangedError } from "@/domain/quote/errors";
-import { getQuoteConfig } from "@/config/env";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+import { getQuoteConfig } from "@/lib/env";
+import { recordAuditEvent } from "@/services/audit-service";
 import type { PurchaseDecisionResult } from "@/domain/quote/contracts";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 import type { CurrencyCode } from "@/domain/money";
-import type { EligibilityReason } from "@/domain/product-decision/eligibility";
+import type { EligibilityReason } from "@/domain/eligibility";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -55,7 +55,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * data; asking a model to re-do work the database can settle would spend quota
  * to make a decision less trustworthy.
  */
-assertServerOnly("src/services/product-decision/product-decision-service.ts");
+assertServerOnly("src/services/product-decision-service.ts");
 
 const log = createLogger({ category: "agent" });
 

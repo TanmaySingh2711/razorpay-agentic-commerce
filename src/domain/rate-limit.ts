@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
  * Everything that decides *whether* a request is over a limit lives here, with
  * no clock and no database, so every boundary - the last millisecond of a
  * window, the first of the next, a header that lies - can be tested exactly.
- * `src/services/rate-limit/rate-limit-service.ts` supplies the time and the
+ * `src/services/rate-limit-service.ts` supplies the time and the
  * counter; this module supplies the arithmetic.
  *
  * ## Why fixed windows

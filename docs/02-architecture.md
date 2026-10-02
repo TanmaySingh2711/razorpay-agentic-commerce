@@ -50,7 +50,7 @@ Rules that keep this acyclic:
   compose an integration with a domain rule.
 - `app/` makes no financial decision itself. A route handler parses, delegates
   to **one** service, and maps the result to a response. The server actions in
-  `app/actions/purchase.ts` are the one deliberate exception to "one service
+  `app/actions.ts` are the one deliberate exception to "one service
   per caller": a purchase is a sequence (buyer agent → product decision →
   policy → inventory → approval), and that sequencing lives there rather than
   behind a single wrapper service. What still never lives in `app/` is a
@@ -65,7 +65,7 @@ real one.
 
 ---
 
-### 1. Buyer Agent — `src/services/buyer-agent/`
+### 1. Buyer Agent — `src/services/buyer-agent-service.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                 |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,7 +81,7 @@ real one.
 
 ---
 
-### 2. AI Provider Adapter — `src/integrations/llm/`
+### 2. AI Provider Adapter — `src/integrations/ai-provider.ts`, `gemini-provider.ts`
 
 |                          |                                                                                                                                                                                                                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -98,7 +98,7 @@ real one.
 
 ---
 
-### 3. Merchant Service — `src/services/merchant/`
+### 3. Merchant Service — `src/services/catalog-repository.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -114,7 +114,7 @@ real one.
 
 ---
 
-### 4. Agent-Readable Catalog — `src/services/merchant/catalog-service.ts`
+### 4. Agent-Readable Catalog — `src/services/catalog-service.ts`
 
 |                          |                                                                                                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -130,7 +130,7 @@ real one.
 
 ---
 
-### 5. Product Decision Engine — `src/services/product-decision/product-decision-service.ts` (`decidePurchase`)
+### 5. Product Decision Engine — `src/services/product-decision-service.ts` (`decidePurchase`)
 
 Its real scope is wider than the name suggests: this is the single function
 that spans everything from "the agent proposed a product" to "a trusted quote
@@ -150,11 +150,11 @@ invoked from a shared orchestrator.
 | **Prohibited**           | Treating the model's own ranking as authorization. Computing the payable amount itself — that arithmetic still happens only inside the quote service it calls.                                                                                                                                                                        |
 | **Persistence**          | Writes transactions (via the creation service), transitions (via the transition service), and audit events directly, all inside its own database transactions.                                                                                                                                                                        |
 | **Security**             | Hard eligibility filters (budget, availability, hard requirements) are applied **deterministically**, both to what the model was shown and to what it picked; a pick outside the eligible set is rejected regardless of the model's stated reason.                                                                                    |
-| **Called by**            | The `submitRequest` server action in `src/app/actions/purchase.ts`, after the Buyer Agent has produced a proposal.                                                                                                                                                                                                                    |
+| **Called by**            | The `submitRequest` server action in `src/app/actions.ts`, after the Buyer Agent has produced a proposal.                                                                                                                                                                                                                             |
 
 ---
 
-### 6. PurchaseQuote — `src/services/quote/`
+### 6. PurchaseQuote — `src/services/quote-service.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -171,7 +171,7 @@ invoked from a shared orchestrator.
 
 ---
 
-### 7. Policy / Authorization Engine — `src/domain/policy/`, `src/services/policy/`
+### 7. Policy / Authorization Engine — `src/domain/policy/`, `src/services/policy-service.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -187,23 +187,23 @@ invoked from a shared orchestrator.
 
 ---
 
-### 8. Human Approval Gate — `src/services/approval/`
+### 8. Human Approval Gate — `src/services/approval-service.ts`
 
-|                          |                                                                                                                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Responsibility**       | Hold a transaction that policy marked `requires_approval` until a human explicitly approves or denies a specific quoted amount, and expire it otherwise.                                                                                             |
-| **Trusted inputs**       | An authenticated human action.                                                                                                                                                                                                                       |
-| **Untrusted inputs**     | The approval request payload from the browser.                                                                                                                                                                                                       |
-| **Outputs**              | `approval_granted` or `approval_denied`, bound to one transaction, one quote and one approver.                                                                                                                                                       |
-| **Allowed dependencies** | Persistence, transaction service, audit.                                                                                                                                                                                                             |
-| **Prohibited**           | Auto-approval of any kind. Approval by a non-human actor. Approving an amount different from the quoted one.                                                                                                                                         |
-| **Persistence**          | `ApprovalRequest`, with an expiry.                                                                                                                                                                                                                   |
-| **Security**             | The transition table grants `APPROVAL_REQUIRED → AUTHORIZED` to `approval_gate` alone, so no agent path can reach it. The acknowledged amount is re-compared to the quote before the authorization stands.                                           |
-| **Called by**            | The `submitRequest`, `approvePurchase` and `rejectPurchase` server actions in `src/app/actions/purchase.ts`. There is no separate `/api/.../approvals` route today; the approval flow is server-action only, matching every other buyer-facing step. |
+|                          |                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Responsibility**       | Hold a transaction that policy marked `requires_approval` until a human explicitly approves or denies a specific quoted amount, and expire it otherwise.                                                                                    |
+| **Trusted inputs**       | An authenticated human action.                                                                                                                                                                                                              |
+| **Untrusted inputs**     | The approval request payload from the browser.                                                                                                                                                                                              |
+| **Outputs**              | `approval_granted` or `approval_denied`, bound to one transaction, one quote and one approver.                                                                                                                                              |
+| **Allowed dependencies** | Persistence, transaction service, audit.                                                                                                                                                                                                    |
+| **Prohibited**           | Auto-approval of any kind. Approval by a non-human actor. Approving an amount different from the quoted one.                                                                                                                                |
+| **Persistence**          | `ApprovalRequest`, with an expiry.                                                                                                                                                                                                          |
+| **Security**             | The transition table grants `APPROVAL_REQUIRED → AUTHORIZED` to `approval_gate` alone, so no agent path can reach it. The acknowledged amount is re-compared to the quote before the authorization stands.                                  |
+| **Called by**            | The `submitRequest`, `approvePurchase` and `rejectPurchase` server actions in `src/app/actions.ts`. There is no separate `/api/.../approvals` route today; the approval flow is server-action only, matching every other buyer-facing step. |
 
 ---
 
-### 9. Inventory Reservation — `src/services/inventory/`
+### 9. Inventory Reservation — `src/services/reservation-service.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -219,15 +219,15 @@ invoked from a shared orchestrator.
 
 ---
 
-### 10. Transaction Service — `src/services/transaction/`
+### 10. Transaction Service — `src/services/transition-service.ts`
 
 Thinner than the name suggests, and worth stating plainly: **this module does
 not orchestrate the purchase flow.** It is three narrow, shared primitives that
 every other service calls into to do its own piece of the lifecycle — there is
 no central function that calls the buyer agent, the quote service, the policy
 engine, the approval gate, the reservation service and the payment provider in
-sequence. That sequencing lives in `src/app/actions/purchase.ts` (for the
-buyer-facing steps) and inside each `src/services/payment/*` service (for the
+sequence. That sequencing lives in `src/app/actions.ts` (for the
+buyer-facing steps) and inside each payment service (for the
 payment steps); each of those calls `applyTransactionEvent(Within)` directly,
 as part of its own atomic database transaction, to record the one transition
 its own step is responsible for.
@@ -242,7 +242,7 @@ its own step is responsible for.
 | **Prohibited**           | Interpreting natural language. Ranking products. Making an authorization decision. Naming a payment vendor. `creation-service.ts`/`transition-service.ts` calling into any other service — the dependency arrow there points the other way, with every other service calling _into_ them.                                                                             |
 | **Persistence**          | `Transaction`, plus `TransactionStateTransition`.                                                                                                                                                                                                                                                                                                                     |
 | **Security**             | Every write goes through `resolveTransition`, which checks both the edge and the actor. Idempotency keys are stored so a replayed request cannot double-write.                                                                                                                                                                                                        |
-| **Called by**            | Nearly every other service — the Product Decision Engine, the Policy Engine, the Approval Gate, the Inventory Reservation service, and every `src/services/payment/*` service — each calling the transition-writing primitive to record its own step. `overview-service.ts` alone is called by the transaction page.                                                  |
+| **Called by**            | Nearly every other service — the Product Decision Engine, the Policy Engine, the Approval Gate, the Inventory Reservation service, and every payment service — each calling the transition-writing primitive to record its own step. `overview-service.ts` alone is called by the transaction page.                                                                   |
 
 ---
 
@@ -290,11 +290,11 @@ its own step is responsible for.
 | **Allowed dependencies** | Config, domain money, logger.                                                                                                                                                                                                                                                                                                                    |
 | **Prohibited**           | Exposing any provider type, provider error, or provider id format in its signatures.                                                                                                                                                                                                                                                             |
 | **Security**             | The chain is `payment/* services → Payment Provider Interface → Razorpay Adapter → Razorpay API`. The domain depends on the middle link only. The domain core does not contain the string "razorpay" — a test asserts this for the state machine's actor vocabulary, which is why the actors are named `payment_provider` and `payment_webhook`. |
-| **Called by**            | The `src/services/payment/*` family — `checkout-service.ts`, `payment-order-service.ts`, `retry-service.ts` and `webhook-service.ts` — each of which holds its own `PaymentProvider` instance rather than reaching it through a shared orchestrator.                                                                                             |
+| **Called by**            | The payment services — `checkout-service.ts`, `payment-order-service.ts`, `retry-service.ts` and `webhook-service.ts` — each of which holds its own `PaymentProvider` instance rather than reaching it through a shared orchestrator.                                                                                                            |
 
 ---
 
-### 14. Razorpay Adapter — `src/integrations/payments/razorpay-provider.ts`
+### 14. Razorpay Adapter — `src/integrations/razorpay-provider.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -304,13 +304,13 @@ its own step is responsible for.
 | **Outputs**              | Domain shapes, per the interface above.                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Allowed dependencies** | Config, domain money, logger.                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Prohibited**           | Deciding whether a payment is allowed. Computing an amount. Being called by the agent, by a route handler, or by the domain. Letting the key secret cross its own boundary.                                                                                                                                                                                                                                                         |
-| **Persistence**          | None directly; `PaymentAttempt` rows are written by `src/services/payment/payment-order-service.ts`, which calls this adapter.                                                                                                                                                                                                                                                                                                      |
+| **Persistence**          | None directly; `PaymentAttempt` rows are written by `src/services/payment-order-service.ts`, which calls this adapter.                                                                                                                                                                                                                                                                                                              |
 | **Security**             | Amounts are passed in minor units exactly as quoted, so no conversion step exists where a rounding bug could live. Razorpay-specific concerns — order parameters, provider ids, provider error codes, capture semantics, signature format — stay entirely inside this folder.                                                                                                                                                       |
 | **Status**               | Implemented and production-proven in Razorpay **Test Mode**: real order creation, real checkout signature verification and real webhook capture have all been exercised against the deployed environment, including a genuine bank decline, a controlled retry, and a duplicate webhook redelivery handled safely. See [24](./24-payment-order-creation.md) and [25](./25-checkout-and-verification.md) for the verified specifics. |
 
 ---
 
-### 15. Webhook Handler — `src/app/api/webhooks/razorpay/` and `src/services/payment/webhook-service.ts`
+### 15. Webhook Handler — `src/app/api/webhooks/razorpay/` and `src/services/webhook-service.ts`
 
 |                          |                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -327,23 +327,23 @@ its own step is responsible for.
 
 ---
 
-### 16. Persistence — `src/integrations/persistence/`
+### 16. Persistence — `src/integrations/prisma-client.ts`
 
-|                          |                                                                                                                                                                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Responsibility**       | The only module that talks to PostgreSQL, through Prisma. Owns the client lifecycle, transactions and connection strategy.                                                                                                                                        |
-| **Trusted inputs**       | `DATABASE_URL` and optional `DIRECT_URL` from the config boundary.                                                                                                                                                                                                |
-| **Untrusted inputs**     | None; callers pass already-validated domain values.                                                                                                                                                                                                               |
-| **Outputs**              | Typed domain entities.                                                                                                                                                                                                                                            |
-| **Allowed dependencies** | Config, domain types, logger.                                                                                                                                                                                                                                     |
-| **Prohibited**           | Being imported by a React component, a UI module, or anything in `app/` other than through a service. Running in a client bundle. Leaking a Prisma model type into the domain core.                                                                               |
-| **Security**             | **Server-only, always.** A pooled connection serves runtime requests; a direct connection is used for migrations, because poolers generally cannot run DDL. Money columns are always an integer plus an explicit currency — see [08](./history/08-data-model.md). |
-| **Called by**            | Services only.                                                                                                                                                                                                                                                    |
-| **To verify**            | Confirmed in Objective 2 and re-confirmed after the move to Neon: the runtime uses Neon's pooled endpoint, and `npm run db:verify:staging` refuses a `DATABASE_URL` that does not name a pooler.                                                                  |
+|                          |                                                                                                                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Responsibility**       | The only module that talks to PostgreSQL, through Prisma. Owns the client lifecycle, transactions and connection strategy.                                                                                                                              |
+| **Trusted inputs**       | `DATABASE_URL` and optional `DIRECT_URL` from the config boundary.                                                                                                                                                                                      |
+| **Untrusted inputs**     | None; callers pass already-validated domain values.                                                                                                                                                                                                     |
+| **Outputs**              | Typed domain entities.                                                                                                                                                                                                                                  |
+| **Allowed dependencies** | Config, domain types, logger.                                                                                                                                                                                                                           |
+| **Prohibited**           | Being imported by a React component, a UI module, or anything in `app/` other than through a service. Running in a client bundle. Leaking a Prisma model type into the domain core.                                                                     |
+| **Security**             | **Server-only, always.** A pooled connection serves runtime requests; a direct connection is used for migrations, because poolers generally cannot run DDL. Money columns are always an integer plus an explicit currency — see [16](./16-database.md). |
+| **Called by**            | Services only.                                                                                                                                                                                                                                          |
+| **To verify**            | Confirmed in Objective 2 and re-confirmed after the move to Neon: the runtime uses Neon's pooled endpoint, and `npm run db:verify:staging` refuses a `DATABASE_URL` that does not name a pooler.                                                        |
 
 ---
 
-### 17. Audit / Event Service — `src/services/audit/`
+### 17. Audit / Event Service — `src/services/audit-service.ts`
 
 |                          |                                                                                                                               |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |

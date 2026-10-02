@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { loadMerchantInsights } from "@/services/insights/merchant-insights-service";
-import { recordAgentRequest } from "@/services/insights/agent-request-log";
+import { loadMerchantInsights } from "@/services/merchant-insights-service";
+import { recordAgentRequest } from "@/services/agent-request-log";
 import { fixedClock } from "@/lib/clock";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import {

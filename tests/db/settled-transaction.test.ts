@@ -1,31 +1,22 @@
 import { createHmac } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  startCheckout,
-  type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
-import {
-  processWebhook,
-  type WebhookServiceDeps,
-} from "@/services/payment/webhook-service";
-import {
-  requestPaymentRetry,
-  type RetryServiceDeps,
-} from "@/services/payment/retry-service";
-import { createPaymentOrder } from "@/services/payment/payment-order-service";
+import { startCheckout, type CheckoutServiceDeps } from "@/services/checkout-service";
+import { processWebhook, type WebhookServiceDeps } from "@/services/webhook-service";
+import { requestPaymentRetry, type RetryServiceDeps } from "@/services/retry-service";
+import { createPaymentOrder } from "@/services/payment-order-service";
 import {
   commitReservation,
   releaseReservation,
   reserveInventory,
-} from "@/services/inventory/reservation-service";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
-import { createTrustedQuote } from "@/services/quote/quote-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy } from "@/services/policy-service";
+import { createTrustedQuote } from "@/services/quote-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { TerminalStateViolationError } from "@/domain/transaction/errors";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionState } from "@/domain/transaction/states";
 import {

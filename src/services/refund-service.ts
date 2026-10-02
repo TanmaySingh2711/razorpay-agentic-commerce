@@ -2,17 +2,17 @@ import { randomUUID } from "node:crypto";
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
 import { systemClock, type Clock } from "@/lib/clock";
-import { getRefundConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+import { getRefundConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
+import { recordAuditEvent } from "@/services/audit-service";
 import {
   assessRefund,
   refundReceiptFor,
   type RefundDenial,
   type RefundStatus,
   type RefundView,
-} from "@/domain/refund/contracts";
+} from "@/domain/refund";
 import type { CurrencyCode } from "@/domain/money";
 import type {
   PaymentProvider,
@@ -20,7 +20,7 @@ import type {
   ProviderRefundOutcome,
 } from "@/domain/payment/provider";
 import type { PrismaClient } from "@/generated/prisma/client";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 
 /**
  * Refunds: the buyer asks, the server decides, the provider returns the money.
@@ -42,7 +42,7 @@ import type { TransactionCapableClient } from "@/services/transaction/transition
  * The transaction itself stays COMPLETED. A refund is a second financial fact
  * about a purchase that genuinely happened; it does not rewrite the first.
  */
-assertServerOnly("src/services/refund/refund-service.ts");
+assertServerOnly("src/services/refund-service.ts");
 
 const log = createLogger({ category: "payment" });
 

@@ -71,7 +71,7 @@ spend quota to make the decision less trustworthy.
 ## Deterministic filtering
 
 Every candidate is judged by arithmetic, in a fixed order, in
-[`eligibility.ts`](../src/domain/product-decision/eligibility.ts):
+[`eligibility.ts`](../src/domain/eligibility.ts):
 
 `WRONG_CATEGORY` · `CURRENCY_MISMATCH` · `NOT_PURCHASABLE` ·
 `INSUFFICIENT_INVENTORY` · `OVER_BUDGET` · `UNMET_HARD_REQUIREMENT`

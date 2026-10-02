@@ -1,7 +1,7 @@
-import { PayButton } from "@/components/payments/pay-button";
+import { PayButton } from "@/components/pay-button";
 import { SiteHeader } from "@/components/site-header";
 import { describePaymentFailure } from "@/domain/payment/failure";
-import { readRetryStatus } from "@/services/payment/retry-service";
+import { readRetryStatus } from "@/services/retry-service";
 import { MAX_PAYMENT_ATTEMPTS, type RetryDenial } from "@/domain/payment/retry";
 
 /**

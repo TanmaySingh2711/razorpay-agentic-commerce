@@ -165,7 +165,7 @@ happened. Objective 2 models the table; Objective 3 writes it.
 
 ## Inventory holds
 
-`holdsInventory(state)` names every state in which stock is reserved:
+Stock is reserved in every state from
 `INVENTORY_RESERVED` through `PAYMENT_CAPTURED`, plus `PAYMENT_FAILED` (so a
 retry does not lose the hold). Any exit from one of these toward a terminal
 failure state must release the reservation; reaching `COMPLETED` commits it.

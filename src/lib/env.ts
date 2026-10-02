@@ -212,7 +212,7 @@ const reservationEnvSchema = z.object({
  * The deployment is a public URL, and the Buyer Agent spends real model quota
  * on every request - so without a ceiling, one script could exhaust the day's
  * quota and leave every genuine visitor with an error. Three ceilings, counted
- * in PostgreSQL (see `src/services/rate-limit/rate-limit-service.ts`):
+ * in PostgreSQL (see `src/services/rate-limit-service.ts`):
  *
  *  - per client per minute, which stops bursts;
  *  - per client per day, which stops a patient loop;
@@ -402,20 +402,4 @@ export function getRateLimitConfig(source: EnvSource = currentEnv()): RateLimitC
 /** Refund policy. Always available; needs no secret. */
 export function getRefundConfig(source: EnvSource = currentEnv()): RefundConfig {
   return Object.freeze(parseSection(refundEnvSchema, "refund", source));
-}
-
-export type OptionalConfigSection =
-  "gemini" | "razorpay" | "razorpayCredentials" | "razorpayWebhook" | "database";
-
-const OPTIONAL_SECTION_SCHEMAS: Record<OptionalConfigSection, z.ZodType> = {
-  gemini: geminiEnvSchema,
-  razorpay: razorpayEnvSchema,
-  razorpayCredentials: razorpayCredentialsSchema,
-  razorpayWebhook: razorpayWebhookSchema,
-  database: databaseEnvSchema,
-};
-
-/** Reports whether an optional section is configured, without throwing. */
-export function isSectionConfigured(section: OptionalConfigSection): boolean {
-  return OPTIONAL_SECTION_SCHEMAS[section].safeParse(currentEnv()).success;
 }

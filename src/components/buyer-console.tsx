@@ -2,8 +2,8 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { submitRequest, type RequestOutcome } from "@/app/actions/purchase";
-import { formatMoney } from "@/domain/ui/journey";
+import { submitRequest, type RequestOutcome } from "@/app/actions";
+import { formatMoney } from "@/domain/journey";
 
 /**
  * The one input in this application.

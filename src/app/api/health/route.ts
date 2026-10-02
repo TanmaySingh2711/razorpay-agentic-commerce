@@ -1,4 +1,4 @@
-import { getRuntimeConfig } from "@/config/env";
+import { getRuntimeConfig } from "@/lib/env";
 
 /**
  * Liveness endpoint.

@@ -1,11 +1,11 @@
 import { config as loadEnv } from "dotenv";
-import { createGeminiProvider } from "../src/integrations/llm/gemini-provider";
+import { createGeminiProvider } from "../src/integrations/gemini-provider";
 import {
   INTENT_RESPONSE_JSON_SCHEMA,
   structuredPurchaseIntentSchema,
 } from "../src/domain/buyer-agent/intent";
-import { INTENT_EXTRACTION_INSTRUCTION } from "../src/services/buyer-agent/instructions";
-import type { AiGenerationResponse } from "../src/integrations/llm/provider";
+import { INTENT_EXTRACTION_INSTRUCTION } from "../src/services/buyer-agent-instructions";
+import type { AiGenerationResponse } from "../src/integrations/ai-provider";
 import type { JsonObject } from "../src/lib/json";
 
 loadEnv({ path: ".env.local", quiet: true });

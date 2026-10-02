@@ -34,24 +34,18 @@ import {
 import {
   INTENT_EXTRACTION_INSTRUCTION,
   PRODUCT_SELECTION_INSTRUCTION,
-} from "@/services/buyer-agent/instructions";
-import {
-  CATALOG_TOOL_DECLARATIONS,
-  executeCatalogTool,
-} from "@/services/buyer-agent/catalog-tools";
+} from "@/services/buyer-agent-instructions";
+import { CATALOG_TOOL_DECLARATIONS, executeCatalogTool } from "@/services/catalog-tools";
 import {
   createServiceCatalogReader,
   type CatalogReader,
-} from "@/services/buyer-agent/catalog-reader";
-import {
-  defaultGeminiProvider,
-  GEMINI_TIMEOUT_MS,
-} from "@/integrations/llm/gemini-provider";
+} from "@/services/catalog-reader";
+import { defaultGeminiProvider, GEMINI_TIMEOUT_MS } from "@/integrations/gemini-provider";
 import { isAppError } from "@/domain/errors";
 import type { AppError } from "@/domain/errors";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 import type { JsonObject, JsonValue } from "@/lib/json";
-import type { AiProvider, AiToolResult } from "@/integrations/llm/provider";
+import type { AiProvider, AiToolResult } from "@/integrations/ai-provider";
 
 /**
  * The Buyer Agent.
@@ -77,7 +71,7 @@ import type { AiProvider, AiToolResult } from "@/integrations/llm/provider";
  * policy, reserves no stock and touches no payment provider — and it has no
  * tool that could.
  */
-assertServerOnly("src/services/buyer-agent/buyer-agent-service.ts");
+assertServerOnly("src/services/buyer-agent-service.ts");
 
 const log = createLogger({ category: "agent" });
 

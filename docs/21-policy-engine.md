@@ -191,7 +191,7 @@ it fails, and the audit event rolls back with it.
 ## Pre-payment recheck
 
 `recheckPolicyAuthorization(transactionId)` in
-`src/services/policy/authorization-recheck.ts` exists for a gap in time. Policy
+`src/services/authorization-recheck.ts` exists for a gap in time. Policy
 is evaluated when a quote is created; a payment order is created later. In
 between, a price can move, a quote can lapse, and a person can change their
 policy. An authorization that was correct at 10:00 is not evidence about 10:40.

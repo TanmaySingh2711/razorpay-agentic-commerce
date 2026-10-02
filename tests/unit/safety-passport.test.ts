@@ -10,7 +10,7 @@ import {
   type PassportEvidence,
   type SafetyPassportFacts,
   type SafetyPassportViewModel,
-} from "@/domain/safety/passport";
+} from "@/domain/safety-passport";
 import type { MoneyDto } from "@/domain/money";
 
 /**
@@ -768,7 +768,7 @@ describe("the passport's own shape", () => {
 
 describe("the passport panel, rendered", () => {
   it("draws every check, the two authorities and the timeline pointer", async () => {
-    const { SafetyPassport } = await import("@/components/transaction/safety-passport");
+    const { SafetyPassport } = await import("@/components/safety-passport");
     const markup = renderToStaticMarkup(
       SafetyPassport({ passport: buildSafetyPassport(completedFacts()) }),
     );
@@ -826,7 +826,7 @@ describe("the row-to-fact mapping the service performs", () => {
   };
 
   it("carries the trusted quote through as the amount and its status", async () => {
-    const { toSafetyPassportFacts } = await import("@/services/safety/passport-service");
+    const { toSafetyPassportFacts } = await import("@/services/passport-service");
     const built = toSafetyPassportFacts({
       transactionId: "t-1",
       state: "COMPLETED",
@@ -845,7 +845,7 @@ describe("the row-to-fact mapping the service performs", () => {
   });
 
   it("falls back to the shared attempt limit when no retry status exists", async () => {
-    const { toSafetyPassportFacts } = await import("@/services/safety/passport-service");
+    const { toSafetyPassportFacts } = await import("@/services/passport-service");
     const { MAX_PAYMENT_ATTEMPTS } = await import("@/domain/payment/retry");
     const built = toSafetyPassportFacts({
       transactionId: "t-1",
@@ -865,7 +865,7 @@ describe("the row-to-fact mapping the service performs", () => {
   });
 
   it("refuses a policy decision outside the engine's three outcomes", async () => {
-    const { toSafetyPassportFacts } = await import("@/services/safety/passport-service");
+    const { toSafetyPassportFacts } = await import("@/services/passport-service");
     const built = toSafetyPassportFacts({
       transactionId: "t-1",
       state: "QUOTE_CREATED",

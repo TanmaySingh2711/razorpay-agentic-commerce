@@ -209,7 +209,7 @@ createTransaction(command)                  ← creation-service.ts
 
 applyTransactionEvent(command)              ← transition-service.ts
   → resolveTransition(state, event)         ← src/domain/transaction/ (pure)
-  → atomic commit                            ← src/integrations/persistence/
+  → atomic commit                            ← src/integrations/prisma-client.ts
 ```
 
 **Creation is its own boundary because the matrix cannot police it.** There is
@@ -343,7 +343,7 @@ and a dull public one. Internal state names never reach the browser.
 ## How future objectives must invoke transitions
 
 ```ts
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
+import { applyTransactionEvent } from "@/services/transition-service";
 
 await applyTransactionEvent({
   transactionId,
@@ -394,7 +394,7 @@ outcome to be _seen_; it does not decide what to do about it.
 To open a transaction:
 
 ```ts
-import { createTransaction } from "@/services/transaction/creation-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 
 const { id } = await createTransaction({ buyerProfileId, merchantId, correlationId });
 ```

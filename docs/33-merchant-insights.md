@@ -1,14 +1,13 @@
 # 33 — Merchant insights
 
-Track 01 is _AI Growth_ & Agentic Commerce. The rest of this system makes an AI
-purchase safe for the buyer; `/merchant` shows what it is worth to the seller -
+The rest of this system makes an AI-assisted purchase safe for the buyer; `/merchant` shows what it is worth to the seller -
 what shoppers asked the assistant for, what turned into paid orders, and what
 the merchant could stock or price differently to sell more.
 
 **Code:** [`src/app/merchant/page.tsx`](../src/app/merchant/page.tsx),
-[`src/services/insights/merchant-insights-service.ts`](../src/services/insights/merchant-insights-service.ts),
-[`src/services/insights/agent-request-log.ts`](../src/services/insights/agent-request-log.ts),
-[`src/domain/insights/metrics.ts`](../src/domain/insights/metrics.ts).
+[`src/services/merchant-insights-service.ts`](../src/services/merchant-insights-service.ts),
+[`src/services/agent-request-log.ts`](../src/services/agent-request-log.ts),
+[`src/domain/insights.ts`](../src/domain/insights.ts).
 **Tests:** `tests/unit/insights-metrics.test.ts`, `tests/db/merchant-insights.test.ts`.
 
 ## What it shows (last 30 days)

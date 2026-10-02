@@ -160,7 +160,7 @@ enum AuditEventResult {
 }
 
 /// Where a refund stands. Mirrors REFUND_STATUSES in
-/// src/domain/refund/contracts.ts; tests/db/enum-parity.test.ts is what stops
+/// src/domain/refund.ts; tests/db/enum-parity.test.ts is what stops
 /// the two drifting.
 enum RefundStatus {
   /// The row exists and the provider has not been asked yet.
@@ -179,7 +179,7 @@ enum RefundStatus {
 }
 
 /// How one Buyer Agent request ended. Mirrors AGENT_REQUEST_OUTCOMES in
-/// src/domain/agent-request/outcomes.ts.
+/// src/domain/agent-request.ts.
 enum AgentRequestOutcome {
   PURCHASE_OPENED
   CLARIFICATION
@@ -304,17 +304,19 @@ model AuthorizationPolicy {
 /// Razorpay payment: provider identifiers live on PaymentAttempt as ordinary
 /// nullable reference columns, never as this table's primary key.
 ///
-/// `productId` and `authorizedAmount` are nullable because a transaction exists
-/// from INTENT_RECEIVED, before any product is selected or amount authorized.
+/// `productId`, `authorizedAmount` and `currency` are nullable and no service
+/// writes them today: the selected product and the authorized amount are read
+/// from the transaction's PurchaseQuote and InventoryReservation, which are the
+/// authoritative records. The columns are kept so the schema matches its
+/// migration history; do not read them expecting a value.
 model Transaction {
   id               String            @id @default(uuid(7))
   buyerProfileId   String
   merchantId       String
   productId        String?
   status           TransactionStatus @default(INTENT_RECEIVED)
-  /// Amount the policy engine authorized, in integer minor units. Held
-  /// separately from the quote so a later disagreement is visible, not silently
-  /// overwritten.
+  /// Integer minor units. Unwritten today - see the model comment; the
+  /// authorized amount is the PurchaseQuote's `totalAmount`.
   authorizedAmount BigInt?
   currency         String?           @db.Char(3)
   /// Ties every log line, audit event and decision of one logical request.

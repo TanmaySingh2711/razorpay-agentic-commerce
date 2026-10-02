@@ -28,7 +28,7 @@ vi.mock("@google/genai", () => ({
 }));
 
 const { createGeminiProvider, DEFAULT_THINKING_LEVEL } =
-  await import("@/integrations/llm/gemini-provider");
+  await import("@/integrations/gemini-provider");
 
 interface CreatedRequest {
   readonly model?: string;

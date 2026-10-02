@@ -1,19 +1,19 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getQuoteConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getQuoteConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
 import { assessQuote, toQuoteDto, type QuoteSnapshot } from "@/domain/quote/rules";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
-import { totalAmountMinor } from "@/domain/product-decision/eligibility";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { recordAuditEvent } from "@/services/audit-service";
+import { totalAmountMinor } from "@/domain/eligibility";
 import {
   QuoteCreationFailureError,
   QuoteProductChangedError,
 } from "@/domain/quote/errors";
 import type { QuoteValidationResult } from "@/domain/quote/contracts";
 import type { CurrencyCode } from "@/domain/money";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { PurchaseAuthority } from "@/domain/eligibility";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -33,7 +33,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  *    7-10 call it before relying on a quote, and it re-reads the product rather
  *    than trusting the stored status column.
  */
-assertServerOnly("src/services/quote/quote-service.ts");
+assertServerOnly("src/services/quote-service.ts");
 
 export interface QuoteServiceDeps {
   readonly prisma: PrismaClient;

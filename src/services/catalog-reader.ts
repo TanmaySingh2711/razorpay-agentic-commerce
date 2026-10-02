@@ -5,7 +5,7 @@ import {
   searchCatalogProducts,
   type CatalogSearchResult,
   type CatalogServiceDeps,
-} from "@/services/merchant/catalog-service";
+} from "@/services/catalog-service";
 import type { CatalogMerchantDto, CatalogProductDto } from "@/domain/catalog/contracts";
 import type { CatalogQuery } from "@/domain/catalog/query";
 

@@ -5,7 +5,7 @@ the obvious response to it. This document records how a retry is made bounded,
 explainable and impossible for anything other than a person to start.
 
 **Code:** `src/domain/payment/retry.ts` (the rules),
-`src/services/payment/retry-service.ts` (the gate),
+`src/services/retry-service.ts` (the gate),
 `src/app/api/payments/retry/route.ts` (the boundary).
 **Tests:** `tests/unit/payment-retry-rules.test.ts`, `tests/db/payment-retry.test.ts`.
 
@@ -136,7 +136,7 @@ that hold was claimed for, a retry is exactly the deliberate human act that may
 ask for a fresh price. This is **not** a silent reprice: it is the same
 `QUOTE_CREATED` self-loop that already exists for "still quoting, but again",
 reused for the one caller who may take it from `PAYMENT_FAILED` -
-`@/services/quote/quote-service`'s `createTrustedQuote`, called with
+`@/services/quote-service`'s `createTrustedQuote`, called with
 `replaceExisting: true`, using this transaction's own product id and quantity
 and no stated budget of its own to compare against (the shopper's original
 budget was already satisfied by the quote just superseded; what a re-quote
@@ -165,7 +165,7 @@ The sequence, all through existing, unmodified boundaries:
    why that edge does not weaken "stock is held before money moves": the hold
    was never released, only rebound.
 
-Nothing above is reachable except from `@/services/payment/retry-service`,
+Nothing above is reachable except from `@/services/retry-service`,
 never from an ordinary first purchase, and the attempt limit is unaffected by
 any of it - re-quoting does not spend or reset an attempt; only a created
 `PaymentAttempt` does that.

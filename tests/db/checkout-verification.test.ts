@@ -5,19 +5,19 @@ import {
   startCheckout,
   verifyCheckoutCallback,
   type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
-import { createPaymentOrder } from "@/services/payment/payment-order-service";
-import { reserveInventory } from "@/services/inventory/reservation-service";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
-import { createTrustedQuote } from "@/services/quote/quote-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { getTransactionAuditHistory } from "@/services/audit/audit-service";
-import { createTransaction } from "@/services/transaction/creation-service";
+} from "@/services/checkout-service";
+import { createPaymentOrder } from "@/services/payment-order-service";
+import { reserveInventory } from "@/services/reservation-service";
+import { evaluateQuotePolicy } from "@/services/policy-service";
+import { createTrustedQuote } from "@/services/quote-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { getTransactionAuditHistory } from "@/services/audit-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 import { handleCheckoutCallback, handleStartCheckout } from "@/app/api/payments/handler";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import {

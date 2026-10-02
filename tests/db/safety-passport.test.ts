@@ -1,30 +1,24 @@
 import { createHmac } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  startCheckout,
-  type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
-import {
-  processWebhook,
-  type WebhookServiceDeps,
-} from "@/services/payment/webhook-service";
-import { createPaymentOrder } from "@/services/payment/payment-order-service";
-import { decideApproval, requestApproval } from "@/services/approval/approval-service";
-import { reserveInventory } from "@/services/inventory/reservation-service";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
+import { startCheckout, type CheckoutServiceDeps } from "@/services/checkout-service";
+import { processWebhook, type WebhookServiceDeps } from "@/services/webhook-service";
+import { createPaymentOrder } from "@/services/payment-order-service";
+import { decideApproval, requestApproval } from "@/services/approval-service";
+import { reserveInventory } from "@/services/reservation-service";
+import { evaluateQuotePolicy } from "@/services/policy-service";
 import {
   decidePurchase,
   type ProductDecisionDeps,
-} from "@/services/product-decision/product-decision-service";
-import { createServiceCatalogReader } from "@/services/buyer-agent/catalog-reader";
-import { loadTransactionOverview } from "@/services/transaction/overview-service";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+} from "@/services/product-decision-service";
+import { createServiceCatalogReader } from "@/services/catalog-reader";
+import { loadTransactionOverview } from "@/services/transaction-overview-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { fixedClock, type MutableClock } from "@/lib/clock";
 import type {
   PassportCheck,
   PassportCheckId,
   SafetyPassportViewModel,
-} from "@/domain/safety/passport";
+} from "@/domain/safety-passport";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { TransactionState } from "@/domain/transaction/states";
 import {

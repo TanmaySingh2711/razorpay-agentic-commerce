@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { assertServerOnly } from "@/lib/server-only";
-import { getGeminiConfig } from "@/config/env";
-import type { GeminiThinkingLevel } from "@/config/env";
+import { getGeminiConfig } from "@/lib/env";
+import type { GeminiThinkingLevel } from "@/lib/env";
 import {
   AiProviderAuthError,
   AiProviderInvalidResponseError,
@@ -18,7 +18,7 @@ import type {
   AiToolCall,
   AiToolDeclaration,
   AiToolResponseRequest,
-} from "@/integrations/llm/provider";
+} from "@/integrations/ai-provider";
 
 /**
  * The Gemini adapter.
@@ -51,7 +51,7 @@ import type {
  *    hidden reasoning the model may spend before answering. The Buyer Agent's
  *    own tasks are schema- or tool-constrained and every financial decision is
  *    made deterministically outside the model, so the production default is
- *    `minimal` - see `GEMINI_THINKING_LEVEL` in `@/config/env`.
+ *    `minimal` - see `GEMINI_THINKING_LEVEL` in `@/lib/env`.
  *
  * ## How a tool conversation is continued
  *
@@ -81,7 +81,7 @@ import type {
  * guarantee the id was supposed to give, kept by construction rather than by
  * the value happening to be short.
  */
-assertServerOnly("src/integrations/llm/gemini-provider.ts");
+assertServerOnly("src/integrations/gemini-provider.ts");
 
 /** Wall-clock bound on a single provider call. */
 export const GEMINI_TIMEOUT_MS = 30_000;

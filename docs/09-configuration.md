@@ -1,6 +1,6 @@
 # 09 — Environment and configuration
 
-**Implemented.** [`src/config/env.ts`](../src/config/env.ts),
+**Implemented.** [`src/lib/env.ts`](../src/lib/env.ts),
 [`.env.example`](../.env.example),
 [`tests/unit/config-env.test.ts`](../tests/unit/config-env.test.ts).
 
@@ -9,10 +9,10 @@
 `process.env` is read in exactly one file. Everywhere else it is a lint error:
 
 ```
-Read configuration through @/config/env instead of process.env.
+Read configuration through @/lib/env instead of process.env.
 ```
 
-The rule is scoped off for `src/config/**` (the boundary itself) and `tests/**`
+The rule is scoped off for `src/lib/env.ts` (the boundary itself) and `tests/**`
 (which builds fake environments to exercise validation failures).
 
 ## Runtime
@@ -72,9 +72,6 @@ behaviour: a missing Razorpay secret or database URL must fail that path loudly 
 immediately, not prevent the application from starting or, worse, let it start
 in a degraded state that silently skips a control.
 
-`isSectionConfigured()` answers "is this feature available?" without throwing —
-useful for a demo that wants to show a disabled state.
-
 ### Optional and fully defaulted — no value needs setting
 
 These have safe defaults, so the system runs correctly with none of them
@@ -105,7 +102,7 @@ verbatim. A dotenv loader turns `NAME=` into the empty string, which
 `z.coerce.number` would read as `0` and every bound above rejects - so a fresh
 clone configured exactly as documented used to fail its first quote with
 `CONFIG_INVALID`. Every numeric setting now treats blank as unset
-(`optionalInteger` in `src/config/env.ts`); a value that is present and out of
+(`optionalInteger` in `src/lib/env.ts`); a value that is present and out of
 range is still refused.
 
 ## Test Mode is enforced, not requested
@@ -180,7 +177,7 @@ boundary even if a schema name ever collided.
 - `npm run db:dev:setup` is the only local command that migrates and seeds. It
   refuses any host outside `localhost`, `127.0.0.1`, `::1` and `0.0.0.0`, checked
   against an allow-list before a single statement runs
-  (`scripts/local-database-guard.ts`), and refuses to target the disposable test
+  (`scripts/database-target-guard.ts`), and refuses to target the disposable test
   database by name.
 - The test suite cannot fall back to the application's connection
   (`tests/db/test-database-url.ts`), and cannot make a live network call at all
@@ -209,7 +206,7 @@ wins and the staging path through that file behaves exactly as it always did.
 
 ## Adding a variable later
 
-1. Add it to the right Zod section in `src/config/env.ts` — required-now only if
+1. Add it to the right Zod section in `src/lib/env.ts` — required-now only if
    it has a safe default.
 2. Document it in `.env.example` with its tier and who reads it.
 3. Read it through the accessor, inside the adapter that owns it. Never widen

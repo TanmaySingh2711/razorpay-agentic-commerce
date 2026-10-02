@@ -1,8 +1,8 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
 import { systemClock, type Clock } from "@/lib/clock";
-import { getRateLimitConfig, type RateLimitConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getRateLimitConfig, type RateLimitConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import {
   DAY_SECONDS,
   GLOBAL_SUBJECT,
@@ -13,7 +13,7 @@ import {
   secondsUntilWindowEnds,
   windowStartOf,
   type RateLimitRule,
-} from "@/domain/rate-limit/rules";
+} from "@/domain/rate-limit";
 import type { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -38,7 +38,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * anyway, and "the limiter was down, so there was no limit" is precisely the
  * outage a quota ceiling exists to prevent.
  */
-assertServerOnly("src/services/rate-limit/rate-limit-service.ts");
+assertServerOnly("src/services/rate-limit-service.ts");
 
 const log = createLogger({ category: "http" });
 

@@ -4,23 +4,17 @@ import {
   evaluateQuotePolicy,
   type PolicyEvaluationCommand,
   type PolicyServiceDeps,
-} from "@/services/policy/policy-service";
-import { recheckPolicyAuthorization } from "@/services/policy/authorization-recheck";
-import {
-  createTrustedQuote,
-  type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
+} from "@/services/policy-service";
+import { recheckPolicyAuthorization } from "@/services/authorization-recheck";
+import { createTrustedQuote, type QuoteServiceDeps } from "@/services/quote-service";
 import {
   applyTransactionEvent,
   getTransactionHistory,
-} from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
-import {
-  FORBIDDEN_TOOL_NAMES,
-  isRegisteredTool,
-} from "@/services/buyer-agent/catalog-tools";
+} from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
+import { FORBIDDEN_TOOL_NAMES, isRegisteredTool } from "@/services/catalog-tools";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import {
   databaseConfigured,
   disconnectTestDb,

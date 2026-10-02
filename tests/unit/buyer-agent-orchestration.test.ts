@@ -5,7 +5,7 @@ import {
   MAX_TOOL_ITERATIONS,
   runBuyerAgent,
   type BuyerAgentDeps,
-} from "@/services/buyer-agent/buyer-agent-service";
+} from "@/services/buyer-agent-service";
 import {
   AiProviderAuthError,
   AiProviderInvalidResponseError,

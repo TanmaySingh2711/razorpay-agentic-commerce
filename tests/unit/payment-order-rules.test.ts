@@ -12,7 +12,7 @@ import {
   isSafelyRetryable,
   PROVIDER_FAILURE_CATEGORIES,
 } from "@/domain/payment/provider";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 
 /**
  * The payment rules and the Razorpay adapter, with no database and no network.

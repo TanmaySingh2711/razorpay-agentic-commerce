@@ -2,14 +2,14 @@ import { AiProviderTimeoutError } from "@/domain/buyer-agent/errors";
 import { AppError } from "@/domain/errors";
 import { CatalogProductNotFoundError } from "@/domain/catalog/errors";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
-import type { CatalogReader } from "@/services/buyer-agent/catalog-reader";
+import type { CatalogReader } from "@/services/catalog-reader";
 import type {
   AiGenerationRequest,
   AiGenerationResponse,
   AiProvider,
   AiProviderStateRef,
   AiToolResponseRequest,
-} from "@/integrations/llm/provider";
+} from "@/integrations/ai-provider";
 
 /**
  * A deterministic stand-in for Gemini.

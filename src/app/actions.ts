@@ -5,32 +5,32 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { createLogger } from "@/lib/logger";
-import { decideApproval, requestApproval } from "@/services/approval/approval-service";
-import { reserveInventory } from "@/services/inventory/reservation-service";
-import { describeReservationRefusal } from "@/domain/inventory/contracts";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
-import { decidePurchase } from "@/services/product-decision/product-decision-service";
+import { decideApproval, requestApproval } from "@/services/approval-service";
+import { reserveInventory } from "@/services/reservation-service";
+import { describeReservationRefusal } from "@/domain/inventory";
+import { evaluateQuotePolicy } from "@/services/policy-service";
+import { decidePurchase } from "@/services/product-decision-service";
 import {
   MAX_ASSISTANT_QUESTION_LENGTH,
   MAX_PRIOR_TURNS,
   runBuyerAgent,
   type ConversationTurn,
-} from "@/services/buyer-agent/buyer-agent-service";
+} from "@/services/buyer-agent-service";
 import {
   limitAgentRequest,
   limitPaymentRequest,
   type RateLimitDecision,
-} from "@/services/rate-limit/rate-limit-service";
-import { recordAgentRequest } from "@/services/insights/agent-request-log";
-import { reconcileRefund, requestRefund } from "@/services/refund/refund-service";
-import { describeRefundDenial } from "@/domain/refund/contracts";
-import { clientKeyFromHeaders } from "@/domain/rate-limit/rules";
+} from "@/services/rate-limit-service";
+import { recordAgentRequest } from "@/services/agent-request-log";
+import { reconcileRefund, requestRefund } from "@/services/refund-service";
+import { describeRefundDenial } from "@/domain/refund";
+import { clientKeyFromHeaders } from "@/domain/rate-limit";
 import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { MoneyDto } from "@/domain/money";
-import { formatMoney } from "@/domain/ui/journey";
+import { formatMoney } from "@/domain/journey";
 
 /**
  * The buyer's actions, as server actions.

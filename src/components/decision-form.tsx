@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
-import type { DecisionOutcome } from "@/app/actions/purchase";
+import type { DecisionOutcome } from "@/app/actions";
 
 /**
  * A single server action bound to a single button.

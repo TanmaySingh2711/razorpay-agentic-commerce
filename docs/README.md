@@ -13,7 +13,7 @@ retry design — and it links onward to whichever document owns each detail.
 
 | Document                                                        | What it settles                                                                      |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [01 — Overview](./01-overview.md)                               | Project purpose, Track 01 goal, the one non-negotiable rule                          |
+| [01 — Overview](./01-overview.md)                               | Project purpose, the one non-negotiable rule                                         |
 | [02 — Architecture](./02-architecture.md)                       | The module boundaries and their contracts                                            |
 | [03 — AI vs deterministic](./03-ai-vs-deterministic.md)         | What the LLM may and may not do                                                      |
 | [04 — Transaction flow](./04-transaction-flow.md)               | End-to-end flow with trust boundaries                                                |
@@ -61,19 +61,6 @@ changing a guarantee it states.
 | Document                        | What it settles                                          |
 | ------------------------------- | -------------------------------------------------------- |
 | [12 — Testing](./12-testing.md) | Test strategy, the local-only guarantee, what is covered |
-
-## Historical record
-
-These describe an earlier point in the build and live in [`history/`](./history/).
-They are kept because the reasoning is still useful, but **they do not describe
-the current system** —
-where they disagree with the documents above, the documents above are right.
-
-| Document                                                    | What it records                                                         |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [08 — Data model](./history/08-data-model.md)               | The pre-implementation schema sketch; [16](./16-database.md) is current |
-| [14 — Objective 1 scope](./history/14-objective-1-scope.md) | What the first objective did and deliberately did not build             |
-| [15 — Roadmap](./history/15-roadmap.md)                     | The order later objectives were planned in                              |
 
 ## Reading order for a new contributor
 

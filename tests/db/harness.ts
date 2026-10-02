@@ -1,6 +1,6 @@
 import { config as loadEnv } from "dotenv";
-import { createIsolatedPrismaClient } from "@/integrations/persistence/client";
-import { createTransaction as createTransactionThroughBoundary } from "@/services/transaction/creation-service";
+import { createIsolatedPrismaClient } from "@/integrations/prisma-client";
+import { createTransaction as createTransactionThroughBoundary } from "@/services/transaction-creation-service";
 import { TEST_SCHEMA } from "./schema-identity";
 import { assertDisposableTestSchema } from "./test-database-guard";
 import { resolveTestDatabaseUrl } from "./test-database-url";

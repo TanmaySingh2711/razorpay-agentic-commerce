@@ -2,27 +2,18 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createPaymentOrder,
   type PaymentOrderServiceDeps,
-} from "@/services/payment/payment-order-service";
-import {
-  startCheckout,
-  type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
+} from "@/services/payment-order-service";
+import { startCheckout, type CheckoutServiceDeps } from "@/services/checkout-service";
 import {
   reserveInventory,
   type ReservationServiceDeps,
-} from "@/services/inventory/reservation-service";
-import {
-  evaluateQuotePolicy,
-  type PolicyServiceDeps,
-} from "@/services/policy/policy-service";
-import {
-  createTrustedQuote,
-  type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy, type PolicyServiceDeps } from "@/services/policy-service";
+import { createTrustedQuote, type QuoteServiceDeps } from "@/services/quote-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import {

@@ -15,7 +15,7 @@ import { defineConfig } from "prisma/config";
  * migration issued over the pooled endpoint can fail or behave surprisingly.
  * Runtime traffic wants the opposite: pooling, so serverless invocations do not
  * exhaust PostgreSQL connections. The runtime connection is configured in
- * `src/integrations/persistence/client.ts`, not here.
+ * `src/integrations/prisma-client.ts`, not here.
  *
  * Prisma 7 does not auto-load env files, and this project keeps real values in
  * `.env.local` (git-ignored, per Objective 1), so it is loaded explicitly.

@@ -12,7 +12,7 @@ import {
   applyTransactionEvent,
   getTransactionHistory,
   type TransitionServiceDeps,
-} from "@/services/transaction/transition-service";
+} from "@/services/transition-service";
 import {
   createBaseFixture,
   createTransaction,

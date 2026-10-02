@@ -11,7 +11,7 @@ import { resolveTransition } from "@/domain/transaction/state-machine";
 import { allTransitionEdges } from "@/domain/transaction/transitions";
 import { AI_ACTORS, TRANSACTION_ACTORS } from "@/domain/transaction/states";
 import { handleRetryPayment } from "@/app/api/payments/handler";
-import type { RetryServiceDeps } from "@/services/payment/retry-service";
+import type { RetryServiceDeps } from "@/services/retry-service";
 import type { TransactionActor } from "@/domain/transaction/states";
 
 /**

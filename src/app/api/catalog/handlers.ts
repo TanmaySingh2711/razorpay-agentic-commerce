@@ -7,7 +7,7 @@ import {
   getCatalogProduct,
   searchCatalogProducts,
   type CatalogServiceDeps,
-} from "@/services/merchant/catalog-service";
+} from "@/services/catalog-service";
 import type { JsonObject, JsonValue } from "@/lib/json";
 
 /**

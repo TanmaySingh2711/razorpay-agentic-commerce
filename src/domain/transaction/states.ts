@@ -76,19 +76,6 @@ export const TERMINAL_TRANSACTION_STATES = [
 ] as const;
 
 /**
- * States in which stock is held and must eventually be committed or released.
- * Any exit from one of these toward a terminal failure state releases the hold.
- */
-export const INVENTORY_HELD_STATES = [
-  "INVENTORY_RESERVED",
-  "PAYMENT_ORDER_CREATED",
-  "PAYMENT_PENDING",
-  "PAYMENT_VERIFIED",
-  "PAYMENT_CAPTURED",
-  "PAYMENT_FAILED",
-] as const;
-
-/**
  * Components permitted to request a transition.
  *
  * Actor names are deliberately provider-neutral: `payment_provider`, not
@@ -128,8 +115,4 @@ export function isAiActor(actor: TransactionActor): boolean {
 
 export function isTerminalState(state: TransactionState): boolean {
   return (TERMINAL_TRANSACTION_STATES as readonly TransactionState[]).includes(state);
-}
-
-export function holdsInventory(state: TransactionState): boolean {
-  return (INVENTORY_HELD_STATES as readonly TransactionState[]).includes(state);
 }

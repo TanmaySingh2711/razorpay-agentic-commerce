@@ -26,7 +26,7 @@ loadEnv({ path: ".env.local", quiet: true });
  *    every setup, and `public` is never touched.
  *
  * The schema is built inside whatever TEST_DIRECT_URL names - by default the
- * local Docker PostgreSQL in docker/docker-compose.yml, started with
+ * local Docker PostgreSQL in .config/docker-compose.yml, started with
  * `npm run db:test:up`. That variable is required rather than optional: see
  * ../tests/db/test-database-url.ts for why there is no fallback to the
  * application's own connection.

@@ -97,7 +97,7 @@ learns a transaction id can host a page that posts to `/api/payments/retry` or
 rows, policy and approval are re-run — so the damage is bounded. Bounded is not
 intended.
 
-`src/lib/http/same-origin.ts` checks `Sec-Fetch-Site` first (a browser sets it;
+`src/lib/same-origin.ts` checks `Sec-Fetch-Site` first (a browser sets it;
 page script cannot), falling back to `Origin` compared against `APP_URL`. It is
 called from `readBody` in the payments boundary, so every state-changing payment
 route is covered by construction rather than by remembering, and from the buyer
@@ -165,7 +165,7 @@ necessary.
 
 Server-only, always. `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
 `GEMINI_API_KEY`, `DATABASE_URL` and `DIRECT_URL` are read only through
-[`src/config/env.ts`](../src/config/env.ts), only inside the adapter that needs
+[`src/lib/env.ts`](../src/lib/env.ts), only inside the adapter that needs
 them. No secret is ever prefixed `NEXT_PUBLIC_`. Configuration errors report
 variable **names**, never values — enforced by a test. Redaction (below) is the
 second line of defence if one is ever passed into metadata by accident.
@@ -219,8 +219,8 @@ re-run and the price moved, the previous authorization is void.
 
 Fixed order: raw bytes → HMAC verification → parse → dedupe on provider event id
 → act. Duplicates return a success status so the provider stops retrying.
-_The exact header name and signature algorithm are to be verified during the
-Razorpay integration objective._
+The signature is an HMAC-SHA256 of the raw body, read from the
+`x-razorpay-signature` header; the delivery id comes from `x-razorpay-event-id`.
 
 ### Idempotency
 

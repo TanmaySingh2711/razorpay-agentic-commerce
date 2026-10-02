@@ -1,11 +1,11 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { getRazorpayCredentials } from "@/config/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { getRazorpayCredentials } from "@/lib/env";
 import { systemClock, type Clock } from "@/lib/clock";
 import { createLogger } from "@/lib/logger";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { recordAuditEvent } from "@/services/audit-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { toMoneyDto, moneyFromBigInt, type CurrencyCode } from "@/domain/money";
 import type {
   CallbackRejection,
@@ -48,9 +48,9 @@ import type { PaymentAttempt, PrismaClient } from "@/generated/prisma/client";
  * or `COMPLETED`, and it never commits inventory. Only the provider, speaking
  * for itself through a channel we authenticate separately, can say money was
  * captured - and that is the webhook's job, in
- * `@/services/payment/webhook-service`.
+ * `@/services/webhook-service`.
  */
-assertServerOnly("src/services/payment/checkout-service.ts");
+assertServerOnly("src/services/checkout-service.ts");
 
 /**
  * The actor for both halves.
@@ -143,8 +143,8 @@ export async function startCheckout(
   const reservation = await deps.prisma.inventoryReservation.findFirst({
     where: { transactionId, status: "ACTIVE" },
     // The product comes from the reservation rather than from the transaction:
-    // `Transaction.productId` is optional and only the agent flow sets it,
-    // whereas a reservation always names the exact product whose stock is held.
+    // `Transaction.productId` is optional and no service writes it, whereas a
+    // reservation always names the exact product whose stock is held.
     // It costs no extra round trip and it is the more authoritative source.
     select: {
       id: true,

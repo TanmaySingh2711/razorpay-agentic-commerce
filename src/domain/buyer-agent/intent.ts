@@ -34,8 +34,6 @@ export type PurchaseIntentType = (typeof PURCHASE_INTENTS)[number];
 /** Comparison operators a hard requirement may use. A closed set. */
 export const REQUIREMENT_OPERATORS = ["EQUALS", "NOT_EQUALS"] as const;
 
-export type RequirementOperator = (typeof REQUIREMENT_OPERATORS)[number];
-
 export const MIN_QUANTITY = 1;
 export const MAX_QUANTITY = 10;
 

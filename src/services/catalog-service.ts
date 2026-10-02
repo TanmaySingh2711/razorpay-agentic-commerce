@@ -1,6 +1,6 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getCatalogConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getCatalogConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { SUPPORTED_CURRENCIES } from "@/domain/money";
 import {
   toCatalogMerchantDto,
@@ -16,7 +16,7 @@ import {
   findActiveMerchantBySlug,
   findVisibleProductById,
   findVisibleProducts,
-} from "@/services/merchant/catalog-repository";
+} from "@/services/catalog-repository";
 import type { CatalogQuery } from "@/domain/catalog/query";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -38,7 +38,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * Reading the catalog is not part of a transaction's lifecycle and must not
  * start one.
  */
-assertServerOnly("src/services/merchant/catalog-service.ts");
+assertServerOnly("src/services/catalog-service.ts");
 
 export interface CatalogServiceDeps {
   readonly prisma: PrismaClient;

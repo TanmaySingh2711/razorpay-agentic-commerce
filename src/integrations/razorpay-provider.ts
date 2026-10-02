@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { assertServerOnly } from "@/lib/server-only";
-import { getRazorpayCredentials, getRazorpayWebhookConfig } from "@/config/env";
+import { getRazorpayCredentials, getRazorpayWebhookConfig } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import type {
   CheckoutSignatureInput,
@@ -47,7 +47,7 @@ import { assessPayableAmount, toProviderAmount } from "@/domain/payment/rules";
  * value is rejected" — and because orders can be fetched by receipt. Those two
  * facts, together, are what let this adapter be safe without a distributed lock.
  */
-assertServerOnly("src/integrations/payments/razorpay-provider.ts");
+assertServerOnly("src/integrations/razorpay-provider.ts");
 
 const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
 

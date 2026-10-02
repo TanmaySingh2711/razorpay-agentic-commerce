@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { checkRequestOrigin } from "@/lib/http/same-origin";
-import { getRuntimeConfig } from "@/config/env";
+import { checkRequestOrigin } from "@/lib/same-origin";
+import { getRuntimeConfig } from "@/lib/env";
 import { jsonData, respond } from "@/lib/api-response";
 import { InvalidBuyerRequestError } from "@/domain/buyer-agent/errors";
 import {
@@ -8,7 +8,7 @@ import {
   defaultBuyerAgentDeps,
   runBuyerAgent,
   type BuyerAgentDeps,
-} from "@/services/buyer-agent/buyer-agent-service";
+} from "@/services/buyer-agent-service";
 import type { JsonValue } from "@/lib/json";
 
 /**

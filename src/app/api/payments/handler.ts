@@ -1,26 +1,26 @@
 import { z } from "zod";
 import { jsonData, respond } from "@/lib/api-response";
 import { ValidationError } from "@/domain/errors";
-import { checkRequestOrigin } from "@/lib/http/same-origin";
-import { getRuntimeConfig } from "@/config/env";
+import { checkRequestOrigin } from "@/lib/same-origin";
+import { getRuntimeConfig } from "@/lib/env";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import {
   createPaymentOrder,
   defaultPaymentOrderDeps,
   type PaymentOrderServiceDeps,
-} from "@/services/payment/payment-order-service";
+} from "@/services/payment-order-service";
 import {
   recordCheckoutDismissal,
   startCheckout,
   verifyCheckoutCallback,
   defaultCheckoutDeps,
   type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
+} from "@/services/checkout-service";
 import {
   requestPaymentRetry,
   defaultRetryDeps,
   type RetryServiceDeps,
-} from "@/services/payment/retry-service";
+} from "@/services/retry-service";
 import type { PaymentRetryResult } from "@/domain/payment/retry";
 import type { PaymentOrderResult } from "@/domain/payment/contracts";
 import type {
@@ -104,7 +104,7 @@ export function handleCreatePaymentOrder(
  * still withheld unless there is an order to pay for, so an endpoint probe
  * cannot be used to read configuration out of the server.
  *
- * Read from `deps` rather than from `@/config/env` directly, and that
+ * Read from `deps` rather than from `@/lib/env` directly, and that
  * distinction matters: `deps.providerKeyId` is resolved once, in
  * `defaultPaymentOrderDeps`, exactly like every other field a test can
  * substitute. Reading real configuration here instead would reach straight
@@ -316,7 +316,6 @@ export function handleCheckoutDismissed(
   });
 }
 
-/**
 /**
  * Refuses a state-changing request that another website caused.
  *

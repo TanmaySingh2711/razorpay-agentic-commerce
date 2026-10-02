@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
  * import the page without pulling in Gemini, Prisma or the config boundary -
  * the console is never actually submitted here.
  */
-vi.mock("@/app/actions/purchase", () => ({
+vi.mock("@/app/actions", () => ({
   submitRequest: vi.fn(),
 }));
 

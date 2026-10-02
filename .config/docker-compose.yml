@@ -28,9 +28,8 @@
 # the local database is rebuilt, so the parity argument holds again.
 
 # Pinned, because Compose otherwise names a project after the folder its file
-# is in. This file moved from the repository root into `docker/`; without the
-# pin the project - and with it the data volume - would have been renamed, and
-# an existing local database would have looked empty.
+# is in. This file lives in `.config/`, so without the pin the project - and with
+# it the data volume - would be called ".config" rather than after the repository.
 name: razorpay-agentic-commerce
 
 services:

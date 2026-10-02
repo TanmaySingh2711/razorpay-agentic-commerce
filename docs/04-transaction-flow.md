@@ -118,5 +118,4 @@ Failure is a first-class outcome, not an exception that falls through:
   that does not match our records is a different case and is audited, as
   `webhook_mismatch`.
 
-Every terminal failure that leaves an outstanding hold releases it —
-`holdsInventory(state)` in the domain names exactly which states carry one.
+Every terminal failure that leaves an outstanding hold releases it.

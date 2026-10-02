@@ -2,8 +2,8 @@
 
 ## What this is
 
-An entry for the **Razorpay AI Buildathon 2026, Track 01 — AI Growth & Agentic
-Commerce**.
+A shop where an AI assistant proposes a product and the server controls every
+step that involves money, built on **Razorpay Test Mode**.
 
 The finished system lets a person say:
 

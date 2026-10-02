@@ -2,28 +2,22 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createPaymentOrder,
   type PaymentOrderServiceDeps,
-} from "@/services/payment/payment-order-service";
+} from "@/services/payment-order-service";
 import {
   releaseReservation,
   reserveInventory,
   type ReservationServiceDeps,
-} from "@/services/inventory/reservation-service";
-import {
-  evaluateQuotePolicy,
-  type PolicyServiceDeps,
-} from "@/services/policy/policy-service";
-import {
-  createTrustedQuote,
-  type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy, type PolicyServiceDeps } from "@/services/policy-service";
+import { createTrustedQuote, type QuoteServiceDeps } from "@/services/quote-service";
 import {
   decideApproval,
   requestApproval,
   type ApprovalServiceDeps,
-} from "@/services/approval/approval-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { getTransactionAuditHistory } from "@/services/audit/audit-service";
-import { createTransaction } from "@/services/transaction/creation-service";
+} from "@/services/approval-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { getTransactionAuditHistory } from "@/services/audit-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 import { handleCreatePaymentOrder } from "@/app/api/payments/handler";
 import { deriveReceipt } from "@/domain/payment/rules";
 import { fixedClock, type MutableClock } from "@/lib/clock";
@@ -32,7 +26,7 @@ import {
   FAKE_PROVIDER_ORDER_ID,
   fakePaymentProvider,
 } from "../support/fake-payment-provider";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import type { PrismaClient } from "@/generated/prisma/client";

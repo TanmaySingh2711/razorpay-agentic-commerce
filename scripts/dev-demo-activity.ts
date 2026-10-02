@@ -52,20 +52,18 @@ async function main(): Promise<void> {
 
   // Imported after the environment is settled, so the shared client binds to
   // the development database and nothing else.
-  const { getPrismaClient } = await import("@/integrations/persistence/client");
+  const { getPrismaClient } = await import("@/integrations/prisma-client");
   const { systemClock } = await import("@/lib/clock");
-  const { decidePurchase } =
-    await import("@/services/product-decision/product-decision-service");
-  const { evaluateQuotePolicy } = await import("@/services/policy/policy-service");
-  const { requestApproval, decideApproval } =
-    await import("@/services/approval/approval-service");
-  const { reserveInventory } = await import("@/services/inventory/reservation-service");
-  const { createPaymentOrder } = await import("@/services/payment/payment-order-service");
-  const { startCheckout } = await import("@/services/payment/checkout-service");
-  const { processWebhook } = await import("@/services/payment/webhook-service");
-  const { requestPaymentRetry } = await import("@/services/payment/retry-service");
-  const { requestRefund } = await import("@/services/refund/refund-service");
-  const { recordAgentRequest } = await import("@/services/insights/agent-request-log");
+  const { decidePurchase } = await import("@/services/product-decision-service");
+  const { evaluateQuotePolicy } = await import("@/services/policy-service");
+  const { requestApproval, decideApproval } = await import("@/services/approval-service");
+  const { reserveInventory } = await import("@/services/reservation-service");
+  const { createPaymentOrder } = await import("@/services/payment-order-service");
+  const { startCheckout } = await import("@/services/checkout-service");
+  const { processWebhook } = await import("@/services/webhook-service");
+  const { requestPaymentRetry } = await import("@/services/retry-service");
+  const { requestRefund } = await import("@/services/refund-service");
+  const { recordAgentRequest } = await import("@/services/agent-request-log");
   const { canonicalCategory } = await import("@/domain/catalog/categories");
 
   const prisma = getPrismaClient();

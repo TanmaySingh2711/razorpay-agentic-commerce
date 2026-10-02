@@ -7,13 +7,10 @@ import {
   isOverLimit,
   secondsUntilWindowEnds,
   windowStartOf,
-} from "@/domain/rate-limit/rules";
-import { withRateLimit } from "@/lib/http/rate-limited";
-import {
-  agentRequestChecks,
-  paymentRequestChecks,
-} from "@/services/rate-limit/rate-limit-service";
-import { getRateLimitConfig } from "@/config/env";
+} from "@/domain/rate-limit";
+import { withRateLimit } from "@/lib/rate-limited";
+import { agentRequestChecks, paymentRequestChecks } from "@/services/rate-limit-service";
+import { getRateLimitConfig } from "@/lib/env";
 
 /**
  * The rate limiter's arithmetic and its HTTP face, without a database.

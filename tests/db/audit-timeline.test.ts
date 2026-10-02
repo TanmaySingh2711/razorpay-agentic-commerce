@@ -3,38 +3,35 @@ import {
   getTransactionAuditHistory,
   recordAuditEvent,
   type AuditTimelineEntry,
-} from "@/services/audit/audit-service";
+} from "@/services/audit-service";
 import {
   decideApproval,
   requestApproval,
   type ApprovalServiceDeps,
-} from "@/services/approval/approval-service";
+} from "@/services/approval-service";
 import {
   reserveInventory,
   type ReservationServiceDeps,
-} from "@/services/inventory/reservation-service";
-import {
-  evaluateQuotePolicy,
-  type PolicyServiceDeps,
-} from "@/services/policy/policy-service";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy, type PolicyServiceDeps } from "@/services/policy-service";
 import {
   createTrustedQuote,
   validateQuoteForUse,
   type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
+} from "@/services/quote-service";
 import {
   applyTransactionEvent,
   getTransactionHistory,
-} from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
+} from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 import {
   decidePurchase,
   type ProductDecisionDeps,
-} from "@/services/product-decision/product-decision-service";
-import { createServiceCatalogReader } from "@/services/buyer-agent/catalog-reader";
+} from "@/services/product-decision-service";
+import { createServiceCatalogReader } from "@/services/catalog-reader";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import {
@@ -904,7 +901,7 @@ describe.skipIf(!databaseConfigured)("the audit timeline", () => {
     it("exposes no way to edit or delete history", async () => {
       // Append-only is a property of the API surface, not a convention.
       const auditModule: Record<string, unknown> =
-        await import("@/services/audit/audit-service");
+        await import("@/services/audit-service");
       for (const name of Object.keys(auditModule)) {
         expect(name).not.toMatch(/^(update|delete|remove|purge|edit)/i);
       }

@@ -1,5 +1,5 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
 import { assessQuote, type QuoteSnapshot } from "@/domain/quote/rules";
 import { evaluatePolicy } from "@/domain/policy/engine";
@@ -19,12 +19,12 @@ import {
 import {
   applyTransactionEventWithin,
   type TransactionCapableClient,
-} from "@/services/transaction/transition-service";
-import { defaultQuoteDeps, validateQuoteForUse } from "@/services/quote/quote-service";
-import { loadPolicySnapshot } from "@/services/policy/policy-reader";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+} from "@/services/transition-service";
+import { defaultQuoteDeps, validateQuoteForUse } from "@/services/quote-service";
+import { loadPolicySnapshot } from "@/services/policy-reader";
+import { recordAuditEvent } from "@/services/audit-service";
 import { AppError } from "@/domain/errors";
-import type { QuoteServiceDeps } from "@/services/quote/quote-service";
+import type { QuoteServiceDeps } from "@/services/quote-service";
 import type { QuoteUnusableCause, QuoteValidationResult } from "@/domain/quote/contracts";
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
 import type { JsonObject } from "@/lib/json";
@@ -60,7 +60,7 @@ import type { AuditEventResult, PrismaClient } from "@/generated/prisma/client";
  * not need a model, and a model that could influence this answer would be the
  * one thing the whole architecture exists to prevent.
  */
-assertServerOnly("src/services/policy/policy-service.ts");
+assertServerOnly("src/services/policy-service.ts");
 
 /** The one actor permitted to request any of these transitions. */
 const POLICY_ACTOR = "policy_engine" as const;

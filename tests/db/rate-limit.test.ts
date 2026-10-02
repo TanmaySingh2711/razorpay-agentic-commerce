@@ -4,8 +4,8 @@ import {
   consumeRateLimits,
   pruneExpiredWindows,
   type RateLimitDeps,
-} from "@/services/rate-limit/rate-limit-service";
-import { getRateLimitConfig } from "@/config/env";
+} from "@/services/rate-limit-service";
+import { getRateLimitConfig } from "@/lib/env";
 import { fixedClock, type MutableClock } from "@/lib/clock";
 import { databaseConfigured, disconnectTestDb, resetTestData, testDb } from "./harness";
 

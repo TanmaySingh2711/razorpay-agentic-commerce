@@ -31,7 +31,7 @@ vi.mock("@google/genai", () => ({
   },
 }));
 
-const { createGeminiProvider } = await import("@/integrations/llm/gemini-provider");
+const { createGeminiProvider } = await import("@/integrations/gemini-provider");
 
 /** A `thought` step exactly as Gemini 3 returns it, signature and all. */
 const THOUGHT_STEP = { type: "thought", signature: "Es0ECsoEAR-opaque-signature" };

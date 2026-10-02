@@ -6,13 +6,13 @@ import {
   refundPurchase,
   rejectPurchase,
   reserveStock,
-} from "@/app/actions/purchase";
+} from "@/app/actions";
 import { SiteHeader } from "@/components/site-header";
-import { describeRefundStatus } from "@/domain/refund/contracts";
-import { AwaitingProvider } from "@/components/transaction/awaiting-provider";
-import { DecisionForm } from "@/components/transaction/decision-form";
-import { PayButton } from "@/components/payments/pay-button";
-import { SafetyPassport } from "@/components/transaction/safety-passport";
+import { describeRefundStatus } from "@/domain/refund";
+import { AwaitingProvider } from "@/components/awaiting-provider";
+import { DecisionForm } from "@/components/decision-form";
+import { PayButton } from "@/components/pay-button";
+import { SafetyPassport } from "@/components/safety-passport";
 import { describePaymentFailure } from "@/domain/payment/failure";
 import {
   awaitsProvider,
@@ -21,9 +21,9 @@ import {
   formatDateTime,
   formatMoney,
   formatTime,
-} from "@/domain/ui/journey";
-import { loadTransactionOverview } from "@/services/transaction/overview-service";
-import type { TransactionOverview } from "@/services/transaction/overview-service";
+} from "@/domain/journey";
+import { loadTransactionOverview } from "@/services/transaction-overview-service";
+import type { TransactionOverview } from "@/services/transaction-overview-service";
 
 /**
  * One purchase, from the sentence that started it to the money that settled it.
@@ -212,14 +212,14 @@ function SelectionCard({ overview }: { readonly overview: TransactionOverview })
         <>
           <h3 className="subhead">Also met every rule</h3>
           <ul className="alternatives">
-            {selection.alternatives.map((alternative) => {
+            {selection.alternatives.map((alternative, index) => {
               const difference = BigInt(alternative.unitAmount.amountMinor) - chosen;
               const magnitude = formatMoney({
                 amountMinor: (difference < 0n ? -difference : difference).toString(),
                 currency: alternative.unitAmount.currency,
               });
               return (
-                <li key={alternative.name}>
+                <li key={`${String(index)}-${alternative.name}`}>
                   <span className="alt-name">{alternative.name}</span>
                   <span className="alt-price">{formatMoney(alternative.unitAmount)}</span>
                   <span className="hint">

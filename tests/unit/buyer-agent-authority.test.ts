@@ -28,10 +28,7 @@ import {
   MIN_QUANTITY,
   structuredPurchaseIntentSchema,
 } from "@/domain/buyer-agent/intent";
-import {
-  nextBestAlternative,
-  refusedOnlyForAvailability,
-} from "@/domain/product-decision/eligibility";
+import { nextBestAlternative, refusedOnlyForAvailability } from "@/domain/eligibility";
 import { productDto } from "../support/fake-ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 

@@ -1,6 +1,6 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getApprovalConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getApprovalConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
 import { evaluatePolicy } from "@/domain/policy/engine";
 import { toPolicyDecisionDto } from "@/domain/policy/decision";
@@ -10,20 +10,17 @@ import {
   issueApprovalToken,
 } from "@/domain/approval/token";
 import { ApprovalPersistenceError, ApprovalRefusedError } from "@/domain/approval/errors";
-import {
-  loadPolicySnapshot,
-  readRecordedEvaluation,
-} from "@/services/policy/policy-reader";
-import { readActiveQuote, type ReadQuote } from "@/services/quote/quote-reader";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+import { loadPolicySnapshot, readRecordedEvaluation } from "@/services/policy-reader";
+import { readActiveQuote, type ReadQuote } from "@/services/quote-reader";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { recordAuditEvent } from "@/services/audit-service";
 import { AppError } from "@/domain/errors";
 import type {
   ApprovalDecisionResult,
   ApprovalRequestDto,
   ApprovalRequestResult,
 } from "@/domain/approval/contracts";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { TransactionState } from "@/domain/transaction/states";
 import type { AuditEventType } from "@/domain/audit-event";
 import type { CurrencyCode } from "@/domain/money";
@@ -49,10 +46,10 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * re-run before the transaction is allowed to move.
  *
  * **The AI is not in this file.** No Gemini call, no model-callable tool, and
- * nothing in `src/services/buyer-agent/` may reach it. That is asserted by
+ * none of the Buyer Agent's own files may reach it. That is asserted by
  * test, not merely intended.
  */
-assertServerOnly("src/services/approval/approval-service.ts");
+assertServerOnly("src/services/approval-service.ts");
 
 /** The one actor permitted to convert human consent into authority. */
 const APPROVAL_ACTOR = "approval_gate" as const;

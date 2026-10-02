@@ -1,8 +1,5 @@
 import type { QuoteDto, QuoteInvalidationReason } from "@/domain/quote/rules";
-import type {
-  EligibilityReason,
-  IneligibilityReason,
-} from "@/domain/product-decision/eligibility";
+import type { EligibilityReason, IneligibilityReason } from "@/domain/eligibility";
 
 /**
  * What the purchase-decision boundary returns.
@@ -65,8 +62,6 @@ export type PurchaseDecisionResult =
       /** What changed between the agent's read and the authoritative one. */
       readonly reasons: readonly QuoteInvalidationReason[];
     };
-
-export type PurchaseDecisionKind = PurchaseDecisionResult["kind"];
 
 /** What `validateQuoteForUse` answers. Objectives 7-10 branch on this. */
 export type QuoteValidationResult =

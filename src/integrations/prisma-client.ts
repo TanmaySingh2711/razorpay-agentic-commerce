@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { getDatabaseConfig } from "@/config/env";
+import { getDatabaseConfig } from "@/lib/env";
 import { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -29,7 +29,7 @@ import { PrismaClient } from "@/generated/prisma/client";
  */
 if (typeof window !== "undefined") {
   throw new Error(
-    "src/integrations/persistence/client.ts was imported in a browser bundle. " +
+    "src/integrations/prisma-client.ts was imported in a browser bundle. " +
       "Database access is server-only; call it from a route handler or server component.",
   );
 }

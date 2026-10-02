@@ -7,7 +7,7 @@ import {
   formatDateTime,
   formatMoney,
   formatTime,
-} from "@/domain/ui/journey";
+} from "@/domain/journey";
 import { TRANSACTION_STATES } from "@/domain/transaction/states";
 import type { TransactionState } from "@/domain/transaction/states";
 

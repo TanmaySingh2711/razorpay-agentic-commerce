@@ -4,33 +4,24 @@ import {
   decideApproval,
   requestApproval,
   type ApprovalServiceDeps,
-} from "@/services/approval/approval-service";
+} from "@/services/approval-service";
 import {
   commitReservation,
   readReservableStock,
   releaseReservation,
   reserveInventory,
   type ReservationServiceDeps,
-} from "@/services/inventory/reservation-service";
-import {
-  evaluateQuotePolicy,
-  type PolicyServiceDeps,
-} from "@/services/policy/policy-service";
-import {
-  createTrustedQuote,
-  type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy, type PolicyServiceDeps } from "@/services/policy-service";
+import { createTrustedQuote, type QuoteServiceDeps } from "@/services/quote-service";
 import {
   applyTransactionEvent,
   getTransactionHistory,
-} from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
-import {
-  FORBIDDEN_TOOL_NAMES,
-  isRegisteredTool,
-} from "@/services/buyer-agent/catalog-tools";
+} from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
+import { FORBIDDEN_TOOL_NAMES, isRegisteredTool } from "@/services/catalog-tools";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import {
@@ -1354,9 +1345,9 @@ describe("no AI or browser authority over approval and inventory", () => {
   it("keeps the buyer agent out of the approval and inventory services", () => {
     // The agent cannot call what it cannot import.
     for (const file of [
-      "src/services/buyer-agent/buyer-agent-service.ts",
-      "src/services/buyer-agent/catalog-tools.ts",
-      "src/services/buyer-agent/catalog-reader.ts",
+      "src/services/buyer-agent-service.ts",
+      "src/services/catalog-tools.ts",
+      "src/services/catalog-reader.ts",
       "src/app/api/buyer-agent/handler.ts",
       "src/app/api/buyer-agent/route.ts",
     ]) {

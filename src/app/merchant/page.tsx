@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
-import { describeState, formatDateTime, formatMoney } from "@/domain/ui/journey";
-import { rate } from "@/domain/insights/metrics";
-import { loadMerchantInsights } from "@/services/insights/merchant-insights-service";
-import type { MerchantInsights } from "@/services/insights/merchant-insights-service";
+import { describeState, formatDateTime, formatMoney } from "@/domain/journey";
+import { rate } from "@/domain/insights";
+import { loadMerchantInsights } from "@/services/merchant-insights-service";
+import type { MerchantInsights } from "@/services/merchant-insights-service";
 
 /**
  * The merchant's side of agentic commerce.
@@ -268,8 +268,8 @@ function RecentOrders({ insights }: { readonly insights: MerchantInsights }) {
             </tr>
           </thead>
           <tbody>
-            {insights.recent.map((order) => (
-              <tr key={`${order.createdAt}-${order.productName}`}>
+            {insights.recent.map((order, index) => (
+              <tr key={`${String(index)}-${order.createdAt}`}>
                 <td>{order.productName}</td>
                 <td className="numeric">
                   {order.amountMinor === null ? "–" : inr(order.amountMinor)}

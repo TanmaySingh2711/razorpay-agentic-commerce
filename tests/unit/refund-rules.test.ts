@@ -7,8 +7,8 @@ import {
   describeRefundStatus,
   refundReceiptFor,
   type RefundFacts,
-} from "@/domain/refund/contracts";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+} from "@/domain/refund";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 
 /**
  * Refund eligibility, and the Razorpay refund adapter.

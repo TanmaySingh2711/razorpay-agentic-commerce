@@ -4,7 +4,7 @@ import {
   MAX_PRIOR_TURNS,
   runBuyerAgent,
   type BuyerAgentDeps,
-} from "@/services/buyer-agent/buyer-agent-service";
+} from "@/services/buyer-agent-service";
 import {
   AiProviderTimeoutError,
   InvalidBuyerRequestError,
@@ -18,7 +18,7 @@ import {
   selectionJson,
   type ScriptedTurn,
 } from "../support/fake-ai-provider";
-import type { AiGenerationRequest } from "@/integrations/llm/provider";
+import type { AiGenerationRequest } from "@/integrations/ai-provider";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 
 /**

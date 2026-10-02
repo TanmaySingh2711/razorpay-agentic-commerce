@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  runBuyerAgent,
-  type BuyerAgentDeps,
-} from "@/services/buyer-agent/buyer-agent-service";
-import { createServiceCatalogReader } from "@/services/buyer-agent/catalog-reader";
+import { runBuyerAgent, type BuyerAgentDeps } from "@/services/buyer-agent-service";
+import { createServiceCatalogReader } from "@/services/catalog-reader";
 import { InvalidModelSelectionError } from "@/domain/buyer-agent/errors";
 import { handleBuyerAgentRequest } from "@/app/api/buyer-agent/handler";
 import {

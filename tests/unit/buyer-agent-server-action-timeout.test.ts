@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiProviderRequestBudgetExceededError } from "@/domain/buyer-agent/errors";
-import type * as BuyerAgentService from "@/services/buyer-agent/buyer-agent-service";
+import type * as BuyerAgentService from "@/services/buyer-agent-service";
 
 /**
  * The Server Action's own half of the guarantee: whatever typed error the
@@ -17,7 +17,7 @@ import type * as BuyerAgentService from "@/services/buyer-agent/buyer-agent-serv
 
 const { mockRunBuyerAgent } = vi.hoisted(() => ({ mockRunBuyerAgent: vi.fn() }));
 
-vi.mock("@/services/buyer-agent/buyer-agent-service", async (importOriginal) => ({
+vi.mock("@/services/buyer-agent-service", async (importOriginal) => ({
   // The real bounds (MAX_PRIOR_TURNS and friends), with only the agent run
   // itself replaced.
   ...(await importOriginal<typeof BuyerAgentService>()),
@@ -34,7 +34,7 @@ const { mockLimitAgentRequest } = vi.hoisted(() => ({
   mockLimitAgentRequest: vi.fn(),
 }));
 
-vi.mock("@/services/rate-limit/rate-limit-service", () => ({
+vi.mock("@/services/rate-limit-service", () => ({
   limitAgentRequest: mockLimitAgentRequest,
   limitPaymentRequest: vi.fn(),
 }));
@@ -43,13 +43,13 @@ const { mockRecordAgentRequest } = vi.hoisted(() => ({
   mockRecordAgentRequest: vi.fn(),
 }));
 
-vi.mock("@/services/insights/agent-request-log", () => ({
+vi.mock("@/services/agent-request-log", () => ({
   recordAgentRequest: mockRecordAgentRequest,
 }));
 
 const { mockDecidePurchase } = vi.hoisted(() => ({ mockDecidePurchase: vi.fn() }));
 
-vi.mock("@/services/product-decision/product-decision-service", () => ({
+vi.mock("@/services/product-decision-service", () => ({
   decidePurchase: mockDecidePurchase,
 }));
 
@@ -74,7 +74,7 @@ describe("submitRequest converts a request-budget failure into the existing grac
       new AiProviderRequestBudgetExceededError({ correlationId: "corr-test" }),
     );
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Find me the best mechanical keyboard under ₹3000 and buy it."),
@@ -108,7 +108,7 @@ describe("submitRequest converts a request-budget failure into the existing grac
       question: "What's your budget?",
     });
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Find me a keyboard."),
@@ -136,7 +136,7 @@ describe("submitRequest is gated by the abuse and cost ceilings", () => {
       retryAfterSeconds: 42,
     });
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Find me a mouse."),
@@ -159,7 +159,7 @@ describe("submitRequest is gated by the abuse and cost ceilings", () => {
       rule: "agent-global-day",
       retryAfterSeconds: 3000,
     });
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Find me a mouse."),
@@ -171,7 +171,7 @@ describe("submitRequest is gated by the abuse and cost ceilings", () => {
 
   it("fails closed when the limiter itself cannot answer", async () => {
     mockLimitAgentRequest.mockRejectedValueOnce(new Error("database unreachable"));
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Find me a mouse."),
@@ -195,7 +195,7 @@ describe("submitRequest continues a conversation", () => {
       JSON.stringify([{ shopper: "a wireless mouse", assistantQuestion: "Budget?" }]),
     );
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     await submitRequest({ kind: "IDLE" }, data);
 
     expect(mockRunBuyerAgent).toHaveBeenCalledWith({
@@ -211,7 +211,7 @@ describe("submitRequest continues a conversation", () => {
       JSON.stringify([{ shopper: "", assistantQuestion: "x", extra: 1 }]),
     );
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest({ kind: "IDLE" }, data);
 
     expect(outcome).toMatchObject({ kind: "ERROR" });
@@ -255,7 +255,7 @@ describe("submitRequest answers a browse request with a recommendation", () => {
       requestType: "BROWSE",
     });
 
-    const { submitRequest } = await import("@/app/actions/purchase");
+    const { submitRequest } = await import("@/app/actions");
     const outcome = await submitRequest(
       { kind: "IDLE" },
       formDataWith("Show me a keyboard under ₹3000"),

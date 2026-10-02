@@ -22,8 +22,8 @@ about price authority is therefore true of the agent too.
 ```
 software client / future Buyer Agent
   → validated catalog query          ← src/domain/catalog/query.ts
-    → catalog service                 ← src/services/merchant/catalog-service.ts
-      → catalog read repository       ← src/services/merchant/catalog-repository.ts
+    → catalog service                 ← src/services/catalog-service.ts
+      → catalog read repository       ← src/services/catalog-repository.ts
         → PostgreSQL                  (authoritative)
       → DTO mapper                    ← src/domain/catalog/contracts.ts
     → typed JSON envelope             ← src/lib/api-response.ts

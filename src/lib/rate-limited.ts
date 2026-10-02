@@ -1,7 +1,7 @@
 import { RateLimitedError } from "@/domain/errors";
 import { jsonError } from "@/lib/api-response";
-import { clientKeyFromHeaders } from "@/domain/rate-limit/rules";
-import type { RateLimitDecision } from "@/services/rate-limit/rate-limit-service";
+import { clientKeyFromHeaders } from "@/domain/rate-limit";
+import type { RateLimitDecision } from "@/services/rate-limit-service";
 
 /**
  * Runs `handler` only if the caller is within its ceilings.

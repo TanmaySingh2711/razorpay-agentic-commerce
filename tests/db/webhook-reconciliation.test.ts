@@ -4,25 +4,22 @@ import {
   startCheckout,
   verifyCheckoutCallback,
   type CheckoutServiceDeps,
-} from "@/services/payment/checkout-service";
-import {
-  processWebhook,
-  type WebhookServiceDeps,
-} from "@/services/payment/webhook-service";
-import { createPaymentOrder } from "@/services/payment/payment-order-service";
+} from "@/services/checkout-service";
+import { processWebhook, type WebhookServiceDeps } from "@/services/webhook-service";
+import { createPaymentOrder } from "@/services/payment-order-service";
 import {
   releaseLapsedReservations,
   reserveInventory,
-} from "@/services/inventory/reservation-service";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
-import { createTrustedQuote } from "@/services/quote/quote-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { getTransactionAuditHistory } from "@/services/audit/audit-service";
-import { createTransaction } from "@/services/transaction/creation-service";
+} from "@/services/reservation-service";
+import { evaluateQuotePolicy } from "@/services/policy-service";
+import { createTrustedQuote } from "@/services/quote-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { getTransactionAuditHistory } from "@/services/audit-service";
+import { createTransaction } from "@/services/transaction-creation-service";
 import { handleRazorpayWebhook } from "@/app/api/webhooks/razorpay/handler";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
 import {

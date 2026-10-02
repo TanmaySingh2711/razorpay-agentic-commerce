@@ -3,9 +3,9 @@
 Three changes to the Buyer Agent ([19](./19-buyer-agent.md)). Each one makes the
 agent more useful, and each one keeps every guarantee the agent already had.
 
-**Code:** [`src/services/buyer-agent/buyer-agent-service.ts`](../src/services/buyer-agent/buyer-agent-service.ts),
-[`src/app/actions/purchase.ts`](../src/app/actions/purchase.ts),
-[`src/components/buyer/buyer-console.tsx`](../src/components/buyer/buyer-console.tsx).
+**Code:** [`src/services/buyer-agent-service.ts`](../src/services/buyer-agent-service.ts),
+[`src/app/actions.ts`](../src/app/actions.ts),
+[`src/components/buyer-console.tsx`](../src/components/buyer-console.tsx).
 **Tests:** `tests/unit/buyer-agent-conversation.test.ts`,
 `tests/unit/buyer-agent-server-action-timeout.test.ts`.
 

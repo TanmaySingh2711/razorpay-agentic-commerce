@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
-import { createTrustedQuote } from "@/services/quote/quote-service";
-import { reserveInventory } from "@/services/inventory/reservation-service";
-import { applyTransactionEvent } from "@/services/transaction/transition-service";
-import { createTransaction } from "@/services/transaction/creation-service";
-import { loadTransactionOverview } from "@/services/transaction/overview-service";
-import { buildJourney, describeState, formatMoney } from "@/domain/ui/journey";
+import { evaluateQuotePolicy } from "@/services/policy-service";
+import { createTrustedQuote } from "@/services/quote-service";
+import { reserveInventory } from "@/services/reservation-service";
+import { applyTransactionEvent } from "@/services/transition-service";
+import { createTransaction } from "@/services/transaction-creation-service";
+import { loadTransactionOverview } from "@/services/transaction-overview-service";
+import { buildJourney, describeState, formatMoney } from "@/domain/journey";
 import { fixedClock, type MutableClock } from "@/lib/clock";
-import type { PurchaseAuthority } from "@/domain/product-decision/eligibility";
+import type { PurchaseAuthority } from "@/domain/eligibility";
 import { databaseConfigured, resetTestData, testDb, uid } from "./harness";
 
 /**

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 
 /**
  * The checkout signature check, against the real adapter.

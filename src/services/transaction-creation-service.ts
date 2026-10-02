@@ -1,5 +1,5 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import {
   INITIAL_TRANSACTION_STATE,
   type InitialTransactionState,
@@ -37,7 +37,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * Server-only: it asserts on import, and it depends on the persistence client,
  * which asserts as well.
  */
-assertServerOnly("src/services/transaction/creation-service.ts");
+assertServerOnly("src/services/transaction-creation-service.ts");
 
 /**
  * Everything needed to open a transaction, and nothing more.

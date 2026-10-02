@@ -4,7 +4,7 @@ import {
   handleProductByIdRequest,
   handleProductSearchRequest,
 } from "@/app/api/catalog/handlers";
-import type { CatalogServiceDeps } from "@/services/merchant/catalog-service";
+import type { CatalogServiceDeps } from "@/services/catalog-service";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 import type { PrismaClient } from "@/generated/prisma/client";
 import {

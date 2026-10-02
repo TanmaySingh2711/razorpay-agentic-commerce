@@ -96,7 +96,7 @@ const STRICT_TRANSPORT_SECURITY = "max-age=63072000; includeSubDomains; preload"
  * production build served over plain HTTP on a developer machine must not pin
  * that host to HTTPS.
  *
- * This is the one place outside `src/config` that reads `process.env`, and the
+ * This is the one place outside `src/lib/env.ts` that reads `process.env`, and the
  * reason is mechanical rather than a preference: Next.js loads this file with
  * its own TypeScript loader, which does not resolve the `@/*` path aliases the
  * config boundary is written in, so importing it here fails the build. The

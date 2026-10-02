@@ -21,7 +21,7 @@ const PAGES = [
   "src/app/page.tsx",
   "src/app/about/page.tsx",
   "src/app/transaction/[transactionId]/page.tsx",
-  "src/components/transaction/decision-form.tsx",
+  "src/components/decision-form.tsx",
 ] as const;
 
 /** Every `<Link …>` opening tag in a file, with its attributes. */
@@ -49,7 +49,7 @@ describe("every navigation action is styled as a control", () => {
   });
 
   it("offers a real control, not just a sentence, when a hold is refused", () => {
-    const source = readFileSync("src/components/transaction/decision-form.tsx", "utf8");
+    const source = readFileSync("src/components/decision-form.tsx", "utf8");
     // The recovery control appears only after the server actually refused.
     expect(source).toMatch(/outcome\.kind === "ERROR"/);
     expect(source).toMatch(/recoveryHref/);

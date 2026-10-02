@@ -1,6 +1,6 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { POLICY_AUDIT_EVENT_TYPE, type PolicySnapshot } from "@/domain/policy/decision";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 
 /**
  * The single way a policy is read out of PostgreSQL.
@@ -10,7 +10,7 @@ import type { TransactionCapableClient } from "@/services/transaction/transition
  * written queries would eventually disagree - which is precisely the bug that
  * lets a payment proceed under a rule the evaluation never saw.
  */
-assertServerOnly("src/services/policy/policy-reader.ts");
+assertServerOnly("src/services/policy-reader.ts");
 
 /**
  * The buyer's policy, or null.

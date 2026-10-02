@@ -1,5 +1,5 @@
 import { config as loadEnv } from "dotenv";
-import { createRazorpayProvider } from "../src/integrations/payments/razorpay-provider";
+import { createRazorpayProvider } from "../src/integrations/razorpay-provider";
 import { deriveReceipt } from "../src/domain/payment/rules";
 
 loadEnv({ path: ".env.local", quiet: true });

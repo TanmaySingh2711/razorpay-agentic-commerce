@@ -170,8 +170,6 @@ export type BuyerAgentDecision =
       readonly trace?: AgentTrace;
     };
 
-export type BuyerAgentDecisionKind = BuyerAgentDecision["kind"];
-
 /** Bounds stated once, so the validator and the provider cannot disagree. */
 export const MAX_SELECTED_PRODUCT_ID_LENGTH = 64;
 export const MAX_SELECTION_QUANTITY = 100;
@@ -234,8 +232,6 @@ export const modelSelectionSchema = z.object({
   clarificationQuestion: absentAsNull(z.string().max(MAX_SELECTION_CLARIFICATION_LENGTH)),
   summary: z.string().min(1).max(MAX_SUMMARY_LENGTH),
 });
-
-export type ModelSelection = z.infer<typeof modelSelectionSchema>;
 
 /**
  * The provider-facing schema for the selection step. See intent.ts for why.

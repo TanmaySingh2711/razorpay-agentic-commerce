@@ -173,7 +173,7 @@ jobs:
           cache: npm
 
       - name: Start a disposable PostgreSQL 17
-        # Pinned to the major version docker/docker-compose.yml runs locally, so a
+        # Pinned to the major version .config/docker-compose.yml runs locally, so a
         # constraint, enum or unique index behaves here exactly as it does on a
         # developer machine.
         uses: ikalnytskyi/action-setup-postgres@v8

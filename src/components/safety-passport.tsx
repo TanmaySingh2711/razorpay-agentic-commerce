@@ -1,10 +1,10 @@
-import type { PassportTone, SafetyPassportViewModel } from "@/domain/safety/passport";
+import type { PassportTone, SafetyPassportViewModel } from "@/domain/safety-passport";
 
 /**
  * The Safety Passport, rendered.
  *
  * A server component with no state, no effects and no decisions. Every string
- * it draws was decided in `@/domain/safety/passport` from persisted rows, which
+ * it draws was decided in `@/domain/safety-passport` from persisted rows, which
  * is what makes the panel testable without a browser and impossible to make
  * flattering by editing markup.
  *

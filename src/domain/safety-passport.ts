@@ -1,4 +1,4 @@
-import { formatMoney } from "@/domain/ui/journey";
+import { formatMoney } from "@/domain/journey";
 import type { MoneyDto } from "@/domain/money";
 import type { PaymentFailureCategory } from "@/domain/payment/failure";
 import type { PolicyDecisionKind } from "@/domain/policy/decision";

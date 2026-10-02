@@ -5,7 +5,7 @@ import {
   type QuoteUsability,
 } from "@/domain/quote/rules";
 import type { CurrencyCode } from "@/domain/money";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 
 /**
  * Reading a quote and judging it, inside somebody else's transaction.
@@ -21,7 +21,7 @@ import type { TransactionCapableClient } from "@/services/transaction/transition
  * rules. One implementation, so the approval gate and the reservation service
  * cannot drift apart about what "still usable" means.
  */
-assertServerOnly("src/services/quote/quote-reader.ts");
+assertServerOnly("src/services/quote-reader.ts");
 
 /** The authoritative columns a usability judgement is made from. */
 const QUOTE_PRODUCT_COLUMNS = {

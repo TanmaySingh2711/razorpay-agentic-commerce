@@ -150,9 +150,8 @@ A purchase moves through a fixed set of states, such as `QUOTE_CREATED`, `AUTHOR
 
 ```text
 razorpay-agentic-commerce/
-├── .config/                 Prisma and Vitest configuration
+├── .config/                 Prisma, Vitest, and docker-compose configuration
 ├── .github/workflows/       CI workflow
-├── docker/                  docker-compose file for local PostgreSQL
 ├── docs/                    Design documents
 ├── prisma/
 │   ├── schema.prisma        Database schema
@@ -162,11 +161,10 @@ razorpay-agentic-commerce/
 ├── src/
 │   ├── app/                 Pages, server actions, and API routes
 │   ├── components/          React components
-│   ├── config/env.ts        The only place environment variables are read
 │   ├── domain/              Pure business rules
 │   ├── integrations/        Gemini, Razorpay, and database adapters
-│   ├── lib/                 Small shared helpers
-│   └── services/            Purchase steps: quote, policy, payment, refund, ...
+│   ├── lib/                 Shared helpers; env.ts reads the environment variables
+│   └── services/            One file per purchase step: quote, policy, payment, refund, ...
 ├── tests/
 │   ├── unit/                Tests that need no database
 │   ├── db/                  Tests that run against PostgreSQL
@@ -286,18 +284,19 @@ Press `Ctrl + C` in the terminal to stop it.
 
 Other useful commands:
 
-| Command                | What it does                                |
-| ---------------------- | ------------------------------------------- |
-| `npm run dev`          | Start the app in development mode.          |
-| `npm run build`        | Create a production build.                  |
-| `npm run start`        | Run the production build.                   |
-| `npm run verify`       | Type check, lint, run all tests, and build. |
-| `npm run test`         | Run the tests only.                         |
-| `npm run format:check` | Check code formatting.                      |
-| `npm run db:seed`      | Refill the demo catalog. Safe to run again. |
-| `npm run db:studio`    | Open a browser view of the local database.  |
-| `npm run db:dev:demo`  | Add sample purchases to the local database. |
-| `npm run db:test:down` | Stop the PostgreSQL container.              |
+| Command                 | What it does                                |
+| ----------------------- | ------------------------------------------- |
+| `npm run dev`           | Start the app in development mode.          |
+| `npm run build`         | Create a production build.                  |
+| `npm run start`         | Run the production build.                   |
+| `npm run verify`        | Type check, lint, run all tests, and build. |
+| `npm run test`          | Run the tests only.                         |
+| `npm run test:coverage` | Run the tests and report code coverage.     |
+| `npm run format:check`  | Check code formatting.                      |
+| `npm run db:seed`       | Refill the demo catalog. Safe to run again. |
+| `npm run db:studio`     | Open a browser view of the local database.  |
+| `npm run db:dev:demo`   | Add sample purchases to the local database. |
+| `npm run db:test:down`  | Stop the PostgreSQL container.              |
 
 `npm run db:dev:demo` is handy for looking at the merchant page without using your Gemini quota. It runs sample purchases through the real server code with a stand-in payment provider, and only works on a local database.
 
@@ -476,7 +475,7 @@ npm run db:test:health   # check that it is ready
 npm run db:test:down     # stop it
 ```
 
-The compose file is `docker/docker-compose.yml`. Its username and password are for local use only.
+The compose file is `.config/docker-compose.yml`. Its username and password are for local use only.
 
 ## Limitations
 

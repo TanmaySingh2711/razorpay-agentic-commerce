@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
-import { processWebhook } from "@/services/payment/webhook-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
+import { processWebhook } from "@/services/webhook-service";
 import { systemClock } from "@/lib/clock";
 import { fakePaymentProvider } from "../support/fake-payment-provider";
 import type { PrismaClient } from "@/generated/prisma/client";

@@ -5,7 +5,7 @@ import type { CurrencyCode } from "@/domain/money";
  *
  * Vendor-neutral by construction: nothing in this file names Razorpay, uses a
  * Razorpay type, or assumes a Razorpay field. The adapter in
- * `@/integrations/payments/razorpay-provider` translates; everything above it
+ * `@/integrations/razorpay-provider` translates; everything above it
  * — the payment order service, the state machine, the audit trail — speaks only
  * the vocabulary declared here.
  *

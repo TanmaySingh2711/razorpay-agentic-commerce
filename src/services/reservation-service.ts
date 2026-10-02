@@ -1,10 +1,10 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getReservationConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getReservationConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
-import { readActiveQuote } from "@/services/quote/quote-reader";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+import { readActiveQuote } from "@/services/quote-reader";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { recordAuditEvent } from "@/services/audit-service";
 import { AppError, DomainRuleError, InfrastructureError } from "@/domain/errors";
 import type {
   CommitResult,
@@ -13,9 +13,9 @@ import type {
   ReservationDto,
   ReservationRefusal,
   ReservationResult,
-} from "@/domain/inventory/contracts";
+} from "@/domain/inventory";
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { TransactionState } from "@/domain/transaction/states";
 import type { AuditEventType } from "@/domain/audit-event";
 import type { JsonObject } from "@/lib/json";
@@ -49,7 +49,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * taken on the wrong row, silently. A conditional UPDATE through the ORM is
  * schema-correct everywhere and needs no raw SQL at all.
  */
-assertServerOnly("src/services/inventory/reservation-service.ts");
+assertServerOnly("src/services/reservation-service.ts");
 
 /** The one actor permitted to claim or settle stock. */
 const INVENTORY_ACTOR = "inventory_service" as const;

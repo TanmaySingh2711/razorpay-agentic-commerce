@@ -1,4 +1,4 @@
-import type { AgentRequestOutcome } from "@/domain/agent-request/outcomes";
+import type { AgentRequestOutcome } from "@/domain/agent-request";
 
 /**
  * The merchant dashboard's arithmetic, as pure functions.

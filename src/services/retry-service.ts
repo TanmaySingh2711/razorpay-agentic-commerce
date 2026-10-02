@@ -1,19 +1,16 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { getReservationConfig, getQuoteConfig } from "@/config/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { getReservationConfig, getQuoteConfig } from "@/lib/env";
 import { systemClock, type Clock } from "@/lib/clock";
 import { createLogger } from "@/lib/logger";
-import { readActiveQuote } from "@/services/quote/quote-reader";
-import { recheckPolicyAuthorization } from "@/services/policy/authorization-recheck";
-import {
-  releaseReservation,
-  requoteReservation,
-} from "@/services/inventory/reservation-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
-import { createPaymentOrder } from "@/services/payment/payment-order-service";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
-import { createTrustedQuote } from "@/services/quote/quote-service";
-import { evaluateQuotePolicy } from "@/services/policy/policy-service";
+import { readActiveQuote } from "@/services/quote-reader";
+import { recheckPolicyAuthorization } from "@/services/authorization-recheck";
+import { releaseReservation, requoteReservation } from "@/services/reservation-service";
+import { recordAuditEvent } from "@/services/audit-service";
+import { createPaymentOrder } from "@/services/payment-order-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
+import { createTrustedQuote } from "@/services/quote-service";
+import { evaluateQuotePolicy } from "@/services/policy-service";
 import {
   QuoteProductChangedError,
   QuoteCreationFailureError,
@@ -30,10 +27,10 @@ import {
   type RetryStatusDto,
 } from "@/domain/payment/retry";
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
-import type { ReservationServiceDeps } from "@/services/inventory/reservation-service";
-import type { PaymentOrderServiceDeps } from "@/services/payment/payment-order-service";
-import type { QuoteServiceDeps } from "@/services/quote/quote-service";
-import type { PolicyServiceDeps } from "@/services/policy/policy-service";
+import type { ReservationServiceDeps } from "@/services/reservation-service";
+import type { PaymentOrderServiceDeps } from "@/services/payment-order-service";
+import type { QuoteServiceDeps } from "@/services/quote-service";
+import type { PolicyServiceDeps } from "@/services/policy-service";
 import type { PaymentProvider } from "@/domain/payment/provider";
 import type { PaymentOrderResult } from "@/domain/payment/contracts";
 import type { TransactionState } from "@/domain/transaction/states";
@@ -73,7 +70,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * the winner's attempt without ever calling the provider. Nothing here depends
  * on a disabled button, an in-memory lock, or timing.
  */
-assertServerOnly("src/services/payment/retry-service.ts");
+assertServerOnly("src/services/retry-service.ts");
 
 const log = createLogger({ category: "payment" });
 

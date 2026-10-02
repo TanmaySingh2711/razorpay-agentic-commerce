@@ -13,7 +13,7 @@ import {
   totalAmountMinor,
   unverifiableRequirements,
   type PurchaseAuthority,
-} from "@/domain/product-decision/eligibility";
+} from "@/domain/eligibility";
 import { fixedClock } from "@/lib/clock";
 import { productDto } from "../support/fake-ai-provider";
 

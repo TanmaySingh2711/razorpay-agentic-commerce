@@ -34,20 +34,20 @@ const { mockRequestApproval, mockDecideApproval } = vi.hoisted(() => ({
   mockDecideApproval: vi.fn(),
 }));
 
-vi.mock("@/services/approval/approval-service", () => ({
+vi.mock("@/services/approval-service", () => ({
   requestApproval: mockRequestApproval,
   decideApproval: mockDecideApproval,
 }));
 
 const { mockReserveInventory } = vi.hoisted(() => ({ mockReserveInventory: vi.fn() }));
 
-vi.mock("@/services/inventory/reservation-service", () => ({
+vi.mock("@/services/reservation-service", () => ({
   reserveInventory: mockReserveInventory,
 }));
 
 const { mockFindUnique } = vi.hoisted(() => ({ mockFindUnique: vi.fn() }));
 
-vi.mock("@/integrations/persistence/client", () => ({
+vi.mock("@/integrations/prisma-client", () => ({
   getPrismaClient: () => ({ transaction: { findUnique: mockFindUnique } }),
 }));
 
@@ -69,7 +69,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     mockRequestApproval.mockResolvedValueOnce({ kind: "APPROVED", token: "token-1" });
     mockDecideApproval.mockResolvedValueOnce({ kind: "AUTHORIZED" });
 
-    const { approvePurchase } = await import("@/app/actions/purchase");
+    const { approvePurchase } = await import("@/app/actions");
     const outcome = await approvePurchase({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
@@ -81,7 +81,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     mockRequestApproval.mockResolvedValueOnce({ kind: "APPROVED", token: "token-1" });
     mockDecideApproval.mockResolvedValueOnce({ kind: "REJECTED" });
 
-    const { rejectPurchase } = await import("@/app/actions/purchase");
+    const { rejectPurchase } = await import("@/app/actions");
     const outcome = await rejectPurchase({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
@@ -91,7 +91,7 @@ describe("a decision that changes state also invalidates the page rendering it",
   it("revalidates when stock is successfully held", async () => {
     mockReserveInventory.mockResolvedValueOnce({ kind: "RESERVED" });
 
-    const { reserveStock } = await import("@/app/actions/purchase");
+    const { reserveStock } = await import("@/app/actions");
     const outcome = await reserveStock({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
@@ -103,7 +103,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     // invalidating the page would suggest otherwise.
     mockReserveInventory.mockResolvedValueOnce({ kind: "UNAVAILABLE" });
 
-    const { reserveStock } = await import("@/app/actions/purchase");
+    const { reserveStock } = await import("@/app/actions");
     const outcome = await reserveStock({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("ERROR");
@@ -111,7 +111,7 @@ describe("a decision that changes state also invalidates the page rendering it",
   });
 
   it("does not revalidate for an unparseable transaction id", async () => {
-    const { reserveStock } = await import("@/app/actions/purchase");
+    const { reserveStock } = await import("@/app/actions");
     const outcome = await reserveStock({ kind: "IDLE" }, formDataFor("not-a-uuid"));
 
     expect(outcome.kind).toBe("ERROR");

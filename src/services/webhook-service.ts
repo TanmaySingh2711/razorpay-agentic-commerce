@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
-import { recordAuditEvent } from "@/services/audit/audit-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
+import { recordAuditEvent } from "@/services/audit-service";
 import { classifyPaymentFailure, describePaymentFailure } from "@/domain/payment/failure";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { commitReservationWithin } from "@/services/inventory/reservation-service";
-import { applyRefundWebhook } from "@/services/refund/refund-service";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { commitReservationWithin } from "@/services/reservation-service";
+import { applyRefundWebhook } from "@/services/refund-service";
 import {
   isRefundWebhookEvent,
   isSupportedWebhookEvent,
@@ -23,7 +23,7 @@ import {
 } from "@/domain/payment/webhook";
 import type { PaymentProvider } from "@/domain/payment/provider";
 import type { PrismaClient } from "@/generated/prisma/client";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { TransactionEvent } from "@/domain/transaction/events";
 
 /**
@@ -57,7 +57,7 @@ import type { TransactionEvent } from "@/domain/transaction/events";
  * to. Those are separate checks, and a mismatch is recorded and refused rather
  * than reconciled.
  */
-assertServerOnly("src/services/payment/webhook-service.ts");
+assertServerOnly("src/services/webhook-service.ts");
 
 const log = createLogger({ category: "payment" });
 

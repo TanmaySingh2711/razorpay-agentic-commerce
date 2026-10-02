@@ -1,6 +1,6 @@
 import { config as loadEnv } from "dotenv";
-import { getPrismaClient } from "../src/integrations/persistence/client";
-import { getTransactionAuditHistory } from "../src/services/audit/audit-service";
+import { getPrismaClient } from "../src/integrations/prisma-client";
+import { getTransactionAuditHistory } from "../src/services/audit-service";
 import { TRANSACTION_STATES } from "../src/domain/transaction/states";
 import { MAX_PAYMENT_ATTEMPTS } from "../src/domain/payment/retry";
 import type { TransactionState } from "../src/domain/transaction/states";

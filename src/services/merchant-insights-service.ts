@@ -1,8 +1,8 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { systemClock, type Clock } from "@/lib/clock";
-import { getCatalogConfig } from "@/config/env";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { AGENT_REQUEST_OUTCOMES } from "@/domain/agent-request/outcomes";
+import { getCatalogConfig } from "@/lib/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { AGENT_REQUEST_OUTCOMES } from "@/domain/agent-request";
 import {
   buildFunnel,
   countOutcomes,
@@ -11,9 +11,9 @@ import {
   unmetDemand,
   type FunnelStage,
   type UnmetDemand,
-} from "@/domain/insights/metrics";
-import type { AgentRequestOutcome } from "@/domain/agent-request/outcomes";
-import type { RefundStatus } from "@/domain/refund/contracts";
+} from "@/domain/insights";
+import type { AgentRequestOutcome } from "@/domain/agent-request";
+import type { RefundStatus } from "@/domain/refund";
 import type { TransactionState } from "@/domain/transaction/states";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -30,7 +30,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * PaymentAttempts, refunds are PROCESSED Refund rows. A quote nobody paid is
  * not revenue, and an agent's opinion of a price appears nowhere.
  */
-assertServerOnly("src/services/insights/merchant-insights-service.ts");
+assertServerOnly("src/services/merchant-insights-service.ts");
 
 /** The look-back window the dashboard reports on. */
 export const INSIGHT_WINDOW_DAYS = 30;

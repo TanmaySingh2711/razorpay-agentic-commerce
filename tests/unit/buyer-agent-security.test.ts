@@ -5,11 +5,11 @@ import {
   FORBIDDEN_TOOL_NAMES,
   executeCatalogTool,
   isRegisteredTool,
-} from "@/services/buyer-agent/catalog-tools";
+} from "@/services/catalog-tools";
 import {
   INTENT_EXTRACTION_INSTRUCTION,
   PRODUCT_SELECTION_INSTRUCTION,
-} from "@/services/buyer-agent/instructions";
+} from "@/services/buyer-agent-instructions";
 import { UnknownToolError } from "@/domain/buyer-agent/errors";
 import { AppError } from "@/domain/errors";
 import { captureError, unreachableCatalogReader } from "../support/fake-ai-provider";

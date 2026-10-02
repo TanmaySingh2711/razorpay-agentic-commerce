@@ -5,7 +5,7 @@ import {
   processWebhook,
   defaultWebhookDeps,
   type WebhookServiceDeps,
-} from "@/services/payment/webhook-service";
+} from "@/services/webhook-service";
 import type { WebhookOutcome } from "@/domain/payment/webhook";
 
 /**

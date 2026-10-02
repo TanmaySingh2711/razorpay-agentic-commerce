@@ -40,7 +40,7 @@ The request surface as it is implemented: HTTP route handlers under
 
 ## Server actions
 
-The buyer-facing pages call server actions in `src/app/actions/purchase.ts`
+The buyer-facing pages call server actions in `src/app/actions.ts`
 rather than fetching their own API routes. The security property is the same and
 worth stating explicitly: **a server action is a function the browser may
 _invoke_, not one the browser may _define_.** Their complete parameter surface

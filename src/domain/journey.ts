@@ -1,4 +1,4 @@
-import { TRANSACTION_STATES, type TransactionState } from "@/domain/transaction/states";
+import type { TransactionState } from "@/domain/transaction/states";
 import type { MoneyDto } from "@/domain/money";
 
 /**
@@ -322,6 +322,3 @@ export function formatTime(iso: string): string {
   if (Number.isNaN(parsed.getTime())) return iso;
   return parsed.toLocaleTimeString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
-
-/** A compile-time check that every state is described. */
-export const DESCRIBED_STATES: readonly TransactionState[] = TRANSACTION_STATES;

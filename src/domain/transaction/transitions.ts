@@ -213,7 +213,7 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
      * nothing left for `reserveInventory` to claim a second time.
      *
      * `retry` on `CreatePaymentOrderCommand` cannot be constructed by any HTTP
-     * boundary - only `@/services/payment/retry-service` builds one, and only
+     * boundary - only `@/services/retry-service` builds one, and only
      * after its own gate has independently confirmed a matching `ACTIVE`
      * reservation exists - so this edge cannot be reached by an ordinary first
      * authorization, which never carries that value.

@@ -80,12 +80,12 @@ committed, deduplicated. The words "secure", "guaranteed", "fraud-proof" and
 
 ## Where the code lives
 
-| Piece                                   | File                                             |
-| --------------------------------------- | ------------------------------------------------ |
-| Pure builder, statuses, tones, evidence | `src/domain/safety/passport.ts`                  |
-| Read-only row reader and fact assembly  | `src/services/safety/passport-service.ts`        |
-| Wiring into the page's single read      | `src/services/transaction/overview-service.ts`   |
-| Rendering                               | `src/components/transaction/safety-passport.tsx` |
+| Piece                                   | File                                           |
+| --------------------------------------- | ---------------------------------------------- |
+| Pure builder, statuses, tones, evidence | `src/domain/safety-passport.ts`                |
+| Read-only row reader and fact assembly  | `src/services/passport-service.ts`             |
+| Wiring into the page's single read      | `src/services/transaction-overview-service.ts` |
+| Rendering                               | `src/components/safety-passport.tsx`           |
 
 The passport is built inside `loadTransactionOverview`, alongside everything
 else the page reads, and its extra queries run in the same parallel batch — so

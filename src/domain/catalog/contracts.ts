@@ -38,9 +38,6 @@ export const CATALOG_CONTRACT_VERSION = "1";
  */
 export const PUBLICLY_LISTED_PRODUCT_STATUSES = ["AVAILABLE", "OUT_OF_STOCK"] as const;
 
-export type PubliclyListedProductStatus =
-  (typeof PUBLICLY_LISTED_PRODUCT_STATUSES)[number];
-
 export const AVAILABILITY_STATUSES = ["AVAILABLE", "OUT_OF_STOCK"] as const;
 
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUSES)[number];

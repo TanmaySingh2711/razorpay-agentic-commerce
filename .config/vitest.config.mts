@@ -51,6 +51,20 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     setupFiles: ["tests/support/no-network.ts"],
+    // `npm run test:coverage`. Measured over the application source only: the
+    // generated Prisma client is not this project's code, and counting it
+    // would bury the real figure under thousands of lines nobody wrote.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/generated/**"],
+      reporter: ["text", "html"],
+      reportsDirectory: "coverage",
+      // A floor a little under the measured figures (87.8 / 80.2 / 87.0 /
+      // 88.7), so the run fails when coverage genuinely drops rather than on
+      // every small change. Raise these when the figures rise.
+      thresholds: { statements: 85, branches: 77, functions: 84, lines: 86 },
+    },
     projects: [
       {
         extends: true,

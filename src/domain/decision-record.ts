@@ -40,8 +40,6 @@ export const DECISION_RESULTS = [
   "failed",
 ] as const;
 
-export type DecisionResult = (typeof DECISION_RESULTS)[number];
-
 /**
  * Hard cap on the reason field. A bounded reason is a design constraint, not a
  * formatting preference: it structurally prevents a model from dumping

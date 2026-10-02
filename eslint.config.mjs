@@ -14,13 +14,13 @@ import nextTs from "eslint-config-next/typescript";
  */
 
 /**
- * The typed config boundary (src/config) is the only place allowed to read the
+ * The typed config boundary (src/lib/env.ts) is the only place allowed to read the
  * environment. Everything else imports from it.
  */
 const NO_DIRECT_PROCESS_ENV = {
   selector: "MemberExpression[object.object.name='process'][object.property.name='env']",
   message:
-    "Read configuration through @/config/env instead of process.env. See docs/09-configuration.md.",
+    "Read configuration through @/lib/env instead of process.env. See docs/09-configuration.md.",
 };
 
 /**
@@ -34,7 +34,7 @@ const NO_DIRECT_TRANSACTION_MUTATION = {
   selector:
     "CallExpression[callee.property.name=/^(update|updateMany|upsert)$/][callee.object.property.name='transaction']",
   message:
-    "Do not mutate a Transaction row directly. Emit a domain event through applyTransactionEvent() in @/services/transaction/transition-service. See docs/17-transaction-state-machine.md.",
+    "Do not mutate a Transaction row directly. Emit a domain event through applyTransactionEvent() in @/services/transition-service. See docs/17-transaction-state-machine.md.",
 };
 
 /**
@@ -47,7 +47,7 @@ const NO_DIRECT_TRANSACTION_CREATE = {
   selector:
     "CallExpression[callee.property.name=/^(create|createMany)$/][callee.object.property.name='transaction']",
   message:
-    "Do not create a Transaction row directly. Use createTransaction() in @/services/transaction/creation-service, which pins the initial state to INTENT_RECEIVED. See docs/17-transaction-state-machine.md.",
+    "Do not create a Transaction row directly. Use createTransaction() in @/services/transaction-creation-service, which pins the initial state to INTENT_RECEIVED. See docs/17-transaction-state-machine.md.",
 };
 
 /**
@@ -135,7 +135,7 @@ const eslintConfig = defineConfig([
     // The config boundary itself must read process.env. It has no business
     // touching transactions, so both transaction rules stay on.
     name: "agentic-commerce/env-boundary-exemption",
-    files: ["src/config/**/*.ts"],
+    files: ["src/lib/env.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -152,7 +152,7 @@ const eslintConfig = defineConfig([
     // from creating transactions: applying an event to a row that does not
     // exist must fail, never quietly conjure one.
     name: "agentic-commerce/transition-service-exemption",
-    files: ["src/services/transaction/transition-service.ts"],
+    files: ["src/services/transition-service.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -168,7 +168,7 @@ const eslintConfig = defineConfig([
     // transaction afterwards, so it cannot be quietly grown into a second,
     // unpoliced writer of the lifecycle.
     name: "agentic-commerce/creation-service-exemption",
-    files: ["src/services/transaction/creation-service.ts"],
+    files: ["src/services/transaction-creation-service.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

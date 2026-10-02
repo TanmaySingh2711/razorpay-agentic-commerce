@@ -7,7 +7,7 @@ import {
   nextBestAlternative,
   refusedOnlyForAvailability,
   type PurchaseAuthority,
-} from "@/domain/product-decision/eligibility";
+} from "@/domain/eligibility";
 import { productDto } from "../support/fake-ai-provider";
 import {
   AVAILABILITY_STATUSES,

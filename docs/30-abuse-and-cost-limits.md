@@ -5,9 +5,9 @@ quota. Without a ceiling, one script could spend the day's quota in minutes and
 leave every genuine visitor - including a judge in the middle of a demo - with an
 error. This document covers the limiter that prevents that.
 
-**Code:** [`src/domain/rate-limit/rules.ts`](../src/domain/rate-limit/rules.ts)
-(pure arithmetic), [`src/services/rate-limit/rate-limit-service.ts`](../src/services/rate-limit/rate-limit-service.ts)
-(the counter), [`src/lib/http/rate-limited.ts`](../src/lib/http/rate-limited.ts)
+**Code:** [`src/domain/rate-limit.ts`](../src/domain/rate-limit.ts)
+(pure arithmetic), [`src/services/rate-limit-service.ts`](../src/services/rate-limit-service.ts)
+(the counter), [`src/lib/rate-limited.ts`](../src/lib/rate-limited.ts)
 (the HTTP wrapper). **Tests:** `tests/unit/rate-limit-rules.test.ts`,
 `tests/db/rate-limit.test.ts`.
 

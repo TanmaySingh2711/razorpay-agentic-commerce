@@ -2,15 +2,15 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   decidePurchase,
   type ProductDecisionDeps,
-} from "@/services/product-decision/product-decision-service";
+} from "@/services/product-decision-service";
 import {
   createTrustedQuote,
   supersedeActiveQuotes,
   validateQuoteForUse,
   type QuoteServiceDeps,
-} from "@/services/quote/quote-service";
-import { createServiceCatalogReader } from "@/services/buyer-agent/catalog-reader";
-import { getTransactionHistory } from "@/services/transaction/transition-service";
+} from "@/services/quote-service";
+import { createServiceCatalogReader } from "@/services/catalog-reader";
+import { getTransactionHistory } from "@/services/transition-service";
 import { fixedClock, type MutableClock } from "@/lib/clock";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import {

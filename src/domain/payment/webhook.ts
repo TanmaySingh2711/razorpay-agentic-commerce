@@ -113,8 +113,6 @@ export const razorpayWebhookSchema = z.object({
   }),
 });
 
-export type RazorpayWebhookEvent = z.infer<typeof razorpayWebhookSchema>;
-
 /**
  * Refund events this system acts on.
  *

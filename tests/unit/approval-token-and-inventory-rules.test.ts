@@ -1,8 +1,5 @@
 import { readFileSync } from "node:fs";
-import {
-  describeReservationRefusal,
-  RESERVATION_REFUSALS,
-} from "@/domain/inventory/contracts";
+import { describeReservationRefusal, RESERVATION_REFUSALS } from "@/domain/inventory";
 import { describe, expect, it } from "vitest";
 import {
   approvalTokenMatches,
@@ -10,19 +7,14 @@ import {
   issueApprovalToken,
   NONCE_HASH_LENGTH,
 } from "@/domain/approval/token";
-import {
-  canReserve,
-  isReservationExpired,
-  reservableQuantity,
-} from "@/domain/inventory/rules";
 
 /**
- * The two pure pieces of Objective 8: the approval credential, and the
- * arithmetic of what is left in stock.
+ * The pure pieces of Objective 8: the approval credential, and what a refused
+ * stock hold tells the buyer.
  *
- * Neither needs a database, and both are where the objective's guarantees
- * actually live - a token that is guessable or an availability sum that is off
- * by one cannot be rescued by anything downstream.
+ * Neither needs a database. The stock arithmetic itself is enforced by atomic
+ * SQL in the reservation service and is proved against PostgreSQL in
+ * `tests/db/approval-and-reservation.test.ts`.
  */
 
 describe("the approval token", () => {
@@ -90,51 +82,6 @@ describe("the approval token", () => {
       .join("\n");
     expect(code).not.toMatch(/Math\.random\(/);
     expect(code).not.toMatch(/Date\.now\(/);
-  });
-});
-
-describe("reservable stock", () => {
-  it("is on-hand inventory minus what is already held", () => {
-    expect(reservableQuantity(10, 0)).toBe(10);
-    expect(reservableQuantity(10, 4)).toBe(6);
-    expect(reservableQuantity(1, 1)).toBe(0);
-  });
-
-  it("never reports a negative figure", () => {
-    // Should be unreachable - a CHECK constraint forbids it - but a negative
-    // "available" would read as stock rather than as a broken row.
-    expect(reservableQuantity(2, 5)).toBe(0);
-  });
-
-  it("permits a claim only when enough is genuinely free", () => {
-    expect(canReserve(1, 0, 1, true)).toBe(true);
-    expect(canReserve(1, 1, 1, true)).toBe(false);
-    expect(canReserve(5, 3, 2, true)).toBe(true);
-    expect(canReserve(5, 3, 3, true)).toBe(false);
-  });
-
-  it("refuses a product nobody may buy, however much is on the shelf", () => {
-    expect(canReserve(100, 0, 1, false)).toBe(false);
-  });
-
-  it("refuses a nonsensical quantity", () => {
-    for (const quantity of [0, -1, 1.5, Number.NaN]) {
-      expect(canReserve(100, 0, quantity, true)).toBe(false);
-    }
-  });
-});
-
-describe("the reservation expiry boundary", () => {
-  const expiresAt = new Date("2026-07-01T10:00:00.000Z");
-
-  it("is inclusive: at the stamped instant the hold is already over", () => {
-    // The same boundary a quote uses. Two expiry rules differing by one
-    // millisecond is a bug nobody finds until it is a disputed charge.
-    expect(isReservationExpired(expiresAt, new Date(expiresAt.getTime() - 1))).toBe(
-      false,
-    );
-    expect(isReservationExpired(expiresAt, expiresAt)).toBe(true);
-    expect(isReservationExpired(expiresAt, new Date(expiresAt.getTime() + 1))).toBe(true);
   });
 });
 

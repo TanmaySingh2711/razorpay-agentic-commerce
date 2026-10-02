@@ -1,18 +1,15 @@
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
-import { getTransactionAuditHistory } from "@/services/audit/audit-service";
-import { readActiveQuote } from "@/services/quote/quote-reader";
-import { readRecordedEvaluation } from "@/services/policy/policy-reader";
-import { readRetryStatus } from "@/services/payment/retry-service";
-import {
-  assembleSafetyPassport,
-  readPassportRows,
-} from "@/services/safety/passport-service";
+import { getTransactionAuditHistory } from "@/services/audit-service";
+import { readActiveQuote } from "@/services/quote-reader";
+import { readRecordedEvaluation } from "@/services/policy-reader";
+import { readRetryStatus } from "@/services/retry-service";
+import { assembleSafetyPassport, readPassportRows } from "@/services/passport-service";
 import { toQuoteDto } from "@/domain/quote/rules";
-import { readRefund } from "@/services/refund/refund-service";
-import type { RefundView } from "@/domain/refund/contracts";
-import type { AuditTimelineEntry } from "@/services/audit/audit-service";
-import type { SafetyPassportViewModel } from "@/domain/safety/passport";
+import { readRefund } from "@/services/refund-service";
+import type { RefundView } from "@/domain/refund";
+import type { AuditTimelineEntry } from "@/services/audit-service";
+import type { SafetyPassportViewModel } from "@/domain/safety-passport";
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { QuoteDto } from "@/domain/quote/rules";
 import type { RetryStatusDto } from "@/domain/payment/retry";

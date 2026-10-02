@@ -1,6 +1,6 @@
 import { handleStartCheckout } from "@/app/api/payments/handler";
-import { withRateLimit } from "@/lib/http/rate-limited";
-import { limitPaymentRequest } from "@/services/rate-limit/rate-limit-service";
+import { withRateLimit } from "@/lib/rate-limited";
+import { limitPaymentRequest } from "@/services/rate-limit-service";
 
 /**
  * Node runtime because Prisma and the Razorpay adapter are server-only, and

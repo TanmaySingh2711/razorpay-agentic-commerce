@@ -1,10 +1,10 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import {
   normaliseInsightCategory,
   type AgentRequestOutcome,
-} from "@/domain/agent-request/outcomes";
+} from "@/domain/agent-request";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -20,7 +20,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * What is stored is the *structured* shape of the request - category, budget,
  * outcome, cost - and never the sentence the shopper typed.
  */
-assertServerOnly("src/services/insights/agent-request-log.ts");
+assertServerOnly("src/services/agent-request-log.ts");
 
 const log = createLogger({ category: "agent" });
 

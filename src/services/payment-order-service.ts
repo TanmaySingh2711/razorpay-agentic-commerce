@@ -1,13 +1,13 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
-import { getRazorpayCredentials } from "@/config/env";
+import { getPrismaClient } from "@/integrations/prisma-client";
+import { getRazorpayCredentials } from "@/lib/env";
 import { systemClock, type Clock } from "@/lib/clock";
 import { createLogger } from "@/lib/logger";
-import { readActiveQuote } from "@/services/quote/quote-reader";
-import { recheckPolicyAuthorization } from "@/services/policy/authorization-recheck";
-import { applyTransactionEventWithin } from "@/services/transaction/transition-service";
-import { recordAuditEvent } from "@/services/audit/audit-service";
-import { createRazorpayProvider } from "@/integrations/payments/razorpay-provider";
+import { readActiveQuote } from "@/services/quote-reader";
+import { recheckPolicyAuthorization } from "@/services/authorization-recheck";
+import { applyTransactionEventWithin } from "@/services/transition-service";
+import { recordAuditEvent } from "@/services/audit-service";
+import { createRazorpayProvider } from "@/integrations/razorpay-provider";
 import { assessPayableAmount, deriveReceipt } from "@/domain/payment/rules";
 import { isSafelyRetryable } from "@/domain/payment/provider";
 import { InfrastructureError } from "@/domain/errors";
@@ -23,7 +23,7 @@ import type {
   ProviderOrder,
 } from "@/domain/payment/provider";
 import type { QuoteInvalidationReason } from "@/domain/quote/rules";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { TransactionState } from "@/domain/transaction/states";
 import type { JsonObject } from "@/lib/json";
 import type { PaymentAttempt, PrismaClient } from "@/generated/prisma/client";
@@ -62,7 +62,7 @@ import type { PaymentAttempt, PrismaClient } from "@/generated/prisma/client";
  * is not in the request body, so a caller cannot supply one; there is no
  * parameter for it, so a future caller cannot start.
  */
-assertServerOnly("src/services/payment/payment-order-service.ts");
+assertServerOnly("src/services/payment-order-service.ts");
 
 /** The actor the state machine permits to move a transaction on a payment event. */
 const PAYMENT_ACTOR = "payment_provider" as const;
@@ -186,7 +186,7 @@ export interface CreatePaymentOrderCommand {
    * The HTTP boundary cannot produce one. Both payment routes parse with
    * `z.strictObject`, so a request carrying `retry` is a 400 rather than a
    * field that is quietly honoured; the only constructor is
-   * `@/services/payment/retry-service`, which builds it from persisted rows
+   * `@/services/retry-service`, which builds it from persisted rows
    * after the gate has passed.
    */
   readonly retry?: RetryAuthorization;
@@ -252,7 +252,7 @@ export async function createPaymentOrder(
   // still ACTIVE and already rebound to the fresh quote (see
   // `src/domain/transaction/transitions.ts`, the `AUTHORIZED` block). Either
   // starting state is only ever paired with `retry` by
-  // `@/services/payment/retry-service`, never by an ordinary first order.
+  // `@/services/retry-service`, never by an ordinary first order.
   const requiredState =
     retry === undefined
       ? "INVENTORY_RESERVED"
@@ -922,7 +922,7 @@ async function readFinalizedAttempt(
  *    order has not failed a payment - no payment was ever attempted - so
  *    recording PAYMENT_FAILED here would consume one of the buyer's bounded
  *    attempts for something that never reached a payment form. The retry gate
- *    in @/services/payment/retry-service owns that decision, and it counts
+ *    in @/services/retry-service owns that decision, and it counts
  *    attempt rows, which this path does create; that is the honest accounting,
  *    because a provider order really was claimed.
  */

@@ -8,7 +8,7 @@ import {
   getRazorpayCredentials,
   getRuntimeConfig,
   type EnvSource,
-} from "@/config/env";
+} from "@/lib/env";
 import { ConfigurationError } from "@/domain/errors";
 
 const EMPTY_ENV: EnvSource = {};
@@ -219,7 +219,7 @@ describe("deployment configuration", () => {
    * The file with its comments removed.
    *
    * Both scans below look for a bare variable name, and both would otherwise
-   * be answered by prose: `src/config/env.ts` documents at length that nothing
+   * be answered by prose: `src/lib/env.ts` documents at length that nothing
    * may be prefixed `NEXT_PUBLIC_`, and a comment saying so must not read as
    * the violation it warns about. Stripping comments first means these tests
    * search code, which is the only place the mistake can actually be made.
@@ -259,7 +259,7 @@ describe("a blank numeric setting means the default", () => {
   // as 0 - so a fresh clone configured exactly as documented used to fail its
   // first quote with CONFIG_INVALID.
   it("reads NAME= as unset for every timing window", async () => {
-    const env = await import("@/config/env");
+    const env = await import("@/lib/env");
     expect(env.getQuoteConfig({ QUOTE_TTL_SECONDS: "" }).QUOTE_TTL_SECONDS).toBe(300);
     expect(
       env.getApprovalConfig({ APPROVAL_TTL_SECONDS: "  " }).APPROVAL_TTL_SECONDS,
@@ -271,7 +271,7 @@ describe("a blank numeric setting means the default", () => {
   });
 
   it("accepts every blank line .env.example actually ships", async () => {
-    const env = await import("@/config/env");
+    const env = await import("@/lib/env");
     const blanks = Object.fromEntries(
       readFileSync(".env.example", "utf8")
         .split(/\r?\n/)
@@ -286,7 +286,7 @@ describe("a blank numeric setting means the default", () => {
   });
 
   it("still refuses a value that is present and out of range", async () => {
-    const env = await import("@/config/env");
+    const env = await import("@/lib/env");
     expect(() => env.getQuoteConfig({ QUOTE_TTL_SECONDS: "5" })).toThrow(
       /QUOTE_TTL_SECONDS/,
     );

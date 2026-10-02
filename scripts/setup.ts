@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
  *   3. creates `.env.local` from `.env.example` if there is none;
  *   4. makes sure a local PostgreSQL is listening - one that is already running
  *      is used as it is, otherwise the Docker container from
- *      `docker/docker-compose.yml` is started;
+ *      `.config/docker-compose.yml` is started;
  *   5. prepares the disposable test schema (`npm run db:test:setup`);
  *   6. creates, migrates and seeds the development database
  *      (`npm run db:dev:setup`).
@@ -45,7 +45,7 @@ import { dirname, join } from "node:path";
 const ROOT = process.cwd();
 const DEFAULT_TEST_URL =
   "postgresql://razorpay:razorpay_local_test@localhost:5432/razorpay_agentic_test?sslmode=disable";
-const COMPOSE_FILE = "docker/docker-compose.yml";
+const COMPOSE_FILE = ".config/docker-compose.yml";
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 function step(message: string): void {

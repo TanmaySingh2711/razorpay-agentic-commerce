@@ -1,8 +1,8 @@
 import { config as loadEnv } from "dotenv";
-import { createGeminiProvider } from "../src/integrations/llm/gemini-provider";
-import { createServiceCatalogReader } from "../src/services/buyer-agent/catalog-reader";
-import { runBuyerAgent } from "../src/services/buyer-agent/buyer-agent-service";
-import { disconnectPrismaClient } from "../src/integrations/persistence/client";
+import { createGeminiProvider } from "../src/integrations/gemini-provider";
+import { createServiceCatalogReader } from "../src/services/catalog-reader";
+import { runBuyerAgent } from "../src/services/buyer-agent-service";
+import { disconnectPrismaClient } from "../src/integrations/prisma-client";
 import {
   INTENT_RESPONSE_JSON_SCHEMA,
   structuredPurchaseIntentSchema,
@@ -14,12 +14,12 @@ import {
 import {
   INTENT_EXTRACTION_INSTRUCTION,
   PRODUCT_SELECTION_INSTRUCTION,
-} from "../src/services/buyer-agent/instructions";
+} from "../src/services/buyer-agent-instructions";
 import {
   CATALOG_TOOL_DECLARATIONS,
   executeCatalogTool,
-} from "../src/services/buyer-agent/catalog-tools";
-import type { AiToolResult } from "../src/integrations/llm/provider";
+} from "../src/services/catalog-tools";
+import type { AiToolResult } from "../src/integrations/ai-provider";
 import type { JsonObject } from "../src/lib/json";
 
 loadEnv({ path: ".env.local", quiet: true });

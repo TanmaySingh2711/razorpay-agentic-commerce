@@ -1,10 +1,10 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { explainAuditEvent } from "@/domain/audit/explanations";
 import { sanitizeAuditPayload } from "@/domain/audit/record";
 import type { AuditActor, AuditRecord, AuditResult } from "@/domain/audit/record";
 import type { AuditEventType } from "@/domain/audit-event";
-import type { TransactionCapableClient } from "@/services/transaction/transition-service";
+import type { TransactionCapableClient } from "@/services/transition-service";
 import type { JsonObject } from "@/lib/json";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -37,7 +37,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * be sampled, rotated and dropped; these rows may not. A future payment module
  * uses this service, not that one, for anything a buyer could later dispute.
  */
-assertServerOnly("src/services/audit/audit-service.ts");
+assertServerOnly("src/services/audit-service.ts");
 
 export interface AuditEventCommand {
   /** Null only for events that precede a transaction existing. */

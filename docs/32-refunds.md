@@ -5,8 +5,8 @@ page. It is the payment flow's discipline pointed the other way: nothing
 financial comes from the caller, the money goes back at most once, and a lost
 provider answer is settled by reading, never by asking again.
 
-**Code:** [`src/domain/refund/contracts.ts`](../src/domain/refund/contracts.ts)
-(eligibility, pure), [`src/services/refund/refund-service.ts`](../src/services/refund/refund-service.ts),
+**Code:** [`src/domain/refund.ts`](../src/domain/refund.ts)
+(eligibility, pure), [`src/services/refund-service.ts`](../src/services/refund-service.ts),
 the Razorpay adapter's `createRefund` / `findRefundByReceipt`, and the refund
 branch of the webhook service. **Tests:** `tests/unit/refund-rules.test.ts`
 (rules and the adapter's HTTP contract), `tests/db/refund.test.ts` (the whole

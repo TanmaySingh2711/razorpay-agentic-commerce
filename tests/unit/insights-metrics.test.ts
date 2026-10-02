@@ -7,12 +7,12 @@ import {
   percentile,
   rate,
   unmetDemand,
-} from "@/domain/insights/metrics";
+} from "@/domain/insights";
 import {
   AGENT_REQUEST_OUTCOMES,
   MAX_INSIGHT_CATEGORY_LENGTH,
   normaliseInsightCategory,
-} from "@/domain/agent-request/outcomes";
+} from "@/domain/agent-request";
 
 /**
  * The merchant dashboard's arithmetic. Pure, so every edge - empty input, a

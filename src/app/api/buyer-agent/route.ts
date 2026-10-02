@@ -1,6 +1,6 @@
 import { handleBuyerAgentRequest } from "@/app/api/buyer-agent/handler";
-import { withRateLimit } from "@/lib/http/rate-limited";
-import { limitAgentRequest } from "@/services/rate-limit/rate-limit-service";
+import { withRateLimit } from "@/lib/rate-limited";
+import { limitAgentRequest } from "@/services/rate-limit-service";
 
 /**
  * The Buyer Agent endpoint.

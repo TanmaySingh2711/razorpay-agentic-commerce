@@ -137,7 +137,7 @@ not name what anything costs.
 
 Every mutating request body is a `z.strictObject`, so an unexpected field is a
 rejection rather than something quietly ignored. The server actions in
-`src/app/actions/purchase.ts` accept a sentence and a transaction id, and there
+`src/app/actions.ts` accept a sentence and a transaction id, and there
 is deliberately nowhere in their signatures to put an amount, a product id, a
 policy result or a retry count. Callback verification uses the order id **this
 server stored**, never the one the browser returned — see §10.
@@ -578,7 +578,7 @@ Concurrency is handled with two idioms throughout, both of which fail closed:
 Both run inside `prisma.$transaction`, so a partial write is not a state the
 system can be left in.
 
-Full detail: [16 — Database](./16-database.md), [08 — Data model](./history/08-data-model.md).
+Full detail: [16 — Database](./16-database.md).
 
 ---
 

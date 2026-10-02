@@ -7,8 +7,8 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "incremental": true,
-    /* Build caches live in .cache/, never loose in the repository root. */
-    "tsBuildInfoFile": ".cache/tsconfig.tsbuildinfo",
+    /* Kept with the other tool caches, out of the repository root. */
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

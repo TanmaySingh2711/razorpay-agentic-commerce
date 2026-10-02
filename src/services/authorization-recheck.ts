@@ -1,13 +1,10 @@
 import { assertServerOnly } from "@/lib/server-only";
-import { getPrismaClient } from "@/integrations/persistence/client";
+import { getPrismaClient } from "@/integrations/prisma-client";
 import { systemClock, type Clock } from "@/lib/clock";
 import { assessQuote, type QuoteSnapshot } from "@/domain/quote/rules";
 import { evaluatePolicy } from "@/domain/policy/engine";
 import { toPolicyDecisionDto, type PolicyDecisionDto } from "@/domain/policy/decision";
-import {
-  loadPolicySnapshot,
-  readRecordedEvaluation,
-} from "@/services/policy/policy-reader";
+import { loadPolicySnapshot, readRecordedEvaluation } from "@/services/policy-reader";
 import type { CurrencyCode } from "@/domain/money";
 import type { JsonObject } from "@/lib/json";
 import type { TransactionState } from "@/domain/transaction/states";
@@ -34,7 +31,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * Everything it can return other than AUTHORIZED is a refusal, and the caller's
  * only correct response to a refusal is to not prepare a payment.
  */
-assertServerOnly("src/services/policy/authorization-recheck.ts");
+assertServerOnly("src/services/authorization-recheck.ts");
 
 /**
  * Why a payment must not be prepared.

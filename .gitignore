@@ -1,66 +1,28 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Installed and generated. Each is rebuilt by a command, never edited by hand.
 /node_modules
-
-# testing
-/coverage
-
-# next.js
 /.next/
-/out/
+/coverage
+# The Prisma client, generated from prisma/schema.prisma by `npm install`.
+# Migrations are NOT ignored - they are reviewable schema history.
+/src/generated
+# Written by Next.js into the project root; its location is not configurable.
+next-env.d.ts
 
-# OS and sync artefacts. `.DS_Store` alone covered macOS while this repository
-# is developed on Windows inside a OneDrive-synced folder, which writes
-# `desktop.ini` into directories it manages and `Thumbs.db` when Explorer
-# renders a folder. None are useful to a reviewer and all are easy to commit
-# by accident with `git add -A`.
-.DS_Store
-Thumbs.db
-ehthumbs.db
-desktop.ini
-*.lnk
-
-# Keys and certificates. Never a tracked file, whatever the extension.
-*.pem
-*.key
-*.p12
-*.pfx
-
-# Editor and local tool state. Personal to a machine, not to the project.
-.vscode/
-.idea/
-*.swp
-*~
-
-# debug. The named patterns are what the package managers write; the general
-# rule catches a redirected command's output (`npm run verify > verify.log`),
-# which is the way a log file actually tends to appear in this repository.
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-*.log
-
-# env files - every real secret-bearing file stays untracked.
-# .env.example is the single tracked, credential-free template.
+# Secrets. Every real env file stays untracked; .env.example is the single
+# tracked, credential-free template. Keys and certificates never belong here.
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
-# local tooling caches. Everything a tool regenerates on its own goes under
-# /.cache (the TypeScript build info, for example) rather than loose in the root.
-/.cache
-/.vitest
-
-# Prisma client is generated from prisma/schema.prisma at install/build time.
-# Migrations are NOT ignored - they are reviewable schema history.
-/src/generated
-
-# vercel
+# Local state: the Vercel CLI link, command output redirected to a file
+# (`npm run verify > verify.log`), editor settings, and what Windows, OneDrive
+# and macOS write into a folder they manage.
 .vercel
-
-# typescript. `next-env.d.ts` is written by Next.js into the project root and
-# its location is not configurable; the build info goes to /.cache (tsconfig).
-*.tsbuildinfo
-next-env.d.ts
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -35,8 +35,8 @@ declare const service: { applyTransactionEvent(command: unknown): Promise<{ kind
 `;
 
 const ANY_SERVICE = "src/services/example-service.ts";
-const CREATION_SERVICE = "src/services/transaction/creation-service.ts";
-const TRANSITION_SERVICE = "src/services/transaction/transition-service.ts";
+const CREATION_SERVICE = "src/services/transaction-creation-service.ts";
+const TRANSITION_SERVICE = "src/services/transition-service.ts";
 
 let eslint: ESLint;
 
@@ -183,7 +183,7 @@ describe("transaction write enforcement (ESLint)", () => {
     for (const filePath of [CREATION_SERVICE, TRANSITION_SERVICE]) {
       it(`still forbids process.env in ${filePath}`, async () => {
         const messages = await lint("const x = process.env['DATABASE_URL'];", filePath);
-        expect(messages.join(" ")).toContain("@/config/env");
+        expect(messages.join(" ")).toContain("@/lib/env");
       });
     }
   });
@@ -291,7 +291,7 @@ describe("server-only boundary", () => {
     // at import, before any exported function can be reached.
     vi.resetModules();
     (globalThis as { window?: unknown }).window = {};
-    await expect(import("@/services/transaction/creation-service")).rejects.toThrow(
+    await expect(import("@/services/transaction-creation-service")).rejects.toThrow(
       /browser bundle/,
     );
   });

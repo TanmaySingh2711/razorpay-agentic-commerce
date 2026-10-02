@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import nextConfig from "../../next.config";
-import { checkRequestOrigin } from "@/lib/http/same-origin";
+import { checkRequestOrigin } from "@/lib/same-origin";
 import { handleCreatePaymentOrder, handleRetryPayment } from "@/app/api/payments/handler";
 
 /**

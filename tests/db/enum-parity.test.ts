@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_REQUEST_OUTCOMES } from "@/domain/agent-request/outcomes";
+import { AGENT_REQUEST_OUTCOMES } from "@/domain/agent-request";
 import { PAYMENT_FAILURE_CATEGORIES } from "@/domain/payment/failure";
-import { REFUND_STATUSES } from "@/domain/refund/contracts";
+import { REFUND_STATUSES } from "@/domain/refund";
 import { TRANSACTION_ACTORS, TRANSACTION_STATES } from "@/domain/transaction/states";
 import {
   AgentRequestOutcome,

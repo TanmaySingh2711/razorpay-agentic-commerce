@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- This module is the single sanctioned log sink. */
-import { getRuntimeConfig } from "@/config/env";
+import { getRuntimeConfig } from "@/lib/env";
 import type { JsonObject } from "@/lib/json";
 import { redact } from "@/lib/redact";
 

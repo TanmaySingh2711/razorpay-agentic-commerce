@@ -1,13 +1,13 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { MAX_PAYMENT_ATTEMPTS } from "@/domain/payment/retry";
-import { buildSafetyPassport, countPassportEvidence } from "@/domain/safety/passport";
+import { buildSafetyPassport, countPassportEvidence } from "@/domain/safety-passport";
 import type {
   PassportAttemptFact,
   PassportQuoteFact,
   PassportTimelineEntry,
   SafetyPassportFacts,
   SafetyPassportViewModel,
-} from "@/domain/safety/passport";
+} from "@/domain/safety-passport";
 import type { CurrencyCode } from "@/domain/money";
 import type { PaymentFailureCategory } from "@/domain/payment/failure";
 import type { PolicyDecisionKind } from "@/domain/policy/decision";
@@ -20,7 +20,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  *
  * Two responsibilities and no others: fetch the authoritative rows the passport
  * is entitled to speak about, and hand them to the pure builder. There is no
- * interpretation here — every claim is decided in `@/domain/safety/passport`,
+ * interpretation here — every claim is decided in `@/domain/safety-passport`,
  * where it can be tested without a database.
  *
  * ## Strictly read-only, like the overview it feeds
@@ -36,7 +36,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * place the truth lives, and the first time the two disagreed the passport
  * would be worse than useless — it would be confidently wrong.
  */
-assertServerOnly("src/services/safety/passport-service.ts");
+assertServerOnly("src/services/passport-service.ts");
 
 /** The extra rows the passport needs beyond what the overview already reads. */
 export interface PassportRows {

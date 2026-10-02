@@ -3,11 +3,11 @@ import { assertServerOnly } from "@/lib/server-only";
 import { SUPPORTED_CURRENCIES } from "@/domain/money";
 import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
 import { parseProductId } from "@/domain/catalog/query";
-import type { CatalogReader } from "@/services/buyer-agent/catalog-reader";
+import type { CatalogReader } from "@/services/catalog-reader";
 import { InvalidToolArgumentsError, UnknownToolError } from "@/domain/buyer-agent/errors";
 import type { CatalogProductDto } from "@/domain/catalog/contracts";
 import type { JsonObject, JsonValue } from "@/lib/json";
-import type { AiToolDeclaration } from "@/integrations/llm/provider";
+import type { AiToolDeclaration } from "@/integrations/ai-provider";
 
 /**
  * The complete set of capabilities the model has.
@@ -29,7 +29,7 @@ import type { AiToolDeclaration } from "@/integrations/llm/provider";
  * add a network hop, a second authentication surface, and a second copy of the
  * query rules to keep in sync — for nothing.
  */
-assertServerOnly("src/services/buyer-agent/catalog-tools.ts");
+assertServerOnly("src/services/catalog-tools.ts");
 
 /** How many products one search may hand the model. */
 export const MAX_TOOL_RESULT_PRODUCTS = 12;
@@ -42,8 +42,6 @@ export const CATALOG_TOOL_NAMES = [
   "get_product_by_id",
   "get_merchant_info",
 ] as const;
-
-export type CatalogToolName = (typeof CATALOG_TOOL_NAMES)[number];
 
 /**
  * Names that must never become tools.

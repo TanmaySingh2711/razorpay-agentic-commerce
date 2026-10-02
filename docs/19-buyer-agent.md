@@ -17,7 +17,7 @@ The earlier roadmap named Anthropic. That is no longer the runtime provider.
 | Credential  | `GEMINI_API_KEY`                                               |
 
 Both values are read **only** through the config boundary in
-[`src/config/env.ts`](../src/config/env.ts), validated lazily so the app still
+[`src/lib/env.ts`](../src/lib/env.ts), validated lazily so the app still
 boots and tests without a key. The key is server-only: it is never a
 `NEXT_PUBLIC_*` variable, never sent to a client component, never logged, and
 never included in a response. The Anthropic configuration section has been
@@ -41,10 +41,10 @@ so switching models is an environment change, not a code change.
 Buyer Agent  →  AiProvider (ours)  →  Gemini adapter  →  @google/genai
 ```
 
-[`src/integrations/llm/gemini-provider.ts`](../src/integrations/llm/gemini-provider.ts)
+[`src/integrations/gemini-provider.ts`](../src/integrations/gemini-provider.ts)
 is the only file in the repository that imports `@google/genai`, and the only
 one that knows what an "interaction" is. Everything above it speaks
-[`AiProvider`](../src/integrations/llm/provider.ts) — our own
+[`AiProvider`](../src/integrations/ai-provider.ts) — our own
 `AiToolDeclaration`, `AiToolCall`, `AiGenerationResponse`. No Gemini type
 reaches the domain or application layer.
 
@@ -190,7 +190,7 @@ Three tools. That is the entire capability surface.
 | `get_merchant_info` | none                                                                  |
 
 They reuse the Objective 4 catalog service in-process through a narrow
-[`CatalogReader`](../src/services/buyer-agent/catalog-reader.ts) port — one set
+[`CatalogReader`](../src/services/catalog-reader.ts) port — one set
 of visibility rules, one price authority, no duplicated query logic and no HTTP
 hop from the server back into its own API.
 

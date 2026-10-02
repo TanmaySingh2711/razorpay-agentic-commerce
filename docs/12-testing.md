@@ -84,7 +84,7 @@ foundation tests still pass on a fresh clone with zero credentials. See
 [16](./16-database.md).
 
 The schema lives in the local Docker PostgreSQL described by
-`docker/docker-compose.yml`, addressed by `TEST_DIRECT_URL`. That is not a preference,
+`.config/docker-compose.yml`, addressed by `TEST_DIRECT_URL`. That is not a preference,
 it is roughly a fortyfold difference: the same five suites took **616s** against
 the hosted database and **15s** locally, because every fixture makes dozens of
 sequential round trips and a hosted database charges network latency for each
@@ -142,10 +142,10 @@ Gemini, real hosted catalog, no writes of any kind. See
 
 The runner is split so each half gets the scheduling it needs:
 
-| Project | Files           | Parallel | Why                                                    |
-| ------- | --------------- | -------- | ------------------------------------------------------ |
-| `unit`  | `tests/unit/**` | yes      | No shared state. 811 tests, seconds.                   |
-| `db`    | `tests/db/**`   | **no**   | 429 tests sharing one schema, truncated between tests. |
+| Project | Files           | Parallel | Why                                              |
+| ------- | --------------- | -------- | ------------------------------------------------ |
+| `unit`  | `tests/unit/**` | yes      | No shared state. Fast.                           |
+| `db`    | `tests/db/**`   | **no**   | Tests share one schema, truncated between tests. |
 
 Per-worker schemas would let the database files run concurrently too, but that
 means provisioning and migrating N schemas per run and teaching the disposable-
@@ -196,6 +196,7 @@ npm run db:dev:setup    # create + migrate + seed the local DEVELOPMENT database
 npm run db:dev:health   # is the development database accepting connections?
 npm run test            # single run
 npm run test:watch      # watch mode
+npm run test:coverage   # single run + coverage report (text, and HTML in coverage/)
 npm run verify          # typecheck + lint + test + build (fully local)
 npm run format:check    # formatting, kept separate from verify
 ```
@@ -232,7 +233,7 @@ client; the same commands on a cold runner prove it passes without any of that.
 **Why no Docker service container.** GitHub offers service containers on Linux
 runners only - macOS runners have no Docker, and Windows runners cannot run
 Linux images. `ikalnytskyi/action-setup-postgres` installs PostgreSQL **17**
-natively on all three, the same major version `docker/docker-compose.yml` pins, so the
+natively on all three, the same major version `.config/docker-compose.yml` pins, so the
 three operating systems test the same database.
 
 **What CI is not allowed to reach.** No Neon, no Gemini, no Razorpay, no Vercel,

@@ -5,8 +5,8 @@ import {
   OVERALL_REQUEST_BUDGET_MS,
   runBuyerAgent,
   type BuyerAgentDeps,
-} from "@/services/buyer-agent/buyer-agent-service";
-import { GEMINI_TIMEOUT_MS } from "@/integrations/llm/gemini-provider";
+} from "@/services/buyer-agent-service";
+import { GEMINI_TIMEOUT_MS } from "@/integrations/gemini-provider";
 import {
   AiProviderRateLimitedError,
   AiProviderRequestBudgetExceededError,
@@ -18,7 +18,7 @@ import type {
   AiGenerationResponse,
   AiProvider,
   AiToolResponseRequest,
-} from "@/integrations/llm/provider";
+} from "@/integrations/ai-provider";
 import {
   createFakeAiProvider,
   createInMemoryCatalogReader,

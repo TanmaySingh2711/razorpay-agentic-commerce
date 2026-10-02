@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BuyerConsole } from "@/components/buyer/buyer-console";
+import { BuyerConsole } from "@/components/buyer-console";
 import { SiteHeader } from "@/components/site-header";
 
 /**
@@ -17,7 +17,7 @@ import { SiteHeader } from "@/components/site-header";
  * what comes back.
  *
  * `maxDuration` bounds that server action (`submitRequest`, in
- * `src/app/actions/purchase.ts`), which is where it invokes the Buyer Agent.
+ * `src/app/actions.ts`), which is where it invokes the Buyer Agent.
  * Next.js reads a Server Action's execution limit from the route segment that
  * invokes it, not from the action's own file, so it is declared here.
  *

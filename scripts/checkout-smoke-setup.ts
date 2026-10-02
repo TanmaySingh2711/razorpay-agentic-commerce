@@ -1,13 +1,13 @@
 import { config as loadEnv } from "dotenv";
-import { getPrismaClient } from "../src/integrations/persistence/client";
-import { createTransaction } from "../src/services/transaction/creation-service";
-import { applyTransactionEvent } from "../src/services/transaction/transition-service";
-import { createTrustedQuote } from "../src/services/quote/quote-service";
-import { evaluateQuotePolicy } from "../src/services/policy/policy-service";
-import { reserveInventory } from "../src/services/inventory/reservation-service";
-import { createPaymentOrder } from "../src/services/payment/payment-order-service";
-import { createRazorpayProvider } from "../src/integrations/payments/razorpay-provider";
-import { getRazorpayCredentials } from "../src/config/env";
+import { getPrismaClient } from "../src/integrations/prisma-client";
+import { createTransaction } from "../src/services/transaction-creation-service";
+import { applyTransactionEvent } from "../src/services/transition-service";
+import { createTrustedQuote } from "../src/services/quote-service";
+import { evaluateQuotePolicy } from "../src/services/policy-service";
+import { reserveInventory } from "../src/services/reservation-service";
+import { createPaymentOrder } from "../src/services/payment-order-service";
+import { createRazorpayProvider } from "../src/integrations/razorpay-provider";
+import { getRazorpayCredentials } from "../src/lib/env";
 import { systemClock } from "../src/lib/clock";
 
 loadEnv({ path: ".env.local", quiet: true });

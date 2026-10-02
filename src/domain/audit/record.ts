@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AUDIT_EVENT_TYPES, type AuditEventType } from "@/domain/audit-event";
-import { TRANSACTION_ACTORS, type TransactionActor } from "@/domain/transaction/states";
+import type { AuditEventType } from "@/domain/audit-event";
+import type { TransactionActor } from "@/domain/transaction/states";
 import { isSensitiveKey } from "@/lib/redact";
 import { MAX_PROVIDER_REFERENCE_LENGTH } from "@/domain/payment/rules";
 import { ValidationError } from "@/domain/errors";
@@ -522,7 +522,3 @@ export interface AuditRecord {
   readonly operationKey: string | null;
   readonly decisionId: string | null;
 }
-
-export const auditActorSchema = z.enum(TRANSACTION_ACTORS);
-export const auditActionSchema = z.enum(AUDIT_EVENT_TYPES);
-export const auditResultSchema = z.enum(AUDIT_RESULTS);
