@@ -463,6 +463,7 @@ This runs the type check, the linter, all tests, and a production build. It take
 
 - Tests run only on your machine. Calls to Gemini, Razorpay, or any outside address are blocked during tests.
 - Database tests use a real local PostgreSQL, in a separate schema that is emptied between tests.
+- `npm run test:coverage` runs the same tests and prints a coverage report. An HTML version is written to `coverage/`, which Git ignores.
 - CI runs the lint, type check, tests, and the one-click setup on Ubuntu, macOS, and Windows.
 
 ## Docker
