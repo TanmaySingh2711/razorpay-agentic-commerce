@@ -4,8 +4,8 @@ import { SiteFooter, SiteHeader } from "@/components/site-header";
 /**
  * The overview: what this is, in one screen, and the one idea behind it.
  *
- * Everything deeper - the flowcharts, the safety rules, the work behind the
- * project - lives on /how-it-works, so this page stays short enough to read
+ * Everything deeper - the flowcharts and the safety rules - lives on
+ * /how-it-works, so this page stays short enough to read
  * before trying the shop.
  */
 export const metadata = {

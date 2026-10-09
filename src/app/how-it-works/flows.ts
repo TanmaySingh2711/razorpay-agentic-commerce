@@ -159,12 +159,7 @@ export const PURCHASE_FLOW: readonly FlowItem[] = [
 ];
 
 export const DASHBOARD_MAP: readonly FlowItem[] = [
-  node(
-    "person",
-    "Overview",
-    "What this is, how the AI is built, and the work behind it.",
-    "/",
-  ),
+  node("person", "Overview", "What this is, and the one idea behind it.", "/"),
   node(
     "ai",
     "Shop",

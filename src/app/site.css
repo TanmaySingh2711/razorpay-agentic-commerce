@@ -394,8 +394,6 @@ h2.section-title {
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .pipeline-step,
-    .effort-stat,
-    .doc-index > li,
     .flow-node,
     .flow-branch-label,
     .safety-grid > li {
@@ -406,7 +404,7 @@ h2.section-title {
   }
 }
 
-/* --- 01 Overview ---------------------------------------------------------- */
+/* --- Overview ---------------------------------------------------------- */
 
 .hero {
   padding: 2.5rem 0 3.5rem;
@@ -549,163 +547,7 @@ h2.section-title {
   }
 }
 
-/* The work behind it */
-
-.effort-grid {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 3rem;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-}
-
-@media (max-width: 60rem) {
-  .effort-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.effort-stat {
-  position: relative;
-  display: grid;
-  align-content: start;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 1.4rem 1.25rem 1.5rem;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-/* A red registration mark on each tile's corner. */
-.effort-stat::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid var(--red);
-  border-left: 2px solid var(--red);
-}
-
-.effort-value {
-  font-family: var(--font-mono);
-  font-size: clamp(1.9rem, 1.2rem + 2vw, 2.75rem);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.effort-label {
-  margin-top: 0.4rem;
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
-.effort-note {
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-.effort-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
-  gap: 2.5rem;
-}
-
-@media (max-width: 52rem) {
-  .effort-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-h3.mini-title {
-  margin: 0 0 0.9rem;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.check-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem;
-}
-
-.check-list li {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin: 0;
-  padding: 0.45rem 0;
-  border-bottom: 1px dashed var(--border);
-  font-size: 0.92rem;
-}
-
-.check-list li::before {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  flex: none;
-  background: var(--red);
-}
-
-.tag-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.tag-list li {
-  margin: 0;
-  padding: 0.3rem 0.55rem;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--pill);
-}
-
-.doc-index {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  columns: 2 15rem;
-  column-gap: 1.75rem;
-}
-
-.doc-index li {
-  margin: 0;
-  break-inside: avoid;
-}
-
-.doc-index a {
-  display: flex;
-  gap: 0.65rem;
-  padding: 0.42rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-  color: var(--foreground);
-  text-decoration: none;
-  transition:
-    color 0.2s var(--ease),
-    padding-left 0.25s var(--ease-out);
-}
-
-.doc-index a:hover {
-  color: var(--red-bright);
-  padding-left: 0.35rem;
-}
-
-/* --- 02 Shop -------------------------------------------------------------- */
+/* --- Shop -------------------------------------------------------------- */
 
 .shop-layout {
   display: grid;
@@ -810,7 +652,7 @@ h3.mini-title {
   color: var(--red-bright);
 }
 
-/* --- 03 How it works: flowcharts ----------------------------------------- */
+/* --- How it works: flowcharts ----------------------------------------- */
 
 .jump-nav {
   display: flex;
@@ -1208,7 +1050,7 @@ h3.mini-title {
   margin-top: 0;
 }
 
-/* --- 04 History ----------------------------------------------------------- */
+/* --- History ----------------------------------------------------------- */
 
 .history-summary {
   display: grid;

@@ -319,7 +319,7 @@ Other useful commands:
 Other pages, from the top bar:
 
 - **Overview** (`/`) explains what the app is and the idea behind it, in one screen.
-- **How it works** (`/how-it-works`) shows four flowcharts: how the AI is built, how a purchase moves, what each page does, and how to use it. Then come the safety rules and the work behind the project: figures counted from the repository (lines of code, tests, design documents, commits).
+- **How it works** (`/how-it-works`) shows four flowcharts: how the AI is built, how a purchase moves, what each page does, and how to use it. It ends with the safety rules.
 - **History** (`/history`) lists every purchase you opened in this browser, with its current status. **Clear history** forgets the list in this browser; it never deletes anything on the server.
 - **Merchant insights** (`/merchant`) shows the seller's view.
 

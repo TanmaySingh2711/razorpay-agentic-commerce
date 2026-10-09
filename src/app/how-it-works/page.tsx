@@ -1,24 +1,19 @@
 import Link from "next/link";
 import { Flowchart, FlowLegend, type FlowItem } from "@/components/flowchart";
-import { ProjectEffort } from "@/components/project-effort";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
-import { readProjectStats } from "@/lib/project-stats";
 import { AI_FLOW, DASHBOARD_MAP, PURCHASE_FLOW, USER_FLOW } from "./flows";
 
 /**
- * How it works: four flowcharts, the rules that hold them up, and the work
- * that went into the project.
+ * How it works: four flowcharts and the rules that hold them up.
  *
  * This absorbed the old /about page ("Architecture & Safety"), which now
  * redirects here: the seven safety decisions are the last section, after the
  * diagrams that show where each one applies.
  *
- * Prerendered at build time (`force-static`). It reads no database, holds no
- * identifiers, and exposes no configuration. The one thing it reads is the
- * repository itself, while it is being built, to count the work behind it
- * (`readProjectStats`).
+ * Deliberately static. It reads no database, holds no identifiers, and exposes
+ * no configuration - there is nothing here for a visitor to learn about the
+ * deployment.
  */
-export const dynamic = "force-static";
 
 export const metadata = {
   title: "How it works | Razorpay Agentic Commerce",
@@ -97,8 +92,6 @@ const SAFETY = [
 ] as const;
 
 export default function HowItWorksPage() {
-  const stats = readProjectStats();
-
   return (
     <>
       <SiteHeader current="how" />
@@ -118,7 +111,6 @@ export default function HowItWorksPage() {
               </a>
             ))}
             <a href="#safety">Architecture &amp; Safety</a>
-            <a href="#work">The work behind it</a>
           </nav>
         </header>
 
@@ -182,8 +174,6 @@ export default function HowItWorksPage() {
             </p>
           </div>
         </section>
-
-        {stats === null ? null : <ProjectEffort stats={stats} />}
 
         <div className="closing">
           <div className="hero-actions">

@@ -51,7 +51,7 @@ razorpay-agentic-commerce/
 │   │   ├── transaction/[transactionId]/ the authoritative purchase view
 │   │   ├── page.tsx            overview: what this is, in one screen
 │   │   ├── shop/page.tsx       the shop: the one input
-│   │   ├── how-it-works/       four flowcharts (flows.ts), safety rules, the work behind it
+│   │   ├── how-it-works/       four flowcharts (flows.ts) and the safety rules
 │   │   ├── history/page.tsx    purchases this browser opened
 │   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
 │   │   ├── error.tsx           what a page shows when the server cannot finish it
@@ -64,9 +64,7 @@ razorpay-agentic-commerce/
 │   ├── components/
 │   │   ├── site-header.tsx     logo, navigation, Test Mode badge, footer
 │   │   ├── scroll-memory.tsx   Back/Forward return to where each page was left
-│   │   ├── project-effort.tsx  "the work behind it", counted from the repository
 │   │   ├── flowchart.tsx       flowcharts drawn as ordered lists
-│   │   ├── count-up.tsx        figures that count up when scrolled into view
 │   │   ├── purchase-history.tsx the history list, filters and Clear history
 │   │   ├── remember-purchase.tsx saves an opened purchase to the history
 │   │   ├── buyer-console.tsx   the shopping input and conversation
@@ -110,7 +108,6 @@ razorpay-agentic-commerce/
 │   │   ├── clock.ts            injectable time, so expiry is testable
 │   │   ├── json.ts             JSON value model
 │   │   ├── logger.ts           structured operational logging
-│   │   ├── project-stats.ts    the overview's figures, counted from the repo at build
 │   │   ├── purchase-history.ts the browser-side history list and its rules
 │   │   ├── redact.ts           secret and reasoning scrubbing
 │   │   └── server-only.ts      module-scope browser-bundle guard
