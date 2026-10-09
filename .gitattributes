@@ -5,3 +5,4 @@
 # would otherwise rewrite both to whatever the local machine prefers.
 *.sh  text eol=lf
 *.bat text eol=crlf
+*.ps1 text eol=crlf

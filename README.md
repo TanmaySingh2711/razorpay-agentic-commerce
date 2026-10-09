@@ -277,7 +277,7 @@ Start the app:
 npm run dev
 ```
 
-On Windows you can double-click `run_dashboard.bat` instead. It starts the app and opens it in your browser.
+On Windows you can double-click `run_dashboard.bat` instead. Its window opens in the middle of the screen, starts the app, and opens your browser once the app is ready. Press `Esc` in that window to stop the app and close the window.
 
 Then open **http://localhost:3000**.
 

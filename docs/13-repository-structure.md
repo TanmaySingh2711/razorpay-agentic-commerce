@@ -23,6 +23,7 @@ razorpay-agentic-commerce/
 │   └── seed.ts                 idempotent demo seed
 ├── scripts/                    standalone CLI tooling, outside the app runtime
 │   ├── setup.ts                `npm run setup`: the one-click setup, no dependencies
+│   ├── run-dashboard.ps1       run_dashboard.bat's launcher: centres, waits, Esc stops
 │   ├── setup-dev-database.ts   local development DB, loopback only
 │   ├── setup-test-schema.ts    creates + migrates the isolated test schema
 │   ├── dev-demo-activity.ts    real-service shopper sessions for the local dev DB
@@ -151,7 +152,7 @@ razorpay-agentic-commerce/
 ├── package.json                scripts, dependencies and the Prettier settings
 ├── tsconfig.json               strict settings
 ├── setup.sh / setup.bat        one-click setup (macOS, Linux / Windows)
-└── run_dashboard.bat           starts the app and opens it in a browser (Windows)
+└── run_dashboard.bat           starts the app, opens the browser when ready, Esc stops (Windows)
 ```
 
 ## What is left in the root, and why
