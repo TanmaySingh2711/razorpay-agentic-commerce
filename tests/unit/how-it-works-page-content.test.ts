@@ -82,9 +82,10 @@ describe("the /how-it-works page describes the system as it actually is", () => 
     expect(markup).not.toMatch(/The work behind it|Lines of application code/);
   });
 
-  it("offers the way back and the way forward as visible controls", () => {
-    expect(markup).toMatch(/<a class="secondary" href="\/">/);
+  it("ends with one way forward, to the shop, as a visible control", () => {
     expect(markup).toMatch(/<a class="primary" href="\/shop">/);
+    // The way back is the header's logo and Overview link; no second button.
+    expect(markup).not.toContain("Back to the overview");
   });
 });
 

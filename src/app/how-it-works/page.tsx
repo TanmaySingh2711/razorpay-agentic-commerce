@@ -180,9 +180,6 @@ export default function HowItWorksPage() {
             <Link href="/shop" className="primary">
               Open the shop
             </Link>
-            <Link href="/" className="secondary">
-              Back to the overview
-            </Link>
           </div>
         </div>
 

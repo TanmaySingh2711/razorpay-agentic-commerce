@@ -754,6 +754,12 @@ h2.section-title {
   scroll-margin-top: 5rem;
 }
 
+/* The last section leads straight into the closing button: no rule between. */
+.chart-section:has(+ .closing) {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 .chart-head {
   display: flex;
   align-items: flex-start;
