@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadPurchaseHistory } from "@/app/actions";
 import { describeState, formatDateTime, formatMoney } from "@/domain/journey";
 import { describeRefundStatus, type RefundStatus } from "@/domain/refund";
+import { purchasePath } from "@/lib/routes";
 import {
   forgetPurchase,
   historyGroup,
@@ -95,7 +96,7 @@ function Row({
         )}
       </span>
       <span className="history-actions">
-        <Link href={`/transaction/${purchase.transactionId}`} className="history-open">
+        <Link href={purchasePath(purchase.transactionId)} className="history-open">
           Open<span className="visually-hidden"> {name}</span>
         </Link>
         <button type="button" className="link-button" onClick={onRemove}>

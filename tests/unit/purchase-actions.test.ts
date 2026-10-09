@@ -183,7 +183,7 @@ describe("submitRequest: one sentence for every way a request can end", () => {
     mocks.evaluateQuotePolicy.mockResolvedValueOnce({ kind: "EVALUATED" });
     await expect(
       ask({ kind: "QUOTE_CREATED", transactionId: TRANSACTION_ID, quote: { id: "q-1" } }),
-    ).rejects.toThrow(`NEXT_REDIRECT:/transaction/${TRANSACTION_ID}`);
+    ).rejects.toThrow(`NEXT_REDIRECT:/shop/${TRANSACTION_ID}`);
 
     expect(mocks.evaluateQuotePolicy).toHaveBeenCalledWith(
       expect.objectContaining({ quoteId: "q-1" }),
@@ -226,7 +226,7 @@ describe("refundPurchase", () => {
     });
     const [command] = mocks.requestRefund.mock.calls[0] as [Record<string, unknown>];
     expect(Object.keys(command).sort()).toEqual(["operationId", "transactionId"]);
-    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/transaction/${TRANSACTION_ID}`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/shop/${TRANSACTION_ID}`);
   });
 
   it("says a pending refund is accepted, not finished", async () => {
@@ -318,7 +318,7 @@ describe("checkRefundStatus", () => {
       kind: "DONE",
       message: "Refund status: reconciliation required.",
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/transaction/${TRANSACTION_ID}`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/shop/${TRANSACTION_ID}`);
   });
 
   it("says so when there is no open refund", async () => {

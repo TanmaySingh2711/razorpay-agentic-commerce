@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     );
     console.log("Now do this by hand - checkout requires a real human action:\n");
     console.log("  1. npm run dev");
-    console.log(`  2. open  ${appUrl}/checkout/${transaction.id}`);
+    console.log(`  2. open  ${appUrl}/shop/${transaction.id}/checkout`);
     console.log('  3. press "Pay"');
     console.log("  4. in Razorpay Test Checkout choose any test method and complete it");
     console.log("     (Test Mode - no real money moves)\n");

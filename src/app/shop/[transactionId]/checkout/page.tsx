@@ -68,7 +68,7 @@ export default async function CheckoutPage({
 
   return (
     <>
-      <SiteHeader current={null} />
+      <SiteHeader current="shop" />
       <main>
         <h1>{failed ? "That payment did not go through" : "Complete your payment"}</h1>
 

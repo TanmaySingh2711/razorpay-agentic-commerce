@@ -88,6 +88,17 @@ export const AUDIT_EVENT_TYPES = [
    * A security-relevant fact that must never move money.
    */
   "webhook_mismatch",
+  /**
+   * This server asked the payment provider for a payment's status, and the
+   * provider answered. The pull counterpart of `webhook_received`: the same
+   * provider truth, asked for rather than pushed, so it still arrives when no
+   * webhook can reach this server (a local machine, for one).
+   */
+  "provider_status_checked",
+  /** The provider's answer did not match our stored payment details. Nothing moved. */
+  "provider_status_mismatch",
+  /** The provider's answer described something this purchase had already moved past. */
+  "provider_status_ignored",
   "state_transitioned",
   "transaction_completed",
   "transaction_blocked",

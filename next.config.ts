@@ -122,6 +122,19 @@ const nextConfig: NextConfig = {
   redirects() {
     return Promise.resolve([
       { source: "/about", destination: "/how-it-works", permanent: true },
+      // A purchase now lives inside the shop (src/lib/routes.ts). Links to
+      // the old addresses - in a browser's history, in a shared message -
+      // still arrive at the same purchase.
+      {
+        source: "/transaction/:transactionId",
+        destination: "/shop/:transactionId",
+        permanent: true,
+      },
+      {
+        source: "/checkout/:transactionId",
+        destination: "/shop/:transactionId/checkout",
+        permanent: true,
+      },
     ]);
   },
   async headers() {

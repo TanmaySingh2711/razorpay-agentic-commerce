@@ -563,6 +563,66 @@ export async function processWebhook(
   }
   const digest = digestOf(inbound.rawBody);
 
+  return reconcilePaymentFacts(facts, digest, deps, WEBHOOK_SOURCE);
+}
+
+/**
+ * Where a set of provider facts came from, and so how they are recorded.
+ *
+ * The reconciliation below is the same whichever way the provider told us -
+ * the same correlation, the same money check against our own records, the
+ * same state machine, the same finalization. What differs is who is speaking:
+ * a signed webhook the provider pushed, or the provider's own API answering a
+ * question this server asked it. The audit trail names which, so nobody
+ * reading it later mistakes one for the other.
+ */
+interface ReconciliationSource {
+  readonly actor: "payment_webhook" | "payment_provider";
+  readonly receivedAction: "webhook_received" | "provider_status_checked";
+  readonly mismatchAction: "webhook_mismatch" | "provider_status_mismatch";
+  readonly ignoredAction: "webhook_ignored" | "provider_status_ignored";
+  /** Prefix of the idempotency and operation keys this source writes. */
+  readonly keyPrefix: "webhook" | "provider_status";
+  /** A webhook redelivery is worth a row; a repeated status check is not. */
+  readonly recordDuplicates: boolean;
+}
+
+const WEBHOOK_SOURCE: ReconciliationSource = {
+  actor: WEBHOOK_ACTOR,
+  receivedAction: "webhook_received",
+  mismatchAction: "webhook_mismatch",
+  ignoredAction: "webhook_ignored",
+  keyPrefix: "webhook",
+  recordDuplicates: true,
+};
+
+/**
+ * The provider's own API, asked by this server.
+ *
+ * `payment_provider` is the actor the state machine already allows to report a
+ * capture out of PAYMENT_PENDING and PAYMENT_VERIFIED - and only those. The
+ * late-capture edges out of PAYMENT_FAILED stay the webhook's alone.
+ */
+export const PROVIDER_STATUS_SOURCE: ReconciliationSource = {
+  actor: "payment_provider",
+  receivedAction: "provider_status_checked",
+  mismatchAction: "provider_status_mismatch",
+  ignoredAction: "provider_status_ignored",
+  keyPrefix: "provider_status",
+  recordDuplicates: false,
+};
+
+/**
+ * Reconciles authenticated provider facts against our records, in one
+ * database transaction. Shared by the webhook and by the status check.
+ */
+export async function reconcilePaymentFacts(
+  facts: AuthenticatedWebhookFacts,
+  digest: string,
+  deps: WebhookServiceDeps,
+  source: ReconciliationSource,
+): Promise<WebhookOutcome> {
+  const providerEventId = facts.providerEventId;
   try {
     return await deps.prisma.$transaction(async (tx): Promise<WebhookOutcome> => {
       // --- 3. Claim the delivery. The unique index is the deduplicator. ---
@@ -628,12 +688,12 @@ export async function processWebhook(
        */
       await recordAuditEvent(tx, {
         transactionId: attempt.transactionId,
-        action: "webhook_received",
-        actor: WEBHOOK_ACTOR,
+        action: source.receivedAction,
+        actor: source.actor,
         result: "PENDING",
         reasonCode: "WEBHOOK_RECEIVED",
         correlationId: attempt.correlationId,
-        operationKey: `webhook_received:${providerEventId}`,
+        operationKey: `${source.receivedAction}:${providerEventId}`,
         trustedInputs: {
           paymentAttemptId: attempt.id,
           providerEventId,
@@ -650,12 +710,12 @@ export async function processWebhook(
         await markRejected(tx, providerEventId, mismatch, attempt.transactionId);
         await recordAuditEvent(tx, {
           transactionId: attempt.transactionId,
-          action: "webhook_mismatch",
-          actor: WEBHOOK_ACTOR,
+          action: source.mismatchAction,
+          actor: source.actor,
           result: "BLOCKED",
           reasonCode: mismatch,
           correlationId: attempt.correlationId,
-          operationKey: `webhook_mismatch:${providerEventId}`,
+          operationKey: `${source.mismatchAction}:${providerEventId}`,
           trustedInputs: {
             paymentAttemptId: attempt.id,
             providerEventId,
@@ -682,11 +742,11 @@ export async function processWebhook(
       const outcome = await applyTransactionEventWithin(tx, {
         transactionId: attempt.transactionId,
         event: domainEventFor(eventType),
-        actor: WEBHOOK_ACTOR,
+        actor: source.actor,
         // The provider's delivery id is the natural identity of this logical
         // operation, so a redelivery that somehow got past the claim still
         // converges instead of writing a second transition.
-        idempotencyKey: `webhook:${providerEventId}`,
+        idempotencyKey: `${source.keyPrefix}:${providerEventId}`,
         details: { providerEventId, eventType },
       });
 
@@ -785,8 +845,8 @@ export async function processWebhook(
             ? captured
               ? "payment_captured"
               : "payment_failed"
-            : "webhook_ignored",
-        actor: WEBHOOK_ACTOR,
+            : source.ignoredAction,
+        actor: source.actor,
         result: applied && !captured ? "FAILURE" : "SUCCESS",
         reasonCode: doubleCapture
           ? "CAPTURE_ON_A_SECOND_ATTEMPT"
@@ -796,7 +856,7 @@ export async function processWebhook(
               ? "PAYMENT_CAPTURE_CONFIRMED"
               : "PAYMENT_ATTEMPT_FAILED",
         correlationId: attempt.correlationId,
-        operationKey: `webhook_reconciled:${providerEventId}`,
+        operationKey: `${source.keyPrefix}_reconciled:${providerEventId}`,
         trustedInputs: {
           paymentAttemptId: attempt.id,
           providerEventId,
@@ -862,11 +922,11 @@ export async function processWebhook(
         await recordAuditEvent(tx, {
           transactionId: attempt.transactionId,
           action: "payment_multiple_capture_detected",
-          actor: WEBHOOK_ACTOR,
+          actor: source.actor,
           result: "BLOCKED",
           reasonCode: "MULTIPLE_CAPTURE",
           correlationId: attempt.correlationId,
-          operationKey: `webhook_multiple_capture:${providerEventId}`,
+          operationKey: `${source.keyPrefix}_multiple_capture:${providerEventId}`,
           trustedInputs: {
             paymentAttemptId: attempt.id,
             conflictingAttemptId: rivalCapture.id,
@@ -911,7 +971,7 @@ export async function processWebhook(
     // The claim collided: this delivery has been seen before. Nothing was
     // written by this call, because the whole transaction rolled back.
     if (isUniqueViolation(error)) {
-      await recordDuplicate(deps.prisma, providerEventId);
+      if (source.recordDuplicates) await recordDuplicate(deps.prisma, providerEventId);
       return { kind: "DUPLICATE", providerEventId };
     }
     // Anything else is a transient internal failure. The claim rolled back with
@@ -920,4 +980,115 @@ export async function processWebhook(
     // an unprocessed event was safely delivered.
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Asking the provider
+// ---------------------------------------------------------------------------
+
+/** States in which a purchase is waiting to hear that its money was captured. */
+const AWAITING_CAPTURE: ReadonlySet<string> = new Set([
+  "PAYMENT_PENDING",
+  "PAYMENT_VERIFIED",
+]);
+
+export type PaymentStatusCheck =
+  /** The purchase is not waiting on a capture, so there was nothing to ask. */
+  | { readonly kind: "NOT_WAITING" }
+  /** The provider has no captured payment for this order yet. */
+  | { readonly kind: "STILL_WAITING" }
+  /** The provider could not be asked just now. Nothing changed. */
+  | { readonly kind: "PROVIDER_UNAVAILABLE" }
+  /** The provider reported a capture, and it was reconciled. */
+  | { readonly kind: "RECONCILED"; readonly outcome: WebhookOutcome };
+
+/**
+ * Asks the payment provider whether this purchase's money has been captured.
+ *
+ * The webhook is how a capture normally arrives, but a webhook needs a public
+ * address: on a developer's machine it can never arrive, and a purchase waits
+ * at "Payment signature verified" for ever. This asks instead - the provider's
+ * own API, called with this server's credentials, about an order this server
+ * created - and puts a captured payment through exactly the reconciliation a
+ * webhook gets: the same correlation, the same comparison with our stored
+ * amount and currency, the same state machine, the same finalization.
+ *
+ * It acts on a capture and on nothing else. A failed payment is left to the
+ * webhook and to the checkout window, because a person may still be paying
+ * again in that window, and recording a failure here first would leave their
+ * successful second payment as a late capture that only a webhook may settle.
+ *
+ * Only a purchase that is waiting (PAYMENT_PENDING or PAYMENT_VERIFIED) is
+ * asked about, and the browser supplies nothing but the transaction id: the
+ * order id comes from our own payment attempt.
+ */
+export async function checkPaymentWithProvider(
+  transactionId: string,
+  deps: WebhookServiceDeps = defaultWebhookDeps(),
+): Promise<PaymentStatusCheck> {
+  const transaction = await deps.prisma.transaction.findUnique({
+    where: { id: transactionId },
+    select: { status: true },
+  });
+  if (transaction === null || !AWAITING_CAPTURE.has(transaction.status)) {
+    return { kind: "NOT_WAITING" };
+  }
+
+  const attempt = await deps.prisma.paymentAttempt.findFirst({
+    where: { transactionId, providerOrderId: { not: null } },
+    orderBy: { attemptNumber: "desc" },
+    select: { providerOrderId: true },
+  });
+  const providerOrderId = attempt?.providerOrderId ?? null;
+  if (providerOrderId === null) return { kind: "STILL_WAITING" };
+
+  const answer = await deps.provider.listOrderPayments(providerOrderId);
+  if (answer.kind === "FAILED") {
+    log.warn("the provider could not be asked for a payment's status", {
+      transactionId,
+      category: answer.failure.category,
+    });
+    return { kind: "PROVIDER_UNAVAILABLE" };
+  }
+
+  const captured = answer.payments.find((payment) => payment.status === "captured");
+  if (captured === undefined) return { kind: "STILL_WAITING" };
+
+  const facts: AuthenticatedWebhookFacts = {
+    // One identity per captured payment, so asking twice is a duplicate and
+    // never a second reconciliation.
+    providerEventId: `status:${captured.providerPaymentId}`,
+    eventType: "payment.captured",
+    providerPaymentId: captured.providerPaymentId,
+    providerOrderId: captured.providerOrderId,
+    amountMinor: captured.amountMinor,
+    currency: captured.currency,
+    failureCode: null,
+    failure: classifyPaymentFailure({
+      errorCode: captured.errorCode,
+      errorSource: captured.errorSource,
+      errorStep: captured.errorStep,
+      errorReason: captured.errorReason,
+    }),
+  };
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        captured.providerPaymentId,
+        captured.providerOrderId,
+        captured.amountMinor.toString(),
+        captured.currency,
+        captured.status,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+
+  const outcome = await reconcilePaymentFacts(
+    facts,
+    digest,
+    deps,
+    PROVIDER_STATUS_SOURCE,
+  );
+  return { kind: "RECONCILED", outcome };
 }

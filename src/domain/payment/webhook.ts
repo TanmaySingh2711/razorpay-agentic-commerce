@@ -81,7 +81,7 @@ export type WebhookMismatch = (typeof WEBHOOK_MISMATCHES)[number];
  * Everything financial here is re-checked against persisted state before it is
  * allowed to mean anything.
  */
-const paymentEntitySchema = z.object({
+export const paymentEntitySchema = z.object({
   id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH),
   order_id: z.string().min(1).max(MAX_PROVIDER_REFERENCE_LENGTH).nullish(),
   /** Integer minor units. Razorpay sends paise; no float ever appears. */

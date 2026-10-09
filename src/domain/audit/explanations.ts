@@ -338,6 +338,12 @@ export function explainAuditEvent(input: {
       // The refund twin of an unknown order outcome: said plainly, because
       // the one wrong response to it is asking for a second refund.
       return "The refund request left an unresolved outcome with the payment provider. It will be checked by its reference and is never sent twice.";
+    case "provider_status_checked":
+      return "The server asked the payment provider for this payment's status.";
+    case "provider_status_mismatch":
+      return `The payment provider's answer did not match this transaction's stored payment details${reasonTail}, so no payment state was changed.`;
+    case "provider_status_ignored":
+      return `The payment provider's answer was recorded without being acted on${reasonTail}, because the transaction had already moved past what it describes.`;
     case "webhook_mismatch":
       return `A genuine provider webhook did not match this transaction's stored payment details${reasonTail}, so no payment state was changed.`;
   }

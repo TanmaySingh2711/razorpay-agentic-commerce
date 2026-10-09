@@ -73,7 +73,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     const outcome = await approvePurchase({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
-    expect(mockRevalidatePath).toHaveBeenCalledWith(`/transaction/${TRANSACTION_ID}`);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(`/shop/${TRANSACTION_ID}`);
   });
 
   it("revalidates when a purchase is rejected, because that is a state change too", async () => {
@@ -85,7 +85,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     const outcome = await rejectPurchase({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
-    expect(mockRevalidatePath).toHaveBeenCalledWith(`/transaction/${TRANSACTION_ID}`);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(`/shop/${TRANSACTION_ID}`);
   });
 
   it("revalidates when stock is successfully held", async () => {
@@ -95,7 +95,7 @@ describe("a decision that changes state also invalidates the page rendering it",
     const outcome = await reserveStock({ kind: "IDLE" }, formDataFor(TRANSACTION_ID));
 
     expect(outcome.kind).toBe("DONE");
-    expect(mockRevalidatePath).toHaveBeenCalledWith(`/transaction/${TRANSACTION_ID}`);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(`/shop/${TRANSACTION_ID}`);
   });
 
   it("does not revalidate when nothing moved, so a refusal cannot masquerade as progress", async () => {

@@ -13,12 +13,14 @@ import type {
   ProviderLookupOutcome,
   ProviderOrder,
   ProviderOrderOutcome,
+  ProviderOrderPaymentsOutcome,
   ProviderRefund,
   ProviderRefundLookupOutcome,
   ProviderRefundOutcome,
   RefundRequest,
 } from "@/domain/payment/provider";
 import { assessPayableAmount, toProviderAmount } from "@/domain/payment/rules";
+import { paymentEntitySchema } from "@/domain/payment/webhook";
 
 /**
  * Razorpay, and the only file in this repository that knows it exists.
@@ -105,6 +107,14 @@ const razorpayRefundListSchema = z.object({
  * strategy.
  */
 const PROVIDER_PAYMENT_ID_PATTERN = /^pay_[A-Za-z0-9]{1,60}$/;
+
+/** The same guard for an order id, which is interpolated into a path too. */
+const PROVIDER_ORDER_ID_PATTERN = /^order_[A-Za-z0-9]{1,60}$/;
+
+/** `GET /v1/orders/:id/payments`: the payments made against one order. */
+const razorpayPaymentListSchema = z.object({
+  items: z.array(paymentEntitySchema.extend({ status: z.string().min(1).max(40) })),
+});
 
 const razorpayErrorSchema = z.object({
   error: z.object({
@@ -289,12 +299,58 @@ export function createRazorpayProvider(
     return { kind: "UNKNOWN", failure: initial };
   }
 
+  async function listOrderPayments(
+    providerOrderId: string,
+  ): Promise<ProviderOrderPaymentsOutcome> {
+    if (!PROVIDER_ORDER_ID_PATTERN.test(providerOrderId)) {
+      return {
+        kind: "FAILED",
+        failure: failure("INVALID_REQUEST", null, "ORDER_ID_MALFORMED"),
+      };
+    }
+    const outcome = await call(`/orders/${providerOrderId}/payments`, { method: "GET" });
+    if (outcome.kind === "NO_ANSWER") {
+      return { kind: "FAILED", failure: failure(outcome.category, null, null) };
+    }
+    if (outcome.status !== 200) {
+      return { kind: "FAILED", failure: classifyStatus(outcome.status, outcome.text) };
+    }
+    const parsed = parseJson(outcome.text, razorpayPaymentListSchema);
+    if (parsed === null) {
+      return {
+        kind: "FAILED",
+        failure: failure("UNREADABLE_RESPONSE", 200, "PAYMENT_LIST_UNPARSABLE"),
+      };
+    }
+    return {
+      kind: "FOUND",
+      // Only payments that name this order. The endpoint is scoped to it
+      // already; checking again costs nothing and means a broadened response
+      // could never hand us a payment for somebody else's order.
+      payments: parsed.items
+        .filter((item) => item.order_id === providerOrderId)
+        .map((item) => ({
+          providerPaymentId: item.id,
+          providerOrderId: item.order_id ?? null,
+          amountMinor: BigInt(item.amount),
+          currency: item.currency.toUpperCase(),
+          status: item.status,
+          errorCode: item.error_code ?? null,
+          errorSource: item.error_source ?? null,
+          errorStep: item.error_step ?? null,
+          errorReason: item.error_reason ?? null,
+        })),
+    };
+  }
+
   return {
     name: "RAZORPAY",
 
     findOrderByReceipt,
 
     findRefundByReceipt,
+
+    listOrderPayments,
 
     /**
      * `POST /v1/payments/:id/refund`, called at most once per refund.

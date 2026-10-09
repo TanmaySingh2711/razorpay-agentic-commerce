@@ -5,7 +5,11 @@ import {
   verifyCheckoutCallback,
   type CheckoutServiceDeps,
 } from "@/services/checkout-service";
-import { processWebhook, type WebhookServiceDeps } from "@/services/webhook-service";
+import {
+  checkPaymentWithProvider,
+  processWebhook,
+  type WebhookServiceDeps,
+} from "@/services/webhook-service";
 import { createPaymentOrder } from "@/services/payment-order-service";
 import {
   releaseLapsedReservations,
@@ -22,6 +26,10 @@ import { fixedClock, type MutableClock } from "@/lib/clock";
 import type { PurchaseAuthority } from "@/domain/eligibility";
 import type { TransactionEvent } from "@/domain/transaction/events";
 import type { TransactionActor } from "@/domain/transaction/states";
+import type {
+  ProviderOrderPaymentsOutcome,
+  ProviderPayment,
+} from "@/domain/payment/provider";
 import {
   fakePaymentProvider,
   type FakePaymentProvider,
@@ -120,6 +128,27 @@ let buyerId = "";
 let merchantId = "";
 let clock: MutableClock;
 let provider: FakePaymentProvider;
+
+/** What the fake provider reports when asked for an order's payments. */
+let listAnswer: (providerOrderId: string) => ProviderOrderPaymentsOutcome;
+
+function capturedPayment(
+  providerOrderId: string,
+  overrides: Partial<ProviderPayment> = {},
+): ProviderPayment {
+  return {
+    providerPaymentId: PAYMENT_ID,
+    providerOrderId,
+    amountMinor: IN_BUDGET,
+    currency: "INR",
+    status: "captured",
+    errorCode: null,
+    errorSource: null,
+    errorStep: null,
+    errorReason: null,
+    ...overrides,
+  };
+}
 
 function checkoutDeps(): CheckoutServiceDeps {
   return { prisma: testDb(), clock, provider, providerKeyId: KEY_ID };
@@ -270,9 +299,11 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
   beforeEach(async () => {
     await resetTestData();
     clock = fixedClock(NOW);
+    listAnswer = () => ({ kind: "FOUND", payments: [] });
     provider = fakePaymentProvider({
       onVerify: (input) => realVerifier.verifyCheckoutSignature(input),
       onVerifyWebhook: (input) => realVerifier.verifyWebhookSignature(input),
+      onListOrderPayments: (providerOrderId) => listAnswer(providerOrderId),
     });
     buyerId = (
       await testDb().buyerProfile.create({ data: { displayName: "Webhook Buyer" } })
@@ -911,6 +942,185 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
       expect(serialised).not.toContain(KEY_SECRET);
       // No 64-character hex blob: no signature or HMAC material was recorded.
       expect(serialised).not.toMatch(/[0-9a-f]{64}/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Asking the provider, for when no webhook can arrive.
+  // -------------------------------------------------------------------------
+
+  describe("asking the provider for a waiting payment's status", () => {
+    const ask = (transactionId: string) =>
+      checkPaymentWithProvider(transactionId, webhookDeps());
+
+    it("completes a verified purchase the provider reports as captured", async () => {
+      const { transactionId, providerOrderId } = await arrangeVerified();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+
+      const check = await ask(transactionId);
+
+      expect(check).toMatchObject({
+        kind: "RECONCILED",
+        outcome: { kind: "RECONCILED", transactionState: "COMPLETED" },
+      });
+      expect(provider.paymentLookups).toEqual([providerOrderId]);
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
+      expect((await attemptOf(transactionId)).status).toBe("CAPTURED");
+      const reservation = await testDb().inventoryReservation.findFirstOrThrow({
+        where: { transactionId },
+      });
+      expect(reservation.status).toBe("COMMITTED");
+    });
+
+    it("records that the provider was asked, under the provider's own actor", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+
+      await ask(transactionId);
+
+      const actions = (await auditOf(transactionId)).map((event) => event.action);
+      expect(actions).toContain("provider_status_checked");
+      expect(actions).toContain("payment_captured");
+      expect(actions).not.toContain("webhook_received");
+      const capture = await testDb().transactionStateTransition.findFirstOrThrow({
+        where: { transactionId, toStatus: "PAYMENT_CAPTURED" },
+      });
+      expect(capture.actor).toBe("payment_provider");
+    });
+
+    it("also settles a purchase still at PAYMENT_PENDING, with no browser callback", async () => {
+      const { transactionId } = await arrangePending();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+
+      await ask(transactionId);
+
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
+    });
+
+    it("changes nothing while the provider has no captured payment", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({
+        kind: "FOUND",
+        payments: [capturedPayment(orderId, { status: "authorized" })],
+      });
+
+      expect(await ask(transactionId)).toEqual({ kind: "STILL_WAITING" });
+      expect(await statusOf(transactionId)).toBe("PAYMENT_VERIFIED");
+    });
+
+    it("leaves a failed payment alone: the buyer may still be paying again", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({
+        kind: "FOUND",
+        payments: [
+          capturedPayment(orderId, { status: "failed", errorCode: "BAD_REQUEST_ERROR" }),
+        ],
+      });
+
+      expect(await ask(transactionId)).toEqual({ kind: "STILL_WAITING" });
+      expect(await statusOf(transactionId)).toBe("PAYMENT_VERIFIED");
+      expect((await attemptOf(transactionId)).status).not.toBe("FAILED");
+    });
+
+    it("acts once, however many times it is asked", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+
+      await ask(transactionId);
+      expect(await ask(transactionId)).toEqual({ kind: "NOT_WAITING" });
+
+      const captures = (await transitionsOf(transactionId)).filter(
+        (row) => row.toStatus === "PAYMENT_CAPTURED",
+      );
+      expect(captures).toHaveLength(1);
+    });
+
+    it("collapses two simultaneous checks into one effect", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+
+      const results = await Promise.all([
+        checkPaymentWithProvider(transactionId, {
+          ...webhookDeps(),
+          prisma: freshTestClient(),
+        }),
+        checkPaymentWithProvider(transactionId, {
+          ...webhookDeps(),
+          prisma: freshTestClient(),
+        }),
+      ]);
+
+      expect(results.every((result) => result.kind === "RECONCILED")).toBe(true);
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
+      const captures = (await transitionsOf(transactionId)).filter(
+        (row) => row.toStatus === "PAYMENT_CAPTURED",
+      );
+      expect(captures).toHaveLength(1);
+    });
+
+    it("refuses a capture whose amount disagrees with the trusted quote", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({
+        kind: "FOUND",
+        payments: [capturedPayment(orderId, { amountMinor: 100n })],
+      });
+
+      expect(await ask(transactionId)).toMatchObject({
+        kind: "RECONCILED",
+        outcome: { kind: "MISMATCHED", mismatch: "AMOUNT_MISMATCH" },
+      });
+      expect(await statusOf(transactionId)).toBe("PAYMENT_VERIFIED");
+      const actions = (await auditOf(transactionId)).map((event) => event.action);
+      expect(actions).toContain("provider_status_mismatch");
+    });
+
+    it("refuses a capture under a different payment id than the verified one", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = (orderId) => ({
+        kind: "FOUND",
+        payments: [capturedPayment(orderId, { providerPaymentId: "pay_SomebodyElse01" })],
+      });
+
+      expect(await ask(transactionId)).toMatchObject({
+        outcome: { kind: "MISMATCHED", mismatch: "PAYMENT_ID_CONFLICT" },
+      });
+      expect(await statusOf(transactionId)).toBe("PAYMENT_VERIFIED");
+    });
+
+    it("does not ask about a purchase that is not waiting for its money", async () => {
+      const { transactionId } = await arrange();
+
+      expect(await ask(transactionId)).toEqual({ kind: "NOT_WAITING" });
+      expect(provider.paymentLookups).toEqual([]);
+    });
+
+    it("changes nothing when the provider cannot be reached", async () => {
+      const { transactionId } = await arrangeVerified();
+      listAnswer = () => ({
+        kind: "FAILED",
+        failure: { category: "NETWORK_FAILURE", code: "NETWORK", httpStatus: null },
+      });
+
+      expect(await ask(transactionId)).toEqual({ kind: "PROVIDER_UNAVAILABLE" });
+      expect(await statusOf(transactionId)).toBe("PAYMENT_VERIFIED");
+    });
+
+    it("lets a webhook that arrives afterwards change nothing", async () => {
+      const { transactionId, providerOrderId } = await arrangeVerified();
+      listAnswer = (orderId) => ({ kind: "FOUND", payments: [capturedPayment(orderId)] });
+      await ask(transactionId);
+
+      const late = await deliver(
+        eventBody({ event: "payment.captured", orderId: providerOrderId }),
+        "evt_after_status_check",
+      );
+
+      expect(late).toMatchObject({ kind: "RECONCILED", alreadyAccountedFor: true });
+      expect(await statusOf(transactionId)).toBe("COMPLETED");
+      const captures = (await transitionsOf(transactionId)).filter(
+        (row) => row.toStatus === "PAYMENT_CAPTURED",
+      );
+      expect(captures).toHaveLength(1);
     });
   });
 });

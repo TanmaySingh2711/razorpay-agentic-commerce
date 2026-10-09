@@ -170,13 +170,13 @@ export const DASHBOARD_MAP: readonly FlowItem[] = [
     "server",
     "Purchase page",
     "The verified price, how the assistant chose, approval, the stock hold, the Safety Passport, refunds and the full timeline.",
-    "/transaction/[id]",
+    "/shop/[id]",
   ),
   node(
     "razorpay",
     "Checkout",
     "The Razorpay payment window, opened only after the purchase is authorized and held.",
-    "/checkout/[id]",
+    "/shop/[id]/checkout",
   ),
   split(
     {

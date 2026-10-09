@@ -196,6 +196,32 @@ export type ProviderRefundLookupOutcome =
   | { readonly kind: "FAILED"; readonly failure: ProviderFailure };
 
 /**
+ * One payment made against an order, as the provider reports it.
+ *
+ * Read through the provider's own API with this server's credentials, so it is
+ * the provider speaking, exactly as in a signed webhook. The figures are still
+ * only evidence: they are compared with our records before they mean anything.
+ */
+export interface ProviderPayment {
+  readonly providerPaymentId: string;
+  readonly providerOrderId: string | null;
+  /** Integer minor units, as the provider sends them. */
+  readonly amountMinor: bigint;
+  readonly currency: string;
+  /** The provider's word: `created`, `authorized`, `captured`, `refunded`, `failed`. */
+  readonly status: string;
+  readonly errorCode: string | null;
+  readonly errorSource: string | null;
+  readonly errorStep: string | null;
+  readonly errorReason: string | null;
+}
+
+/** The payments made against one of our orders. Read-only. */
+export type ProviderOrderPaymentsOutcome =
+  | { readonly kind: "FOUND"; readonly payments: readonly ProviderPayment[] }
+  | { readonly kind: "FAILED"; readonly failure: ProviderFailure };
+
+/**
  * The port. One implementation in production, one fake in tests.
  *
  * `createOrder` is expected to resolve its own ambiguity where it safely can —
@@ -217,6 +243,12 @@ export interface PaymentProvider {
     providerPaymentId: string,
     receipt: string,
   ): Promise<ProviderRefundLookupOutcome>;
+  /**
+   * The payments made against one of our orders, as the provider sees them
+   * now. How a purchase learns its money was captured when no webhook can
+   * reach this server.
+   */
+  listOrderPayments(providerOrderId: string): Promise<ProviderOrderPaymentsOutcome>;
   /**
    * Decides whether a checkout callback genuinely came from the provider.
    *

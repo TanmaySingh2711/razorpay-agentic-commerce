@@ -25,6 +25,7 @@ import {
 } from "@/services/rate-limit-service";
 import { recordAgentRequest } from "@/services/agent-request-log";
 import { reconcileRefund, requestRefund } from "@/services/refund-service";
+import { checkPaymentWithProvider } from "@/services/webhook-service";
 import { describeRefundDenial } from "@/domain/refund";
 import { clientKeyFromHeaders } from "@/domain/rate-limit";
 import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
@@ -32,6 +33,7 @@ import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { MoneyDto } from "@/domain/money";
 import { formatMoney } from "@/domain/journey";
 import { MAX_HISTORY_ENTRIES } from "@/lib/purchase-history";
+import { purchasePath } from "@/lib/routes";
 import {
   loadPurchaseSummaries,
   type PurchaseSummary,
@@ -338,7 +340,7 @@ export async function submitRequest(
     };
   }
 
-  redirect(`/transaction/${transactionId}`);
+  redirect(purchasePath(transactionId));
 }
 
 // ---------------------------------------------------------------------------
@@ -430,10 +432,10 @@ async function decide(
         // The transaction's state has genuinely moved, so the page that renders
         // it is now stale. Without this the buyer sees the old step until they
         // press F5 - the decision landed, but the journey appeared frozen.
-        revalidatePath(`/transaction/${id.data}`);
+        revalidatePath(purchasePath(id.data));
         return { kind: "DONE", message: "Approved. You can pay when you are ready." };
       case "REJECTED":
-        revalidatePath(`/transaction/${id.data}`);
+        revalidatePath(purchasePath(id.data));
         return { kind: "DONE", message: "Rejected. Nothing has been charged." };
       default:
         return {
@@ -488,7 +490,7 @@ export async function reserveStock(
       // Same reason as the approval decision above: the hold changes the state
       // the page is rendering, so the page must be re-read rather than left for
       // the buyer to refresh by hand.
-      revalidatePath(`/transaction/${id.data}`);
+      revalidatePath(purchasePath(id.data));
       return { kind: "DONE", message: "The item is held for you." };
     }
 
@@ -542,7 +544,7 @@ export async function refundPurchase(
       transactionId: id.data,
       operationId: operation(),
     });
-    revalidatePath(`/transaction/${id.data}`);
+    revalidatePath(purchasePath(id.data));
     switch (result.kind) {
       case "REFUND_STARTED":
         return {
@@ -592,7 +594,7 @@ export async function checkRefundStatus(
       return { kind: "ERROR", message: "Too many requests. Please wait a moment." };
     }
     const status = await reconcileRefund(id.data);
-    revalidatePath(`/transaction/${id.data}`);
+    revalidatePath(purchasePath(id.data));
     return {
       kind: "DONE",
       message:
@@ -642,5 +644,44 @@ export async function loadPurchaseHistory(ids: unknown): Promise<PurchaseHistory
       kind: "ERROR",
       message: "Your purchases could not be loaded just now. Please try again.",
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Waiting for the money
+// ---------------------------------------------------------------------------
+
+export type PaymentStatusOutcome =
+  { readonly kind: "CHANGED" } | { readonly kind: "UNCHANGED" };
+
+/**
+ * Asks the payment provider whether a waiting purchase's money has arrived.
+ *
+ * The purchase page calls this while it shows "waiting for the payment
+ * provider", so a capture is noticed even where no webhook can arrive. The
+ * browser names the purchase and nothing else; the provider is asked about an
+ * order this server created, and only a capture that matches our stored amount
+ * and currency moves anything. The payment ceiling applies, since this reaches
+ * the provider.
+ */
+export async function checkPaymentStatus(
+  transactionId: unknown,
+): Promise<PaymentStatusOutcome> {
+  const id = transactionIdSchema.safeParse(transactionId);
+  if (!id.success) return { kind: "UNCHANGED" };
+  try {
+    const limited = await limitPaymentRequest(await clientKey());
+    if (limited.kind === "LIMITED") return { kind: "UNCHANGED" };
+
+    const check = await checkPaymentWithProvider(id.data);
+    if (check.kind !== "RECONCILED") return { kind: "UNCHANGED" };
+    revalidatePath(purchasePath(id.data));
+    return { kind: "CHANGED" };
+  } catch (error: unknown) {
+    log.error("a payment status check failed", {
+      transactionId: id.data,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return { kind: "UNCHANGED" };
   }
 }

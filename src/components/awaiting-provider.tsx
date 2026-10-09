@@ -2,14 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { checkPaymentStatus } from "@/app/actions";
 
 /**
  * Waits for the payment provider, so a person does not have to.
  *
  * There is a genuine gap between "this browser's confirmation was verified"
- * and "the provider confirmed the money moved". The second fact arrives on
- * Razorpay's own webhook, out of band, some seconds later - which is exactly
- * why `PAYMENT_VERIFIED` and `PAYMENT_CAPTURED` are separate states.
+ * and "the provider confirmed the money moved". The second fact usually
+ * arrives on Razorpay's own webhook, out of band, some seconds later - which
+ * is exactly why `PAYMENT_VERIFIED` and `PAYMENT_CAPTURED` are separate
+ * states. A webhook needs a public address, though, so on a machine it cannot
+ * reach the wait would never end; each round therefore also asks the server
+ * to check with Razorpay (`checkPaymentStatus`).
  *
  * The page used to state that gap and then hand the problem to the reader:
  * "this page does not update by itself - refresh in a moment". That was honest
@@ -19,10 +23,11 @@ import { useEffect, useRef, useState } from "react";
  *
  * ## What it deliberately does not do
  *
- * It carries no financial authority whatsoever. It sends nothing, decides
- * nothing, and cannot advance a transaction - `router.refresh()` only re-runs
- * the server render, and the server reads the same authoritative row it always
- * did. Polling faster would not make a payment settle sooner, and stopping
+ * It carries no financial authority whatsoever. It decides nothing and cannot
+ * advance a transaction: it sends the purchase id and nothing else, the server
+ * asks Razorpay about an order it created itself, and only a capture matching
+ * the stored amount moves anything. `router.refresh()` then re-runs the server
+ * render, which reads the same authoritative row it always did. Polling faster would not make a payment settle sooner, and stopping
  * early does not roll anything back.
  *
  * ## Why it stops
@@ -33,13 +38,21 @@ import { useEffect, useRef, useState } from "react";
  * told that rather than watching a spinner that will never resolve.
  */
 
-/** Long enough not to hammer the server, short enough to feel immediate. */
-const INTERVAL_MS = 3000;
+/**
+ * Long enough not to hammer the server, short enough to feel immediate. Each
+ * round also asks Razorpay once, so this keeps well inside the per-minute
+ * payment ceiling (15 a minute against a default of 20).
+ */
+const INTERVAL_MS = 4000;
 
-/** Roughly two minutes of waiting before handing back to the person. */
+/** Roughly two and a half minutes of waiting before handing back to the person. */
 const MAX_ATTEMPTS = 40;
 
-export function AwaitingProvider(): React.JSX.Element {
+export function AwaitingProvider({
+  transactionId,
+}: {
+  readonly transactionId: string;
+}): React.JSX.Element {
   const router = useRouter();
   const [attempts, setAttempts] = useState(0);
   const [gaveUp, setGaveUp] = useState(false);
@@ -58,15 +71,20 @@ export function AwaitingProvider(): React.JSX.Element {
         setGaveUp(true);
         return;
       }
-      // Re-runs the server component above. If the webhook has landed, this
-      // render returns a different state and the component unmounts with it.
-      router.refresh();
+      // Ask the provider through the server, then re-run the server component
+      // above. If the capture has landed, by either route, this render returns
+      // a different state and the component unmounts with it.
+      void checkPaymentStatus(transactionId)
+        .catch(() => undefined)
+        .finally(() => {
+          router.refresh();
+        });
     }, INTERVAL_MS);
 
     return () => {
       clearInterval(timer);
     };
-  }, [router, gaveUp]);
+  }, [router, gaveUp, transactionId]);
 
   if (gaveUp) {
     return (
@@ -86,7 +104,11 @@ export function AwaitingProvider(): React.JSX.Element {
             attemptsRef.current = 0;
             setAttempts(0);
             setGaveUp(false);
-            router.refresh();
+            void checkPaymentStatus(transactionId)
+              .catch(() => undefined)
+              .finally(() => {
+                router.refresh();
+              });
           }}
         >
           Check again

@@ -185,7 +185,7 @@ describe("the merchant insights page", () => {
 
   it("never prints a link to a purchase", async () => {
     const markup = await merchantMarkup(insights());
-    expect(markup).not.toContain("/transaction/");
+    expect(markup).not.toMatch(/\/shop\/[0-9a-f-]{36}|\/transaction\//);
   });
 
   it("stays useful with no activity at all", async () => {
@@ -295,8 +295,7 @@ function overview(overrides: Partial<TransactionOverview> = {}): TransactionOver
 
 async function transactionMarkup(data: TransactionOverview | null): Promise<string> {
   mocks.loadTransactionOverview.mockResolvedValueOnce(data);
-  const { default: TransactionPage } =
-    await import("@/app/transaction/[transactionId]/page");
+  const { default: TransactionPage } = await import("@/app/shop/[transactionId]/page");
   return renderToStaticMarkup(
     await TransactionPage({ params: Promise.resolve({ transactionId: TRANSACTION_ID }) }),
   );
@@ -419,6 +418,16 @@ describe("refunds on the purchase page", () => {
     );
     expect(markup).toContain("could not process this refund");
     expect(markup).toContain("Refund this purchase");
+  });
+});
+
+describe("the purchase page's place in the site", () => {
+  it("is part of the Shop: the header marks Shop as the current page", async () => {
+    const markup = await transactionMarkup(overview());
+    expect(markup).toMatch(
+      /<a class="nav-link"[^>]*href="\/shop"[^>]*aria-current="page"|<a class="nav-link"[^>]*aria-current="page"[^>]*href="\/shop"/,
+    );
+    expect(markup.match(/aria-current="page"/g)).toHaveLength(1);
   });
 });
 

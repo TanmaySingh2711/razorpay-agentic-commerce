@@ -87,6 +87,7 @@ async function main(): Promise<void> {
       });
     },
     findOrderByReceipt: () => Promise.resolve({ kind: "NOT_FOUND" }),
+    listOrderPayments: () => Promise.resolve({ kind: "FOUND", payments: [] }),
     createRefund: (request) =>
       Promise.resolve({
         kind: "CREATED",
@@ -437,8 +438,7 @@ async function main(): Promise<void> {
   console.log(`  purchases opened : ${String(opened.length)}`);
   console.log(`  unmet requests   : ${String(unmet.length)}`);
   console.log(`\nOpen http://localhost:3000/merchant, or a purchase:`);
-  for (const id of opened.slice(0, 3))
-    console.log(`  http://localhost:3000/transaction/${id}`);
+  for (const id of opened.slice(0, 3)) console.log(`  http://localhost:3000/shop/${id}`);
   await prisma.$disconnect();
 }
 

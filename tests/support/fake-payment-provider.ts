@@ -6,6 +6,7 @@ import type {
   ProviderLookupOutcome,
   ProviderOrder,
   ProviderOrderOutcome,
+  ProviderOrderPaymentsOutcome,
   ProviderRefund,
   ProviderRefundLookupOutcome,
   ProviderRefundOutcome,
@@ -38,6 +39,8 @@ export interface FakePaymentProvider extends PaymentProvider {
   /** Every refund creation, so a test can assert a second one was *not* made. */
   readonly refundRequests: RefundRequest[];
   readonly refundLookups: { providerPaymentId: string; receipt: string }[];
+  /** Every payment-status question, so a test can assert which order was asked about. */
+  readonly paymentLookups: string[];
 }
 
 export interface FakePaymentProviderOptions {
@@ -62,6 +65,13 @@ export interface FakePaymentProviderOptions {
     providerPaymentId: string,
     receipt: string,
   ) => ProviderRefundLookupOutcome;
+  /**
+   * Answers "which payments were made against this order?". Defaults to none:
+   * a suite must arrange a captured payment before one can be reported.
+   */
+  readonly onListOrderPayments?: (
+    providerOrderId: string,
+  ) => ProviderOrderPaymentsOutcome;
   /** Fixes the order id, instead of issuing a distinct one per creation. */
   readonly providerOrderId?: string;
 }
@@ -88,6 +98,7 @@ export function fakePaymentProvider(
   const refundRequests: RefundRequest[] = [];
   const refundLookups: { providerPaymentId: string; receipt: string }[] = [];
   const refunds = new Map<string, ProviderRefund>();
+  const paymentLookups: string[] = [];
   let refundsIssued = 0;
   let issued = 0;
   const nextOrderId = (): string => {
@@ -106,6 +117,14 @@ export function fakePaymentProvider(
     webhookInputs,
     refundRequests,
     refundLookups,
+    paymentLookups,
+
+    listOrderPayments(providerOrderId) {
+      paymentLookups.push(providerOrderId);
+      return Promise.resolve(
+        options.onListOrderPayments?.(providerOrderId) ?? { kind: "FOUND", payments: [] },
+      );
+    },
 
     createRefund(request) {
       refundRequests.push(request);

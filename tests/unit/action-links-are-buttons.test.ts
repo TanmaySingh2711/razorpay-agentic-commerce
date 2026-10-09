@@ -21,7 +21,7 @@ const PAGES = [
   "src/app/page.tsx",
   "src/app/shop/page.tsx",
   "src/app/how-it-works/page.tsx",
-  "src/app/transaction/[transactionId]/page.tsx",
+  "src/app/shop/[transactionId]/page.tsx",
   "src/components/decision-form.tsx",
 ] as const;
 
@@ -45,7 +45,7 @@ describe("every navigation action is styled as a control", () => {
   }
 
   it("styles the transaction page's own escape hatch", () => {
-    const source = readFileSync("src/app/transaction/[transactionId]/page.tsx", "utf8");
+    const source = readFileSync("src/app/shop/[transactionId]/page.tsx", "utf8");
     expect(source).toMatch(/className="secondary"[\s\S]{0,80}Start another purchase/);
   });
 

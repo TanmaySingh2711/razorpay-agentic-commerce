@@ -171,6 +171,34 @@ unauthenticated caller could exploit in a loop.
   The cap bounds the _record_, never the check: every callback is still
   refused.
 
+## When no webhook can arrive
+
+A capture normally reaches this server as Razorpay's signed webhook. A webhook
+needs a public address, so on a developer's machine it never arrives, and a
+purchase would wait at `PAYMENT_VERIFIED` for ever.
+
+While the purchase page shows "waiting for the payment provider", it asks the
+server to check (`checkPaymentStatus` in `src/app/actions.ts`). The server
+asks Razorpay's own API, with its own credentials, for the payments on an
+order **it created** (`GET /v1/orders/:id/payments`), and puts a captured
+payment through exactly the reconciliation a webhook gets
+(`reconcilePaymentFacts` in `webhook-service.ts`): the same correlation, the
+same comparison with the stored amount, currency and payment id, the same
+state machine and the same finalization.
+
+- It runs only for a purchase at `PAYMENT_PENDING` or `PAYMENT_VERIFIED`, under
+  the `payment_provider` actor, which the state machine already allows to
+  report a capture from those two states and no others. The late-capture
+  edges out of `PAYMENT_FAILED` stay the webhook's alone.
+- It acts on a capture and nothing else. A failed payment is left to the
+  webhook and the checkout window, because the buyer may still be paying again
+  in that window.
+- Each captured payment has one identity (`status:<payment id>`), so asking
+  twice, or a webhook arriving afterwards, changes nothing the second time.
+- The audit trail says which route the facts came by:
+  `provider_status_checked` / `provider_status_mismatch` /
+  `provider_status_ignored` for this one, `webhook_*` for the webhook.
+
 ## Idempotency and uniqueness
 
 Browsers retry and people refresh, so the same callback arrives more than once.

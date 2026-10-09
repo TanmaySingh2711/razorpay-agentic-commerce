@@ -47,10 +47,10 @@ razorpay-agentic-commerce/
 │   │   ├── api/payments/       order, checkout, callback, retry, dismissed
 │   │   │   └── handler.ts      HTTP validation + response mapping (testable)
 │   │   ├── api/webhooks/razorpay/  provider webhook intake and verification
-│   │   ├── checkout/[transactionId]/    the page that offers Pay
-│   │   ├── transaction/[transactionId]/ the authoritative purchase view
 │   │   ├── page.tsx            overview: what this is, in one screen
 │   │   ├── shop/page.tsx       the shop: the one input
+│   │   ├── shop/[transactionId]/          the authoritative purchase view, inside the shop
+│   │   ├── shop/[transactionId]/checkout/ the page that offers paying again
 │   │   ├── how-it-works/       four flowcharts (flows.ts) and the safety rules
 │   │   ├── history/page.tsx    purchases this browser opened
 │   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
@@ -109,6 +109,7 @@ razorpay-agentic-commerce/
 │   │   ├── json.ts             JSON value model
 │   │   ├── logger.ts           structured operational logging
 │   │   ├── purchase-history.ts the browser-side history list and its rules
+│   │   ├── routes.ts           where a purchase lives (/shop/:id), in one place
 │   │   ├── redact.ts           secret and reasoning scrubbing
 │   │   └── server-only.ts      module-scope browser-bundle guard
 │   └── services/               one flat folder: each file is one application service

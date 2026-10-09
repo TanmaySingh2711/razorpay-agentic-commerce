@@ -562,7 +562,7 @@ export default async function TransactionPage({
 
   return (
     <>
-      <SiteHeader current={null} />
+      <SiteHeader current="shop" />
       <RememberPurchase transactionId={overview.transactionId} />
       <main className="wide">
         <p className="breadcrumb">
@@ -572,9 +572,12 @@ export default async function TransactionPage({
         </p>
 
         <header className="page-head">
+          <p className="eyebrow">Your purchase</p>
           <h1>{narrative.label}</h1>
           <p className="lead">{narrative.meaning}</p>
-          {awaitsProvider(overview.state) ? <AwaitingProvider /> : null}
+          {awaitsProvider(overview.state) ? (
+            <AwaitingProvider transactionId={overview.transactionId} />
+          ) : null}
         </header>
 
         <Journey overview={overview} />
