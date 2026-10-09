@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { PayButton } from "@/components/pay-button";
 import { SiteHeader } from "@/components/site-header";
 import { describePaymentFailure } from "@/domain/payment/failure";
@@ -61,10 +62,12 @@ export default async function CheckoutPage({
   const { transactionId } = await params;
   const status = await readRetryStatus(transactionId);
 
-  // Nothing to say about a transaction that does not exist, and nothing worth
-  // leaking about whether it might: the ordinary page is rendered either way,
-  // and pressing Pay gets a refusal from the server.
-  const failed = status?.transactionState === "PAYMENT_FAILED";
+  // A purchase that does not exist has nothing to pay for. The purchase page
+  // beside this one already answers not-found for an unknown id, so rendering
+  // a Pay button here would hide nothing - it would only invite a click the
+  // server is bound to refuse.
+  if (status === null) notFound();
+  const failed = status.transactionState === "PAYMENT_FAILED";
 
   return (
     <>

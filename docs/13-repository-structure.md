@@ -55,6 +55,7 @@ razorpay-agentic-commerce/
 │   │   ├── history/page.tsx    purchases this browser opened
 │   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
 │   │   ├── error.tsx           what a page shows when the server cannot finish it
+│   │   ├── not-found.tsx       an unknown address or purchase, in the site's own frame
 │   │   ├── layout.tsx          root layout, self-hosted fonts
 │   │   ├── globals.css         design tokens (black and red) + element defaults
 │   │   ├── ui.css              component styles, loaded after globals.css

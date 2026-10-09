@@ -108,7 +108,7 @@ summary:focus-visible {
 }
 
 /* `.primary`/`.secondary` are shared by <button> (form actions) and <a>
-   (the Architecture & Safety link below) - a reviewer should not be able to
+   (links such as "Open the shop") - a reviewer should not be able to
    tell, by look or feel, that one of these is a navigation link and the
    other submits a form. Only the button-specific states (:disabled) stay
    scoped to the element that can actually have them. */
