@@ -305,6 +305,7 @@ export default async function MerchantPage() {
       <SiteHeader current="merchant" />
       <main className="wide">
         <header className="page-head">
+          <p className="eyebrow">05 — Merchant</p>
           <h1>Merchant insights</h1>
           <p className="lead">
             What shoppers asked the AI assistant for, what turned into paid orders, and
@@ -391,7 +392,7 @@ export default async function MerchantPage() {
         )}
 
         <p className="cta-row">
-          <Link href="/" className="secondary">
+          <Link href="/shop" className="secondary">
             Back to the shop
           </Link>
         </p>

@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 
 const GLOBALS = readFileSync("src/app/globals.css", "utf8");
 const UI = readFileSync("src/app/ui.css", "utf8");
+const SITE = readFileSync("src/app/site.css", "utf8");
 
 const stripComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -95,7 +96,7 @@ function tokenDecls(body: string): Map<string, string> {
 /** Every custom property the stylesheets actually consume. */
 function referencedTokens(): Set<string> {
   const referenced = new Set<string>();
-  for (const css of [GLOBALS, UI]) {
+  for (const css of [GLOBALS, UI, SITE]) {
     for (const match of stripComments(css).matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/g)) {
       const name = match[1];
       if (name !== undefined) referenced.add(name);

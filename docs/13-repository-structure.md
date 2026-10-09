@@ -47,16 +47,23 @@ razorpay-agentic-commerce/
 │   │   ├── api/webhooks/razorpay/  provider webhook intake and verification
 │   │   ├── checkout/[transactionId]/    the page that offers Pay
 │   │   ├── transaction/[transactionId]/ the authoritative purchase view
-│   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
-│   │   ├── about/page.tsx      how the system works, for a reviewer
-│   │   ├── page.tsx            the shop
-│   │   ├── layout.tsx          root layout
-│   │   ├── globals.css         design tokens + element defaults
+│   │   ├── page.tsx            01 overview: what this is, the AI, the work behind it
+│   │   ├── shop/page.tsx       02 the shop: the one input
+│   │   ├── how-it-works/       03 four flowcharts (flows.ts) + the safety rules
+│   │   ├── history/page.tsx    04 purchases this browser opened
+│   │   ├── merchant/page.tsx   05 merchant insights: demand, conversion, recovery
+│   │   ├── layout.tsx          root layout, self-hosted fonts
+│   │   ├── globals.css         design tokens (black and red) + element defaults
 │   │   ├── ui.css              component styles, loaded after globals.css
+│   │   ├── site.css            header, page frames and the four main pages
 │   │   ├── icon.tsx            generated tab icon (Next file convention)
 │   │   └── favicon.ico         for browsers that request /favicon.ico directly
 │   ├── components/
-│   │   ├── site-header.tsx     brand, navigation, Test Mode badge
+│   │   ├── site-header.tsx     brand, numbered navigation, Test Mode badge, footer
+│   │   ├── flowchart.tsx       flowcharts drawn as ordered lists
+│   │   ├── count-up.tsx        figures that count up when scrolled into view
+│   │   ├── purchase-history.tsx the history list, filters and Clear history
+│   │   ├── remember-purchase.tsx saves an opened purchase to the history
 │   │   ├── buyer-console.tsx   the shopping input and conversation
 │   │   ├── pay-button.tsx      the one place a person spends money
 │   │   ├── decision-form.tsx   approve / reject / hold / refund buttons
@@ -98,6 +105,8 @@ razorpay-agentic-commerce/
 │   │   ├── clock.ts            injectable time, so expiry is testable
 │   │   ├── json.ts             JSON value model
 │   │   ├── logger.ts           structured operational logging
+│   │   ├── project-stats.ts    the overview's figures, counted from the repo at build
+│   │   ├── purchase-history.ts the browser-side history list and its rules
 │   │   ├── redact.ts           secret and reasoning scrubbing
 │   │   └── server-only.ts      module-scope browser-bundle guard
 │   └── services/               one flat folder: each file is one application service
@@ -125,6 +134,7 @@ razorpay-agentic-commerce/
 │       ├── passport-service.ts           safety passport rows, read-only
 │       ├── agent-request-log.ts          one structured row per agent request
 │       ├── merchant-insights-service.ts  the merchant dashboard's read model
+│       ├── purchase-history-service.ts   current state of remembered purchases
 │       ├── transaction-creation-service.ts the ONLY creator of Transaction rows
 │       ├── transition-service.ts         the ONLY writer of Transaction.status
 │       └── transaction-overview-service.ts the read model the pages render

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   requestApproval: vi.fn(),
   decideApproval: vi.fn(),
   reserveInventory: vi.fn(),
+  loadPurchaseSummaries: vi.fn(),
   findUnique: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((path: string): never => {
@@ -61,6 +62,9 @@ vi.mock("@/services/approval-service", () => ({
 }));
 vi.mock("@/services/reservation-service", () => ({
   reserveInventory: mocks.reserveInventory,
+}));
+vi.mock("@/services/purchase-history-service", () => ({
+  loadPurchaseSummaries: mocks.loadPurchaseSummaries,
 }));
 vi.mock("@/integrations/prisma-client", () => ({
   getPrismaClient: () => ({ transaction: { findUnique: mocks.findUnique } }),
@@ -407,5 +411,65 @@ describe("approvePurchase / rejectPurchase / reserveStock", () => {
       kind: "ERROR",
       message: "The item could not be held just now.",
     });
+  });
+});
+
+describe("loadPurchaseHistory", () => {
+  const summary = {
+    transactionId: TRANSACTION_ID,
+    state: "COMPLETED",
+    createdAt: "2026-10-01T09:00:00.000Z",
+    productName: "Aurora TKL",
+    quantity: 1,
+    total: { amountMinor: "249900", currency: "INR" },
+    refund: null,
+  };
+
+  it("returns the summaries for exactly the ids it was given", async () => {
+    mocks.loadPurchaseSummaries.mockResolvedValueOnce([summary]);
+    const { loadPurchaseHistory } = await actions();
+
+    expect(await loadPurchaseHistory([TRANSACTION_ID])).toEqual({
+      kind: "LOADED",
+      purchases: [summary],
+    });
+    expect(mocks.loadPurchaseSummaries).toHaveBeenCalledWith([TRANSACTION_ID]);
+  });
+
+  it.each([
+    ["not a list", "01a068ee-b304-7756-83d6-3e709f3c1c37"],
+    ["a list of non-strings", [1, 2, 3]],
+    [
+      "more ids than a history can hold",
+      Array.from({ length: 51 }, () => TRANSACTION_ID),
+    ],
+  ])("refuses %s without reaching the service", async (_label, input) => {
+    const { loadPurchaseHistory } = await actions();
+
+    expect(await loadPurchaseHistory(input)).toMatchObject({ kind: "ERROR" });
+    expect(mocks.loadPurchaseSummaries).not.toHaveBeenCalled();
+  });
+
+  it("turns a failure into a sentence, never a thrown error", async () => {
+    mocks.loadPurchaseSummaries.mockRejectedValueOnce(new Error("connection refused"));
+    const { loadPurchaseHistory } = await actions();
+
+    const outcome = await loadPurchaseHistory([TRANSACTION_ID]);
+
+    expect(outcome).toEqual({
+      kind: "ERROR",
+      message: "Your purchases could not be loaded just now. Please try again.",
+    });
+    expect(JSON.stringify(outcome)).not.toContain("connection refused");
+  });
+
+  it("consumes no rate limit: reading your own history costs nothing", async () => {
+    mocks.loadPurchaseSummaries.mockResolvedValueOnce([]);
+    const { loadPurchaseHistory } = await actions();
+
+    await loadPurchaseHistory([]);
+
+    expect(mocks.limitPaymentRequest).not.toHaveBeenCalled();
+    expect(mocks.limitAgentRequest).not.toHaveBeenCalled();
   });
 });

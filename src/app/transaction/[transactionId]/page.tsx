@@ -7,6 +7,7 @@ import {
   rejectPurchase,
   reserveStock,
 } from "@/app/actions";
+import { RememberPurchase } from "@/components/remember-purchase";
 import { SiteHeader } from "@/components/site-header";
 import { describeRefundStatus } from "@/domain/refund";
 import { AwaitingProvider } from "@/components/awaiting-provider";
@@ -444,7 +445,7 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
           transactionId={overview.transactionId}
           label="Hold it for me"
           busyLabel="Holding…"
-          recoveryHref="/"
+          recoveryHref="/shop"
           recoveryLabel="Start a new purchase"
         />
       </section>
@@ -562,9 +563,10 @@ export default async function TransactionPage({
   return (
     <>
       <SiteHeader current={null} />
+      <RememberPurchase transactionId={overview.transactionId} />
       <main className="wide">
         <p className="breadcrumb">
-          <Link href="/" className="secondary">
+          <Link href="/shop" className="secondary">
             ← Start another purchase
           </Link>
         </p>

@@ -1,126 +1,159 @@
 /* Design tokens and element defaults.
  *
- * The palette is Razorpay's: the brand blue (#3395FF) against the deep navy
- * (#02042B) they use for dark surfaces, with a tinted blue for quiet
- * backgrounds. It is used for meaning rather than decoration - blue marks the
- * one thing a person can act on next, and the semantic tokens below carry the
- * states this application actually has (a hold, an approval, a refusal, a
- * completed purchase) so a status colour is never picked ad hoc in a component.
+ * Black and red, and nothing else carrying colour except status. The whole
+ * interface sits on near-black; red is the one accent and is spent on
+ * meaning - the thing to press next, the current page, a refusal, the line a
+ * purchase travels along. Status keeps its own pairs (green for done, amber
+ * for waiting) because a refund that went through must never look like an
+ * error, whatever the theme says.
+ *
+ * Two typefaces, both self-hosted from npm (see the root layout), so a build
+ * never reaches a font CDN and the CSP needs no font host:
+ *  - Archivo, a grotesque with a width axis, condensed for headings;
+ *  - JetBrains Mono for labels, figures and anything that is a code or an id.
+ *
+ * Corners are nearly square on purpose. Soft, pill-shaped everything is the
+ * default look of generated interfaces; hairlines, a grid and square edges
+ * read as a tool somebody built.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* Razorpay brand */
-  --rzp-blue: #3395ff;
-  --rzp-blue-strong: #1a73e8;
-  --rzp-navy: #02042b;
-  --rzp-blue-tint: #ebf3ff;
+  /* Ink */
+  --black: #070707;
+  --background: #0a0a0a;
+  --surface: #111111;
+  --surface-raised: #161616;
+  --foreground: #f1efed;
+  --muted: #9b9794;
+  --faint: #6b6764;
+  --border: #242222;
+  --border-strong: #3a3636;
 
-  /* Surfaces and text */
-  --background: #ffffff;
-  --surface: #f7f8fa;
-  --surface-raised: #f7f9fc;
-  --foreground: #0f1729;
-  --muted: #5b6472;
-  --border: #e3e8ef;
-  --border-strong: #cbd5e1;
-  --accent: var(--rzp-blue-strong);
+  /* Red */
+  --red: #e3162d;
+  --red-bright: #ff3b4f;
+  --red-deep: #8f0c1b;
+  --accent: var(--red-bright);
+  --accent-fill: var(--red);
   --accent-contrast: #ffffff;
-  --accent-quiet: var(--rzp-blue-tint);
+  --accent-quiet: #1d0a0d;
+  --accent-line: color-mix(in srgb, var(--red) 55%, transparent);
 
-  /* Semantic states. Each is a foreground/background pair so a status never
-     has to pick its own tint at the call site. */
-  --positive: #0f7b45;
-  --positive-bg: #e8f6ee;
-  --warning: #8a5a00;
-  --warning-bg: #fdf3e2;
-  --negative: #b3261e;
-  --negative-bg: #fdecea;
+  /* Status. Each is a foreground/background pair so a component never has to
+     pick its own tint. */
+  --positive: #5fd38d;
+  --positive-bg: #0d1f15;
+  --warning: #e9b04f;
+  --warning-bg: #231a0b;
+  --negative: var(--red-bright);
+  --negative-bg: #250b0f;
 
-  /* Elevation and motion */
-  --shadow-sm: 0 1px 2px rgb(2 4 43 / 6%);
-  --shadow-md: 0 4px 16px rgb(2 4 43 / 8%);
-  --radius: 12px;
-  --radius-lg: 14px;
+  /* Type */
+  --font-sans:
+    "Archivo Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shape and motion */
+  --radius: 4px;
+  --radius-lg: 6px;
+  --pill: 3px;
+  --shadow-sm: 0 1px 0 rgb(0 0 0 / 60%);
+  --shadow-md: 0 10px 30px -12px rgb(0 0 0 / 80%);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--rzp-navy);
-    --surface: #14171c;
-    --surface-raised: #11153f;
-    --foreground: #e9ecf5;
-    --muted: #9aa4bf;
-    --border: #22274f;
-    --border-strong: #333a6b;
-    --accent: var(--rzp-blue);
-    --accent-contrast: #04122b;
-    --accent-quiet: #10224a;
-
-    --positive: #59d08c;
-    --positive-bg: #10241a;
-    --warning: #e0ac52;
-    --warning-bg: #2a2113;
-    --negative: #f0837c;
-    --negative-bg: #2a1614;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow-md: 0 4px 16px rgb(0 0 0 / 45%);
-  }
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --page-width: 72rem;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: var(--black);
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    /* A faint construction grid, fixed so it does not swim while scrolling. */
+    linear-gradient(to right, rgb(255 255 255 / 2.2%) 1px, transparent 1px) 0 0 / 6rem
+      6rem,
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
+  font-size: 1rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--red);
+  color: #fff;
 }
 
 main {
   max-width: 46rem;
   margin: 0 auto;
-  padding: 4rem 1.5rem;
+  padding: 3.5rem 1.5rem 4rem;
 }
 
 main.wide {
   max-width: 60rem;
 }
 
+main.full {
+  max-width: var(--page-width);
+}
+
+/* Condensed and tightly tracked, the gaps between words shrink with the
+   letters; a little word spacing gives them back. */
+h1,
+h2,
+h3 {
+  font-stretch: 85%;
+  word-spacing: 0.08em;
+}
+
 h1 {
-  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.5rem;
+  font-size: clamp(2rem, 1.2rem + 3vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.75rem;
+  text-wrap: balance;
 }
 
 h2 {
-  font-size: 1rem;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-stretch: normal;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 2.5rem 0 0.75rem;
+  margin: 2.75rem 0 0.9rem;
 }
 
 h2.plain {
-  font-size: 1.125rem;
+  font-family: var(--font-sans);
+  font-stretch: 85%;
+  font-size: 1.35rem;
+  font-weight: 750;
   letter-spacing: -0.01em;
   text-transform: none;
   color: var(--foreground);
+}
+
+h3 {
+  font-weight: 700;
+  letter-spacing: -0.005em;
 }
 
 p {
@@ -138,38 +171,44 @@ li {
 
 a {
   color: var(--accent);
-  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
   transition: color 0.15s var(--ease);
 }
 
 a:hover {
-  color: var(--rzp-blue);
+  color: var(--foreground);
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.875em;
-  background: color-mix(in srgb, var(--border) 60%, transparent);
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  padding: 0.05em 0.35em;
+  border-radius: 2px;
 }
 
 /* One visible focus treatment for every interactive element. Never removed:
    a keyboard user has to be able to see where they are. */
-:where(a, button, input, textarea, select, [tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
@@ -178,10 +217,11 @@ code {
   margin-bottom: 2rem;
 }
 
+/* The rule every page states somewhere: a red edge on black. */
 .rule {
   background: var(--accent-quiet);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  border-left: 3px solid var(--accent);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--red);
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;

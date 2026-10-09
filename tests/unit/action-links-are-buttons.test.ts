@@ -19,7 +19,8 @@ import { describe, expect, it } from "vitest";
 
 const PAGES = [
   "src/app/page.tsx",
-  "src/app/about/page.tsx",
+  "src/app/shop/page.tsx",
+  "src/app/how-it-works/page.tsx",
   "src/app/transaction/[transactionId]/page.tsx",
   "src/components/decision-form.tsx",
 ] as const;

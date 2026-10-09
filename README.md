@@ -83,6 +83,7 @@ This project shows one way to do that. The AI is kept to a small, harmless job, 
 | Safety Passport         | Each purchase page shows a plain summary of why the purchase was allowed.                                            |
 | How the assistant chose | Each purchase page shows how many products were looked at and which other products also qualified.                   |
 | Audit trail             | Every decision and state change is stored with a reason code.                                                        |
+| Purchase history        | Every purchase you open is saved in your browser, with its live status. You can clear it at any time.                |
 | Merchant insights       | A page for the seller: revenue, conversion, requests that found nothing, and payments recovered by retry.            |
 | Rate limits             | Limits on requests per visitor and per day protect the AI quota from abuse.                                          |
 
@@ -302,7 +303,7 @@ Other useful commands:
 
 ## Usage
 
-1. Open the app. You land on the shop page.
+1. Open the app. You land on the **Overview**. Press **Open the shop**.
 2. Type what you want, for example `Find me the best mouse under ₹3000 and buy it`, and press **Find**.
 3. If the assistant asks a question, type your answer and press **Answer**.
 4. You are taken to the purchase page. It shows the verified price, how the assistant chose, and the Safety Passport.
@@ -314,8 +315,10 @@ Other useful commands:
 
 Other pages, from the top bar:
 
+- **Overview** (`/`) explains what the app is, how the assistant is built, and shows figures counted from the repository (lines of code, tests, design documents, commits).
+- **How it works** (`/how-it-works`) shows four flowcharts: how the AI is built, how a purchase moves, what each page does, and how to use it. It ends with the safety rules.
+- **History** (`/history`) lists every purchase you opened in this browser, with its current status. **Clear history** forgets the list in this browser; it never deletes anything on the server.
 - **Merchant insights** (`/merchant`) shows the seller's view.
-- **How it's safe** (`/about`) explains the safety design.
 
 ## Example Requests
 

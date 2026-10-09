@@ -1,0 +1,1669 @@
+/* The site frame and the four main pages: header, overview, shop, how it
+   works, history.
+
+   Loaded after globals.css and ui.css. Colours come only from the tokens in
+   globals.css. Motion follows three rules:
+    - it shows something true: the line a request travels, a figure being
+      counted, a branch being taken;
+    - it runs once, on arrival, except for the few things that are genuinely
+      live (the Test Mode dot, a request in flight, the flow of a connector);
+    - with reduced motion requested, everything is simply there - globals.css
+      shortens every animation to nothing, and the scroll-driven reveals below
+      are only declared when motion is welcome at all. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes travel {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(500%);
+  }
+}
+
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(560%);
+  }
+}
+
+@keyframes flow-down {
+  to {
+    background-position: 0 10px;
+  }
+}
+
+@keyframes live {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 59 79 / 55%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 7px rgb(255 59 79 / 0%);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* --- Header -------------------------------------------------------------- */
+
+.product-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgb(7 7 7 / 88%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* A thin light that runs along the bottom edge: the one ambient motion on the
+   page, slow enough to read as a signal rather than decoration. */
+.product-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red-bright), transparent);
+  animation: scan 7s linear infinite;
+}
+
+.product-bar-inner {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 0.7rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 700;
+  font-stretch: 80%;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.brand:hover {
+  color: var(--muted);
+}
+
+.brand-name span {
+  color: var(--foreground);
+  font-weight: 800;
+}
+
+/* A red square with one corner cut: the mark, drawn in CSS. */
+.brand-mark {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+  background: var(--red);
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 62% 100%, 0 100%);
+  transition: transform 0.4s var(--ease-out);
+}
+
+.brand:hover .brand-mark {
+  transform: rotate(90deg);
+}
+
+.site-nav {
+  display: flex;
+  gap: 0.1rem;
+  margin-left: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-index {
+  font-size: 0.62rem;
+  color: var(--faint);
+  transition: color 0.2s var(--ease);
+}
+
+.nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.2rem;
+  height: 2px;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.nav-link:hover {
+  color: var(--foreground);
+}
+
+.nav-link:hover::after,
+.nav-link[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+.nav-link[aria-current="page"] {
+  color: var(--foreground);
+}
+
+.nav-link[aria-current="page"] .nav-index {
+  color: var(--red-bright);
+}
+
+.badge.test-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+  background: var(--accent-quiet);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--pill);
+  padding: 0.32rem 0.55rem;
+  white-space: nowrap;
+}
+
+.badge.test-mode .dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--red-bright);
+  animation: live 1.8s ease-out infinite;
+}
+
+/* On a narrow screen the bar takes three rows, so it scrolls away with the
+   page instead of keeping a third of the screen. The page numbers go, and the
+   five links tighten until they fit on one line - the current page is never
+   hidden off the edge of a scrolling strip. */
+@media (max-width: 62rem) {
+  .product-bar {
+    position: static;
+  }
+
+  .product-bar-inner {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  .badge.test-mode {
+    margin-left: auto;
+  }
+
+  .site-nav {
+    order: 3;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    overflow: visible;
+  }
+
+  .nav-link {
+    padding: 0.5rem 0.15rem;
+    letter-spacing: 0.03em;
+  }
+
+  .nav-link::after {
+    left: 0.15rem;
+    right: 0.15rem;
+  }
+
+  .nav-index {
+    display: none;
+  }
+}
+
+@media (max-width: 26rem) {
+  .product-bar-inner {
+    padding: 0.6rem 1rem;
+  }
+
+  .brand {
+    font-size: 0.95rem;
+  }
+}
+
+/* --- Shared page furniture ----------------------------------------------- */
+
+main.full {
+  padding-top: 2.5rem;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.eyebrow::before {
+  content: "";
+  width: 1.5rem;
+  height: 1px;
+  background: var(--red);
+}
+
+.page-intro {
+  max-width: 54rem;
+  padding: 1rem 0 1.5rem;
+}
+
+.page-intro > *,
+.hero > * {
+  animation: rise 0.8s var(--ease-out) both;
+}
+
+.page-intro > :nth-child(2),
+.hero > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.page-intro > :nth-child(3),
+.hero > :nth-child(3) {
+  animation-delay: 160ms;
+}
+
+.page-intro > :nth-child(n + 4),
+.hero > :nth-child(n + 4) {
+  animation-delay: 240ms;
+}
+
+h2.section-title {
+  font-family: var(--font-sans);
+  font-stretch: 80%;
+  font-size: clamp(1.6rem, 1rem + 2vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: var(--foreground);
+  margin: 0 0 0.75rem;
+  text-wrap: balance;
+}
+
+.section-lead {
+  color: var(--muted);
+  max-width: 44rem;
+  margin: 0 0 1.75rem;
+}
+
+.section {
+  padding: 3.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.closing {
+  padding: 4rem 0 1rem;
+}
+
+.closing .section-lead {
+  margin-bottom: 1.25rem;
+}
+
+.site-footer {
+  margin-top: 4rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+/* A button for the one irreversible-feeling action on the site. */
+:where(button).danger {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.55rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease);
+}
+
+:where(button).danger:hover {
+  background: color-mix(in srgb, var(--red) 82%, white);
+}
+
+/* Scroll-driven reveals, where the browser can run them on the compositor.
+   Elsewhere (and with reduced motion) these blocks are simply present. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .pipeline-step,
+    .page-cards > li,
+    .ai-part,
+    .effort-stat,
+    .doc-index > li,
+    .flow-node,
+    .flow-branch-label,
+    .safety-grid > li {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+
+/* --- 01 Overview ---------------------------------------------------------- */
+
+.hero {
+  padding: 2.5rem 0 3.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-title {
+  font-size: clamp(2.6rem, 1rem + 6vw, 5.5rem);
+  font-stretch: 72%;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  word-spacing: 0.12em;
+  margin: 0 0 1.5rem;
+}
+
+.hero-title span {
+  display: block;
+}
+
+/* The second line is the claim, so it arrives second: wiped in from the left
+   after the first has settled. */
+.hero-accent {
+  color: var(--red-bright);
+  animation: wipe 1.1s 0.35s var(--ease-out) both;
+}
+
+.hero-lead {
+  max-width: 42rem;
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.pipeline {
+  position: relative;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* The line a request travels along, with a pulse running its length. */
+.pipeline::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--border-strong);
+}
+
+.pipeline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--red-bright));
+  animation: travel 4.5s var(--ease) infinite;
+}
+
+.pipeline-step {
+  margin: 0;
+  padding: 1.4rem 1.1rem 1.5rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  transition: background-color 0.25s var(--ease);
+}
+
+.pipeline-step:last-child {
+  border-right: 0;
+}
+
+.pipeline-step:hover {
+  background: var(--surface-raised);
+}
+
+/* The AI's step is drawn differently from the rest on purpose: hatched and
+   dashed, the same way the flowcharts draw anything the model produces. */
+.pipeline-step[data-ai="true"] {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 10px, rgb(227 22 45 / 7%) 10px 11px),
+    var(--surface);
+  outline: 1px dashed var(--accent-line);
+  outline-offset: -7px;
+}
+
+.pipeline-index {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+}
+
+.pipeline-who {
+  display: block;
+  margin: 0.9rem 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pipeline-step[data-ai="true"] .pipeline-who {
+  color: var(--red-bright);
+}
+
+.pipeline-step h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+  font-stretch: 85%;
+}
+
+.pipeline-step p {
+  margin: 0;
+  font-size: 0.87rem;
+  color: var(--muted);
+}
+
+@media (max-width: 60rem) {
+  .pipeline {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-step {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pipeline-step:last-child {
+    border-bottom: 0;
+  }
+
+  .pipeline::after {
+    display: none;
+  }
+}
+
+/* Cells separated by hairlines: a grid with a 1px gap over a border-coloured
+   background, so every edge is shared and exactly one pixel. */
+.page-cards,
+.ai-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+
+.page-cards {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.page-cards > li {
+  margin: 0;
+}
+
+/* Each card is a `.secondary` link (every navigation action on a page is a
+   styled control - see tests/unit/action-links-are-buttons.test.ts), drawn
+   here as a full cell rather than a button. The selectors carry the class so
+   they outrank the button rules in ui.css. */
+.page-cards a.secondary {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  height: 100%;
+  justify-content: stretch;
+  align-items: start;
+  min-height: 0;
+  padding: 1.4rem 1.3rem 1.6rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  background: var(--surface);
+  color: var(--foreground);
+  border: 0;
+  border-radius: 0;
+  text-decoration: none;
+  overflow: hidden;
+  transition: background-color 0.25s var(--ease);
+}
+
+.page-cards a.secondary::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--red);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.page-cards a.secondary:hover:not(:disabled),
+.page-cards a.secondary:active:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--foreground);
+  transform: none;
+  box-shadow: none;
+}
+
+.page-cards a.secondary:hover::before,
+.page-cards a.secondary:focus-visible::before {
+  transform: scaleY(1);
+}
+
+.page-card-number {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--red-bright);
+}
+
+.page-card-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  font-stretch: 80%;
+  letter-spacing: -0.01em;
+}
+
+.page-card-body {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.page-card-go {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  font-family: var(--font-mono);
+  color: var(--faint);
+  transition:
+    transform 0.3s var(--ease-out),
+    color 0.3s var(--ease);
+}
+
+.page-cards a.secondary:hover .page-card-go {
+  transform: translateX(4px);
+  color: var(--red-bright);
+}
+
+/* Six parts: three across, then two, then one - never a ragged last row
+   with an empty cell showing through. */
+.ai-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 60rem) {
+  .ai-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 36rem) {
+  .ai-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-part {
+  margin: 0;
+  padding: 1.3rem 1.3rem 1.4rem;
+  background: var(--surface);
+}
+
+.ai-label {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--red-bright);
+}
+
+.ai-part h3 {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 1.1rem;
+  font-stretch: 85%;
+}
+
+.ai-part p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* The work behind it */
+
+.effort-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 3rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 60rem) {
+  .effort-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.effort-stat {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 1.4rem 1.25rem 1.5rem;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* A red registration mark on each tile's corner. */
+.effort-stat::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid var(--red);
+  border-left: 2px solid var(--red);
+}
+
+.effort-value {
+  font-family: var(--font-mono);
+  font-size: clamp(1.9rem, 1.2rem + 2vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.effort-label {
+  margin-top: 0.4rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.effort-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.effort-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 2.5rem;
+}
+
+@media (max-width: 52rem) {
+  .effort-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+h3.mini-title {
+  margin: 0 0 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.check-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem;
+}
+
+.check-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.45rem 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.92rem;
+}
+
+.check-list li::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: none;
+  background: var(--red);
+}
+
+.tag-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tag-list li {
+  margin: 0;
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+}
+
+.doc-index {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  columns: 2 15rem;
+  column-gap: 1.75rem;
+}
+
+.doc-index li {
+  margin: 0;
+  break-inside: avoid;
+}
+
+.doc-index a {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.42rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--foreground);
+  text-decoration: none;
+  transition:
+    color 0.2s var(--ease),
+    padding-left 0.25s var(--ease-out);
+}
+
+.doc-index a:hover {
+  color: var(--red-bright);
+  padding-left: 0.35rem;
+}
+
+.doc-number {
+  min-width: 1.4rem;
+  padding-top: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+/* --- 02 Shop -------------------------------------------------------------- */
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 2rem;
+  align-items: start;
+  margin-top: 0.5rem;
+  animation: rise 0.8s 0.2s var(--ease-out) both;
+}
+
+@media (max-width: 60rem) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shop-layout .console {
+  margin: 0;
+  border-top: 2px solid var(--red);
+  transition:
+    border-color 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+.shop-layout .console:focus-within {
+  border-color: var(--accent-line);
+  border-top-color: var(--red-bright);
+  box-shadow: 0 24px 60px -32px rgb(227 22 45 / 55%);
+}
+
+/* A request in flight: a light runs across the top of the progress box for
+   as long as the server is working. */
+.agent-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.agent-progress::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--red-bright), transparent);
+  animation: travel 1.4s linear infinite;
+}
+
+.shop-aside {
+  position: sticky;
+  top: 5rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.shop-aside h2 {
+  margin-top: 0;
+}
+
+.shop-aside .secondary {
+  margin-top: 1rem;
+}
+
+.after-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  counter-reset: after;
+}
+
+.after-list li {
+  position: relative;
+  counter-increment: after;
+  margin: 0;
+  padding: 0.6rem 0 0.6rem 2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.after-list li::before {
+  content: counter(after, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+}
+
+.after-who {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.after-list li[data-ai="true"] .after-who {
+  color: var(--red-bright);
+}
+
+/* --- 03 How it works: flowcharts ----------------------------------------- */
+
+.jump-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.jump-nav a {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--foreground);
+  text-decoration: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+  transition:
+    border-color 0.2s var(--ease),
+    background-color 0.2s var(--ease);
+}
+
+.jump-nav a span {
+  color: var(--red-bright);
+}
+
+.jump-nav a:hover {
+  color: var(--foreground);
+  border-color: var(--red);
+  background: var(--accent-quiet);
+}
+
+.flow-legend {
+  list-style: none;
+  padding: 1rem 0;
+  margin: 1rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.flow-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.flow-swatch {
+  width: 1.4rem;
+  height: 0.85rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  background: var(--surface);
+}
+
+/* Who does a step decides how its box is drawn. The legend's swatches use
+   exactly the same rules, so the key always matches the chart. */
+[data-actor="person"] > .flow-swatch,
+.flow-node[data-actor="person"] {
+  box-shadow: inset 3px 0 0 var(--foreground);
+}
+
+[data-actor="server"] > .flow-swatch,
+.flow-node[data-actor="server"] {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+[data-actor="ai"] > .flow-swatch,
+.flow-node[data-actor="ai"] {
+  border: 1px dashed var(--red-bright);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 9px, rgb(227 22 45 / 9%) 9px 10px),
+    var(--surface);
+}
+
+[data-actor="razorpay"] > .flow-swatch,
+.flow-node[data-actor="razorpay"] {
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red-deep) 45%, var(--surface));
+}
+
+[data-actor="data"] > .flow-swatch,
+.flow-node[data-actor="data"] {
+  border: 3px double var(--border-strong);
+}
+
+.chart-section {
+  padding: 3.5rem 0;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 5rem;
+}
+
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.chart-number {
+  min-width: 2.25rem;
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--red);
+}
+
+.flow {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem auto 0;
+  max-width: 58rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding-top: 2.25rem;
+}
+
+.flow-step:first-child {
+  padding-top: 0;
+}
+
+/* The connector into each step: a dashed red line whose dashes travel
+   downwards, ending in an arrowhead on the box below. */
+.flow-step:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 0.2rem;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 1.7rem;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--red) 0 5px,
+    transparent 5px 10px
+  );
+  background-size: 2px 10px;
+  animation: flow-down 0.6s linear infinite;
+}
+
+.flow-step:not(:first-child)::after {
+  content: "";
+  position: absolute;
+  top: 1.75rem;
+  left: calc(50% - 5px);
+  border: 5px solid transparent;
+  border-top: 6px solid var(--red);
+  border-bottom: 0;
+}
+
+.flow-node {
+  position: relative;
+  display: grid;
+  gap: 0.2rem;
+  width: min(34rem, 100%);
+  padding: 0.85rem 1.05rem 0.95rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  transition:
+    transform 0.25s var(--ease-out),
+    border-color 0.25s var(--ease);
+}
+
+.flow-node:hover {
+  transform: translateY(-2px);
+}
+
+.flow-actor {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.flow-node[data-actor="ai"] .flow-actor {
+  color: var(--red-bright);
+}
+
+.flow-node[data-actor="razorpay"] .flow-actor {
+  color: #ffb3bb;
+}
+
+.flow-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.flow-body {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.flow-node[data-actor="razorpay"] .flow-body {
+  color: #d9c2c4;
+}
+
+/* A fork: a bar across the branches, a short drop into each. */
+.flow-branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.flow-branch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 1.4rem;
+}
+
+.flow-branch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 1.2rem;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--red) 0 5px,
+    transparent 5px 10px
+  );
+  background-size: 2px 10px;
+  animation: flow-down 0.6s linear infinite;
+}
+
+.flow-branch::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -0.5rem;
+  right: -0.5rem;
+  height: 2px;
+  background: var(--accent-line);
+}
+
+.flow-branch:first-child::after {
+  left: 50%;
+}
+
+.flow-branch:last-child::after {
+  right: 50%;
+}
+
+.flow-branch:only-child::after {
+  display: none;
+}
+
+.flow-branch-label {
+  margin-bottom: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+}
+
+.flow-inner {
+  margin-top: 0;
+  width: 100%;
+}
+
+.flow-inner > .flow-step:first-child {
+  padding-top: 1.6rem;
+}
+
+.flow-inner > .flow-step:first-child::before,
+.flow-inner > .flow-step:first-child::after {
+  content: "";
+  position: absolute;
+}
+
+.flow-inner > .flow-step:first-child::before {
+  top: 0.1rem;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 1.1rem;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--red) 0 5px,
+    transparent 5px 10px
+  );
+  background-size: 2px 10px;
+  animation: flow-down 0.6s linear infinite;
+}
+
+.flow-inner > .flow-step:first-child::after {
+  top: 1.15rem;
+  left: calc(50% - 5px);
+  border: 5px solid transparent;
+  border-top: 6px solid var(--red);
+  border-bottom: 0;
+}
+
+.flow-branch[data-end] .flow-inner::after {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.flow-branch[data-end="stop"] .flow-inner::after {
+  content: "■ Stops here";
+}
+
+.flow-branch[data-end="loop"] .flow-inner::after {
+  content: "↺ Back a step";
+}
+
+/* Stacked on a phone, branches would read as one step after another. Each
+   one after the first is set off by a dashed rule marked "or", so they read
+   as the alternatives they are. */
+@media (max-width: 48rem) {
+  .flow-branches {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .flow-branch::after {
+    display: none;
+  }
+
+  .flow-branch + .flow-branch {
+    margin-top: 1.5rem;
+    padding-top: 1.75rem;
+    border-top: 1px dashed var(--border-strong);
+  }
+
+  .flow-branch + .flow-branch::before {
+    content: "or";
+    top: 0;
+    left: 50%;
+    width: auto;
+    height: auto;
+    padding: 0 0.6rem;
+    transform: translate(-50%, -50%);
+    background: var(--background);
+    animation: none;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+/* The seven safety decisions */
+
+.safety-grid {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+.safety-grid > li.card {
+  margin: 0;
+}
+
+.safety-index {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--red-bright);
+}
+
+.safety-grid h3 {
+  margin: 0.4rem 0 0.35rem;
+  font-size: 1rem;
+}
+
+.safety-grid p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.two-facts h3 {
+  margin-top: 0;
+}
+
+/* --- 04 History ----------------------------------------------------------- */
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1rem 0 2.5rem;
+  border: 1px solid var(--border);
+}
+
+.history-summary > div {
+  padding: 1.1rem 1.25rem;
+  border-right: 1px solid var(--border);
+}
+
+.history-summary > div:last-child {
+  border-right: 0;
+}
+
+.history-summary dt {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.history-summary dd {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1.35rem, 1rem + 1vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 40rem) {
+  .history-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .history-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .history-summary > div:last-child {
+    border-bottom: 0;
+  }
+}
+
+.history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.history-toolbar h2 {
+  margin: 0 auto 0 0;
+}
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.filter {
+  padding: 0.4rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+  cursor: pointer;
+  transition:
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    background-color 0.15s var(--ease);
+}
+
+.filter:hover {
+  color: var(--foreground);
+  border-color: var(--foreground);
+}
+
+.filter[aria-pressed="true"] {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+}
+
+:where(button).secondary.clear-button {
+  min-height: 36px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.clear-confirm {
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem;
+  background: var(--negative-bg);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  animation: rise 0.3s var(--ease-out) both;
+}
+
+.clear-confirm p {
+  margin: 0 0 0.85rem;
+}
+
+.clear-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(6.5rem, 0.8fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+  margin: 0;
+  padding: 1rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  animation: rise 0.45s var(--ease-out) both;
+  transition: background-color 0.2s var(--ease);
+}
+
+.history-row:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.history-row:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.history-row:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.history-row:nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+
+.history-row:hover {
+  background: var(--surface);
+}
+
+.history-product {
+  display: block;
+  font-weight: 700;
+}
+
+.history-qty {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.history-meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.history-amount {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.history-open {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--red-bright);
+  border-bottom: 1px solid var(--accent-line);
+}
+
+.history-open:hover {
+  color: var(--foreground);
+}
+
+@media (max-width: 44rem) {
+  .history-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .history-status,
+  .history-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+.history-row.skeleton {
+  display: block;
+  height: 4.3rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-raised) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.history-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.history-empty-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-stretch: 80%;
+}
+
+.history-empty .primary {
+  margin-top: 0.75rem;
+}
+
+.history-none {
+  padding: 1.5rem 0;
+}
+
+.history-note {
+  margin-top: 2rem;
+}

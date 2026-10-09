@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
+// Self-hosted from npm: the font files are bundled with the app, so no build
+// or page load reaches a font CDN. Archivo is loaded with its width axis for
+// the condensed headings.
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/jetbrains-mono";
 import "./globals.css";
 import "./ui.css";
+import "./site.css";
 
 export const metadata: Metadata = {
   title: "Razorpay Agentic Commerce",
   description:
-    "Agent-transactable commerce with deterministic financial controls, human approval gates and a full audit trail.",
+    "An AI assistant picks a product from a sentence; the server decides everything about the money. Razorpay Test Mode.",
 };
 
 /**

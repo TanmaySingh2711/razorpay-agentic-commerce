@@ -1,19 +1,22 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import AboutPage from "@/app/about/page";
+import HowItWorksPage from "@/app/how-it-works/page";
+import nextConfig from "../../next.config";
 
 /**
- * The `/about` page is static prose, but prose about a system's own
+ * `/how-it-works` is static prose and diagrams, but prose about a system's own
  * capabilities can go stale exactly like a doc can - and unlike `docs/`, this
- * page is what a reviewer visiting the deployed app actually reads. This test
- * exists because the page once claimed inventory commit and final completion
- * were "later objectives... not implemented here", well after both had
- * shipped and been proven in production. That is a regression this test
- * would have caught: the markup must never claim the system stops short of
+ * page is what a reviewer visiting the deployed app actually reads.
+ *
+ * It took over the old `/about` page ("Architecture & Safety"), and every
+ * claim that page was held to is held here. The first of them exists because
+ * that page once claimed inventory commit and final completion were "later
+ * objectives... not implemented here", well after both had shipped and been
+ * proven in production: the markup must never claim the system stops short of
  * work that has actually landed.
  */
-describe("the /about page describes the system as it actually is", () => {
-  const markup = renderToStaticMarkup(AboutPage());
+describe("the /how-it-works page describes the system as it actually is", () => {
+  const markup = renderToStaticMarkup(HowItWorksPage());
 
   it("does not claim inventory commit or completion are unimplemented", () => {
     expect(markup).not.toMatch(/not implemented here/i);
@@ -31,13 +34,15 @@ describe("the /about page describes the system as it actually is", () => {
 
   it("never claims the browser or the model can move money", () => {
     expect(markup).not.toMatch(/browser can (charge|capture|complete)/i);
+    expect(markup).not.toMatch(/AI (executes|authorizes|approves|verifies)/i);
   });
 
-  it("is titled Architecture & Safety, the renamed destination of the homepage's CTA", () => {
+  it("keeps the Architecture & Safety section the old /about page became", () => {
     expect(markup).toMatch(/Architecture &amp; Safety/);
+    expect(markup).toMatch(/id="safety"/);
   });
 
-  it("presents the seven safety decisions the demo-polish pass organised the page around", () => {
+  it("presents the seven safety decisions", () => {
     for (const title of [
       "AI Boundary",
       "Trusted PurchaseQuote",
@@ -57,10 +62,7 @@ describe("the /about page describes the system as it actually is", () => {
     );
   });
 
-  it("puts the product name above the page title, not below it", () => {
-    // Regression for a deliberate reorder: "Razorpay Agentic Commerce" is the
-    // product and must read first; "Architecture & Safety" is this page and
-    // follows it - never the other way round.
+  it("puts the product name above the section title, not below it", () => {
     const productIndex = markup.indexOf("Razorpay Agentic Commerce");
     const titleIndex = markup.indexOf("Architecture &amp; Safety");
     expect(productIndex).toBeGreaterThan(-1);
@@ -68,8 +70,8 @@ describe("the /about page describes the system as it actually is", () => {
     expect(productIndex).toBeLessThan(titleIndex);
   });
 
-  it("does not repeat the Buildathon line here - the product name already identifies it", () => {
-    expect(markup).not.toMatch(/Buildathon/i);
+  it("does not mention a competition", () => {
+    expect(markup).not.toMatch(/Buildathon|hackathon/i);
   });
 
   it("does not surface repo-oriented text like the docs/ path or the liveness endpoint", () => {
@@ -78,7 +80,57 @@ describe("the /about page describes the system as it actually is", () => {
     expect(markup).not.toMatch(/api\/health/i);
   });
 
-  it("styles the return link as a visible secondary action, not a bare text link", () => {
+  it("offers the way back and the way forward as visible controls", () => {
     expect(markup).toMatch(/<a class="secondary" href="\/">/);
+    expect(markup).toMatch(/<a class="primary" href="\/shop">/);
+  });
+});
+
+describe("the four flowcharts", () => {
+  const markup = renderToStaticMarkup(HowItWorksPage());
+
+  it("draws all four, each as an ordered list a screen reader can follow", () => {
+    for (const label of [
+      "How the AI is built",
+      "How a purchase works",
+      "What is in this dashboard",
+      "How you use it",
+    ]) {
+      expect(markup).toContain(`<ol class="flow" aria-label="${label}">`);
+    }
+  });
+
+  it("marks only proposal steps as the AI's, and never a money step", () => {
+    const aiTitles = [
+      ...markup.matchAll(
+        /data-actor="ai"><span class="flow-actor">[^<]*<\/span><strong class="flow-title">([^<]+)</g,
+      ),
+    ].map((match) => match[1]);
+    expect(aiTitles).toEqual(["Pass 1 — intent", "Pass 2 — selection", "Shop"]);
+    for (const title of aiTitles) {
+      expect(title).not.toMatch(/pay|price|quote|approv|refund|hold|order/i);
+    }
+  });
+
+  it("names the three read-only tools the agent is actually given", () => {
+    expect(markup).toContain("search_catalog");
+    expect(markup).toContain("get_product_by_id");
+    expect(markup).toContain("get_merchant_info");
+  });
+
+  it("shows where a branch ends instead of leaving it hanging", () => {
+    expect(markup).toMatch(/data-end="stop"/);
+    expect(markup).toMatch(/data-end="loop"/);
+  });
+});
+
+describe("the old /about address", () => {
+  it("redirects permanently to /how-it-works", async () => {
+    const redirects = await nextConfig.redirects?.();
+    expect(redirects).toContainEqual({
+      source: "/about",
+      destination: "/how-it-works",
+      permanent: true,
+    });
   });
 });

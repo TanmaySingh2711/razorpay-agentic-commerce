@@ -115,6 +115,15 @@ function servesHttps(): boolean {
 }
 
 const nextConfig: NextConfig = {
+  /**
+   * `/about` ("Architecture & Safety") became the last section of
+   * `/how-it-works`. Old links still land on that page.
+   */
+  redirects() {
+    return Promise.resolve([
+      { source: "/about", destination: "/how-it-works", permanent: true },
+    ]);
+  },
   async headers() {
     const https = servesHttps();
     return [

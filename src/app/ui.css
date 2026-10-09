@@ -2,8 +2,8 @@
 
    Plain CSS, no framework, no runtime. The whole surface is a handful of cards
    and one input, so a utility framework would ship more bytes than page. Every
-   colour comes from the tokens in globals.css, so light and dark stay in step
-   without a second theme to maintain.
+   colour comes from the tokens in globals.css, so the black-and-red palette is
+   defined once and nothing here picks a colour of its own.
 
    Loaded after globals.css from the root layout. This file declares no design
    tokens of its own: it used to carry a second `:root` block that silently
@@ -133,22 +133,27 @@ summary:focus-visible {
     transform 0.08s var(--ease);
 }
 
+/* The fill is the deeper red, not the bright one: white text on it keeps a
+   readable contrast, and the bright red stays free for text and lines. The
+   button sets that red as its own `--accent`, so every state below is built
+   relative to the colour it actually rests on. */
 :where(button, a).primary {
+  --accent: var(--accent-fill);
   background: var(--accent);
   color: var(--accent-contrast);
   box-shadow: var(--shadow-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* Blends toward white rather than swapping to a fixed second colour. `--accent`
-   and `--rzp-blue` resolve to the exact same value in dark mode, which made
-   this hover state invisible in the one theme most reviewers actually see -
-   the button read as flat because, on hover, its fill genuinely did not
-   change. Blending always lightens the button's own colour, in either theme,
-   without ever changing what colour it is. The lift makes the response felt
-   as well as seen. */
+/* Hover lightens the button's own red and lifts it, so the response is felt
+   as well as seen; it never swaps to a second colour. */
 :where(button, a).primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 85%, white);
-  box-shadow: var(--shadow-md);
+  background: color-mix(in srgb, var(--accent) 82%, white);
+  color: var(--accent-contrast);
+  box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--red) 70%, transparent);
   transform: translateY(-1px);
 }
 
@@ -156,6 +161,10 @@ summary:focus-visible {
   background: var(--surface);
   color: var(--foreground);
   border-color: var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 :where(button, a).secondary:hover:not(:disabled) {
@@ -239,7 +248,7 @@ button[aria-busy="true"]::after {
   color: var(--foreground);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--pill);
   padding: 0.4rem 0.9rem;
   cursor: pointer;
   text-align: left;
@@ -360,7 +369,7 @@ button[aria-busy="true"]::after {
 .attributes li {
   font-size: 0.82rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--pill);
   padding: 0.25rem 0.7rem;
 }
 
@@ -377,7 +386,7 @@ button[aria-busy="true"]::after {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 0.25rem 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--pill);
   white-space: nowrap;
 }
 
@@ -518,47 +527,6 @@ button[aria-busy="true"]::after {
   font-size: 0.78rem;
 }
 
-/* --- How it works -------------------------------------------------------- */
-
-.steps {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-}
-
-.steps li {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-.step-number {
-  flex: 0 0 auto;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.steps h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.steps p {
-  margin: 0.2rem 0 0;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
 /* --- Misc ---------------------------------------------------------------- */
 
 .button-row {
@@ -587,13 +555,6 @@ button[aria-busy="true"]::after {
 .technical code {
   font-size: 0.85rem;
   word-break: break-all;
-}
-
-.site-footer {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.9rem;
 }
 
 .visually-hidden {
@@ -705,76 +666,6 @@ button[aria-busy="true"]::after {
   }
 }
 
-/* --- Product header ------------------------------------------------------
-   A slim identity bar with three destinations (see .site-nav below), not a
-   navigation system. Full-bleed on purpose: it is the one element
-   allowed to ignore `main`'s max-width, the way a real product's top bar
-   would sit above its content column rather than inside it. */
-
-.product-bar {
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-raised);
-}
-
-.product-bar-inner {
-  /* Matches `main.wide` below exactly, so the brand block and the hero
-     heading share one left edge instead of sitting in two differently-sized
-     centred columns. */
-  max-width: 54rem;
-  margin: 0 auto;
-  padding: 0.85rem 1.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  row-gap: 0.4rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.product-bar .brand {
-  font-weight: 800;
-  font-size: 1.15rem;
-  letter-spacing: -0.015em;
-  color: var(--foreground);
-}
-
-/* The one status a reviewer must never be unsure about. A dot rather than
-   punctuation for emphasis, because a colour signal reads faster than text
-   when someone is scanning, not reading. */
-.badge.test-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--accent-quiet);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
-.badge.test-mode .dot {
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-@media (max-width: 26rem) {
-  .product-bar-inner {
-    padding: 0.75rem 1.1rem;
-  }
-
-  .badge.test-mode {
-    font-size: 0.65rem;
-    padding: 0.28rem 0.5rem;
-  }
-}
-
 /* --- Secondary call to action ---------------------------------------------
    Replaces a footer text link that a reviewer could - and did - miss
    entirely. A real button earns a place in the layout; a link at the bottom
@@ -784,44 +675,6 @@ button[aria-busy="true"]::after {
   display: flex;
   justify-content: center;
   margin: 1.25rem 0 0;
-}
-
-/* --- Architecture & Safety: the seven-card layout ------------------------- */
-
-.safety-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 1rem;
-  margin: 1rem 0 2rem;
-}
-
-.safety-grid .card {
-  margin: 0;
-}
-
-.safety-grid h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.95rem;
-}
-
-.safety-grid p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-/* --- Architecture & Safety: title hierarchy -------------------------------
-   "Razorpay Agentic Commerce" is the product; "Architecture & Safety" is
-   this page. The label sits above the heading, small and quiet, so the
-   reading order confirms that order rather than contradicting it the way a
-   smaller line *below* a big title would. */
-
-.project-label {
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--accent);
-  margin: 0 0 0.35rem;
 }
 
 /* --- Objective 20: the Agentic Purchase Safety Passport -------------------
@@ -902,7 +755,7 @@ button[aria-busy="true"]::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 50%;
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1;
@@ -1080,40 +933,6 @@ button[aria-busy="true"]::after {
   margin: 0.75rem 0 0;
 }
 
-/* --- Site navigation ------------------------------------------------------
-   Three destinations for three audiences: the shopper, the merchant and the
-   reviewer. The current page carries aria-current, and that attribute - not
-   a class - is what styles it, so what is announced and what is shown can
-   never disagree. */
-
-.site-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.nav-link {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  transition:
-    background-color 0.15s var(--ease),
-    color 0.15s var(--ease);
-}
-
-.nav-link:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.nav-link[aria-current="page"] {
-  color: var(--accent);
-  background: var(--accent-quiet);
-}
-
 /* --- The assistant at work ------------------------------------------------ */
 
 .agent-progress {
@@ -1232,7 +1051,7 @@ button[aria-busy="true"]::after {
   display: inline-block;
   margin-left: 0.5rem;
   padding: 0.05rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--pill);
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--muted);

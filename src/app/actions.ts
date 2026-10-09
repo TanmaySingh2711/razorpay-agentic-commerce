@@ -31,6 +31,11 @@ import { MERCHANT_CATEGORIES } from "@/domain/catalog/categories";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
 import type { MoneyDto } from "@/domain/money";
 import { formatMoney } from "@/domain/journey";
+import { MAX_HISTORY_ENTRIES } from "@/lib/purchase-history";
+import {
+  loadPurchaseSummaries,
+  type PurchaseSummary,
+} from "@/services/purchase-history-service";
 
 /**
  * The buyer's actions, as server actions.
@@ -599,5 +604,41 @@ export async function checkRefundStatus(
       reason: error instanceof Error ? error.name : "unknown",
     });
     return { kind: "ERROR", message: "The refund status could not be checked just now." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Purchase history
+// ---------------------------------------------------------------------------
+
+export type PurchaseHistoryOutcome =
+  | { readonly kind: "LOADED"; readonly purchases: readonly PurchaseSummary[] }
+  | { readonly kind: "ERROR"; readonly message: string };
+
+const historyIdsSchema = z.array(z.string()).max(MAX_HISTORY_ENTRIES);
+
+/**
+ * Where each remembered purchase stands now.
+ *
+ * The browser keeps the ids (there is no login, so it is the only place a
+ * person's own history can live); this returns, for exactly those ids, what
+ * their purchase pages would show. Read-only: no limit is consumed and
+ * nothing is written, because nothing here costs money or quota.
+ */
+export async function loadPurchaseHistory(ids: unknown): Promise<PurchaseHistoryOutcome> {
+  const parsed = historyIdsSchema.safeParse(ids);
+  if (!parsed.success) {
+    return { kind: "ERROR", message: "The saved history could not be read." };
+  }
+  try {
+    return { kind: "LOADED", purchases: await loadPurchaseSummaries(parsed.data) };
+  } catch (error: unknown) {
+    log.error("purchase history could not be loaded", {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return {
+      kind: "ERROR",
+      message: "Your purchases could not be loaded just now. Please try again.",
+    };
   }
 }
