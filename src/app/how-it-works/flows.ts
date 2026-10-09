@@ -23,7 +23,7 @@ export const AI_FLOW: readonly FlowItem[] = [
   ),
   node(
     "ai",
-    "Pass 1 — intent",
+    "First pass: intent",
     "Gemini turns the sentence into a structured intent: what kind of request it is, the category, the quantity and the budget.",
   ),
   node(
@@ -38,8 +38,8 @@ export const AI_FLOW: readonly FlowItem[] = [
   ),
   node(
     "ai",
-    "Pass 2 — selection",
-    "Gemini picks one product id from what it was shown. It may call search_catalog, get_product_by_id or get_merchant_info - all read-only.",
+    "Second pass: selection",
+    "Gemini picks one product id from what it was shown. It may call search_catalog, get_product_by_id or get_merchant_info, all of them read-only.",
   ),
   node(
     "server",
@@ -175,13 +175,13 @@ export const DASHBOARD_MAP: readonly FlowItem[] = [
     "server",
     "Purchase page",
     "The verified price, how the assistant chose, approval, the stock hold, the Safety Passport, refunds and the full timeline.",
-    "/transaction/…",
+    "/transaction/[id]",
   ),
   node(
     "razorpay",
     "Checkout",
     "The Razorpay payment window, opened only after the purchase is authorized and held.",
-    "/checkout/…",
+    "/checkout/[id]",
   ),
   split(
     {
@@ -235,7 +235,7 @@ export const USER_FLOW: readonly FlowItem[] = [
         step(
           "person",
           "Answer its question",
-          "Usually your budget. The same conversation continues - you do not start over.",
+          "Usually your budget. The same conversation continues, so you do not start over.",
         ),
       ],
     },

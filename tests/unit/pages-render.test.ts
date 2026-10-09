@@ -180,7 +180,7 @@ describe("the merchant insights page", () => {
   it("shows a refunded order as refunded, and an unpriced one without an amount", async () => {
     const markup = await merchantMarkup(insights());
     expect(markup).toMatch(/Volt Compact 60<\/td>.*?₹1,999\.00<\/td><td>Refunded/);
-    expect(markup).toMatch(/Aurora TKL<\/td><td class="numeric">–<\/td>/);
+    expect(markup).toMatch(/Aurora TKL<\/td><td class="numeric">n\/a<\/td>/);
   });
 
   it("never prints a link to a purchase", async () => {
@@ -420,6 +420,22 @@ describe("refunds on the purchase page", () => {
     expect(markup).toContain("could not process this refund");
     expect(markup).toContain("Refund this purchase");
   });
+});
+
+describe("the purchase page's copy", () => {
+  it.each([
+    ["APPROVAL_REQUIRED", { state: "APPROVAL_REQUIRED", reservationStatus: null }],
+    ["AUTHORIZED", { state: "AUTHORIZED", reservationStatus: null }],
+    ["COMPLETED", {}],
+  ] as const)(
+    "has no em or en dash, arrow or ellipsis character when %s",
+    async (_state, overrides) => {
+      const markup = (
+        await transactionMarkup(overview(overrides as Partial<TransactionOverview>))
+      ).replace(/<svg[\s\S]*?<\/svg>/g, "");
+      expect(markup).not.toMatch(/[–—…←-⇿]/);
+    },
+  );
 });
 
 describe("how the assistant chose", () => {

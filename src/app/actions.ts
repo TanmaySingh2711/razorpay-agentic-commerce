@@ -63,6 +63,9 @@ const operation = (): string => randomUUID();
 const messageSchema = z.string().trim().min(1).max(1000);
 const transactionIdSchema = z.string().uuid();
 
+const DATABASE_UNREACHABLE_MESSAGE =
+  "The shop could not reach its database just now. Nothing was charged. Please try again in a moment.";
+
 /**
  * What the console renders after a request that did not open a purchase.
  *
@@ -161,10 +164,10 @@ async function clientKey(): Promise<string> {
 function rateLimitedMessage(decision: RateLimitDecision): string {
   if (decision.kind !== "LIMITED") return "";
   return decision.rule === "agent-global-day"
-    ? "The assistant has reached today's usage limit for this demo. Please come back tomorrow - nothing was charged."
+    ? "The assistant has reached today's usage limit for this demo. Please come back tomorrow. Nothing was charged."
     : `You are sending requests faster than this demo allows. Please wait ${String(
         Math.min(decision.retryAfterSeconds, 3600),
-      )} seconds and try again - nothing was charged.`;
+      )} seconds and try again. Nothing was charged.`;
 }
 
 /**
@@ -203,14 +206,13 @@ export async function submitRequest(
   try {
     limited = await limitAgentRequest(await clientKey());
   } catch (error: unknown) {
+    // The limiter is the first thing that reads the database, so this is
+    // almost always "the database is not answering" - say that, rather than
+    // blaming the assistant, which was never reached.
     log.error("the rate limiter could not answer", {
       reason: error instanceof Error ? error.name : "unknown",
     });
-    return {
-      kind: "ERROR",
-      message:
-        "The assistant is unavailable just now. Nothing was charged. Please try again.",
-    };
+    return { kind: "ERROR", message: DATABASE_UNREACHABLE_MESSAGE };
   }
   if (limited.kind === "LIMITED") {
     await recordAgentRequest({ outcome: "RATE_LIMITED", durationMs: 0, turn });
@@ -562,7 +564,7 @@ export async function refundPurchase(
         return {
           kind: "DONE",
           message:
-            "The refund was sent, but the payment provider has not confirmed it yet. It will never be sent twice - use Check refund status in a moment.",
+            "The refund was sent, but the payment provider has not confirmed it yet. It will never be sent twice. Use Check refund status in a moment.",
         };
     }
   } catch (error: unknown) {

@@ -26,7 +26,7 @@ import type { PassportTone, SafetyPassportViewModel } from "@/domain/safety-pass
 /** One glyph per tone. Decorative — the status word beside it carries meaning. */
 const TONE_MARKS: Readonly<Record<PassportTone, string>> = {
   POSITIVE: "✓",
-  NEUTRAL: "–",
+  NEUTRAL: "?",
   WARNING: "!",
   NEGATIVE: "✕",
 };
@@ -116,7 +116,7 @@ export function SafetyPassport({
       </ul>
 
       <p className="hint">
-        Every line above is derived from this purchase&apos;s own persisted records — its
+        Every line above is derived from this purchase&apos;s own persisted records: its
         quote, its policy evaluation, its approvals, its stock hold, its payment attempts
         and its audit trail. No part of it is written by a language model. The full
         chronological evidence is in <strong>What happened</strong>, below.

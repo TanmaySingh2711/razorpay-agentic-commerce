@@ -539,7 +539,7 @@ describe("retry, re-quote and replay history", () => {
 
     const rows = passport.retry?.rows ?? [];
     expect(passport.retry?.attemptsUsed).toBe(1);
-    expect(rows[0]?.value).toMatch(/^FAILED · declined by bank$/);
+    expect(rows[0]?.value).toMatch(/^FAILED, declined by bank$/);
     expect(rows.find((row) => row.label === "Retry eligibility")?.value).toBe(
       "AVAILABLE",
     );

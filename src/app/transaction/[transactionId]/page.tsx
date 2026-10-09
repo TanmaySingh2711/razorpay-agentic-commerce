@@ -62,12 +62,12 @@ function Journey({ overview }: { readonly overview: TransactionOverview }) {
           <span className="step-label">{step.label}</span>
           <span className="visually-hidden">
             {step.status === "DONE"
-              ? " — done"
+              ? ", done"
               : step.status === "CURRENT"
-                ? " — in progress"
+                ? ", in progress"
                 : step.status === "STOPPED"
-                  ? " — stopped here"
-                  : " — not started"}
+                  ? ", stopped here"
+                  : ", not started"}
           </span>
         </li>
       ))}
@@ -133,7 +133,7 @@ function QuoteCard({ overview }: { readonly overview: TransactionOverview }) {
 
       <p className="hint">
         The assistant suggested this product. This price was read from the merchant&apos;s
-        own records by the server and frozen — it is the only amount that can be charged.
+        own records by the server and frozen. It is the only amount that can be charged.
       </p>
     </section>
   );
@@ -180,7 +180,7 @@ function SelectionCard({ overview }: { readonly overview: TransactionOverview })
           </div>
           <div>
             <dt>Met every rule</dt>
-            <dd>{selection.eligibleCount ?? "–"}</dd>
+            <dd>{selection.eligibleCount ?? "n/a"}</dd>
           </div>
           <div>
             <dt>Model calls</dt>
@@ -261,13 +261,13 @@ function RefundCard({ overview }: { readonly overview: TransactionOverview }) {
         ) : null}
         <p>
           You can refund this purchase in full to the original payment method. The amount
-          is the one that was captured - it cannot be changed here.
+          is the one that was captured, and it cannot be changed here.
         </p>
         <DecisionForm
           action={refundPurchase}
           transactionId={overview.transactionId}
           label="Refund this purchase"
-          busyLabel="Requesting refund…"
+          busyLabel="Requesting refund..."
           variant="secondary"
         />
       </section>
@@ -303,7 +303,7 @@ function RefundCard({ overview }: { readonly overview: TransactionOverview }) {
           action={checkRefundStatus}
           transactionId={overview.transactionId}
           label="Check refund status"
-          busyLabel="Checking…"
+          busyLabel="Checking..."
           variant="secondary"
         />
       ) : null}
@@ -407,13 +407,13 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
             action={approvePurchase}
             transactionId={overview.transactionId}
             label="Approve this purchase"
-            busyLabel="Approving…"
+            busyLabel="Approving..."
           />
           <DecisionForm
             action={rejectPurchase}
             transactionId={overview.transactionId}
             label="Reject"
-            busyLabel="Rejecting…"
+            busyLabel="Rejecting..."
             variant="secondary"
           />
         </div>
@@ -444,7 +444,7 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
           action={reserveStock}
           transactionId={overview.transactionId}
           label="Hold it for me"
-          busyLabel="Holding…"
+          busyLabel="Holding..."
           recoveryHref="/shop"
           recoveryLabel="Start a new purchase"
         />
@@ -538,7 +538,7 @@ function Timeline({ overview }: { readonly overview: TransactionOverview }) {
             <div>
               <p className="event">{entry.conciseExplanation}</p>
               <p className="hint">
-                {entry.source === "STATE_TRANSITION" ? "Lifecycle" : "Decision"} ·{" "}
+                {entry.source === "STATE_TRANSITION" ? "Lifecycle" : "Decision"},{" "}
                 {entry.reasonCode}
               </p>
             </div>
@@ -567,7 +567,7 @@ export default async function TransactionPage({
       <main className="wide">
         <p className="breadcrumb">
           <Link href="/shop" className="secondary">
-            ← Start another purchase
+            Start another purchase
           </Link>
         </p>
 

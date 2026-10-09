@@ -145,7 +145,7 @@ describe("submitRequest is gated by the abuse and cost ceilings", () => {
     expect(outcome).toEqual({
       kind: "ERROR",
       message:
-        "You are sending requests faster than this demo allows. Please wait 42 seconds and try again - nothing was charged.",
+        "You are sending requests faster than this demo allows. Please wait 42 seconds and try again. Nothing was charged.",
     });
     expect(mockRunBuyerAgent).not.toHaveBeenCalled();
     expect(mockRecordAgentRequest).toHaveBeenCalledWith(

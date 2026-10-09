@@ -34,7 +34,7 @@ export type FlowItem =
 
 export const ACTOR_LABELS: Readonly<Record<FlowActor, string>> = {
   person: "You",
-  ai: "AI · proposes only",
+  ai: "AI, proposes only",
   server: "Server",
   razorpay: "Razorpay",
   data: "Database",

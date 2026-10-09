@@ -98,7 +98,8 @@ if (Test-PortInUse) {
 
 Write-Host ""
 Write-Host "  Razorpay Agentic Commerce" -ForegroundColor Red
-Write-Host "  Starting at $Url - the browser opens when it is ready."
+Write-Host "  Starting the database, then the app at $Url."
+Write-Host "  The browser opens by itself when the app is ready."
 Write-Host "  Press Esc to stop the app and close this window."
 Write-Host ""
 
@@ -118,8 +119,10 @@ try {
                 Write-Host ""
                 Write-Host "  Opened $Url  (Esc stops the app)" -ForegroundColor Green
                 Write-Host ""
-            } elseif (((Get-Date) - $started).TotalSeconds -gt 180) {
-                Write-Host "  The app has not answered after 3 minutes. Check the messages above." -ForegroundColor Yellow
+            } elseif (((Get-Date) - $started).TotalSeconds -gt 600) {
+                # Generous on purpose: the first step starts Docker and lets
+                # PostgreSQL recover if it was shut down uncleanly.
+                Write-Host "  The app has not answered after 10 minutes. Check the messages above." -ForegroundColor Yellow
                 $opened = $true
             } else {
                 Start-Sleep -Milliseconds 500

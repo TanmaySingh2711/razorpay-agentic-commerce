@@ -1,15 +1,20 @@
+"use client";
+
 import Link from "next/link";
 
 /**
  * The bar every page opens with: what this is, the pages there are, and the
  * one fact that must survive whatever the copy says.
  *
- * The pages are numbered in the order they are meant to be read - what this
- * is, try it, how it works, what you bought - with the merchant's view last,
- * because it is a different audience. The current page is marked with
- * `aria-current`, so the location is announced rather than only coloured.
+ * The current page is marked with `aria-current`, so the location is announced
+ * rather than only coloured.
  *
- * `TEST MODE · NO REAL MONEY` is a fixed badge rather than prose, so no copy
+ * A link in this bar always lands at the top of its page. Pressing the link
+ * for the page already open scrolls it back to the top instead of reloading
+ * it. (Going back with the browser returns to where you were - see
+ * `scroll-memory.tsx`.)
+ *
+ * `TEST MODE, NO REAL MONEY` is a fixed badge rather than prose, so no copy
  * edit can quietly remove it.
  */
 
@@ -27,6 +32,55 @@ const LINKS: readonly {
   { section: "merchant", href: "/merchant", label: "Merchant" },
 ];
 
+/** On the page already open, a header link means "take me to the top". */
+function scrollToTopIfHere(
+  event: React.MouseEvent<HTMLAnchorElement>,
+  href: string,
+): void {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+  if (window.location.pathname !== href) return;
+  event.preventDefault();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/**
+ * The mark: a shopping bag with a tick, for a purchase the server has checked.
+ * Drawn inline so it is crisp at any size and needs no image request.
+ */
+export function BrandMark({ size = 30 }: { readonly size?: number }): React.JSX.Element {
+  return (
+    <svg
+      className="brand-mark"
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect width="32" height="32" rx="8" fill="#e3162d" />
+      <path
+        d="M12.25 12.5V11a3.75 3.75 0 0 1 7.5 0v1.5"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8.6 12.5h14.8a1 1 0 0 1 1 .92l.95 11.1a1.8 1.8 0 0 1-1.8 1.98H8.45a1.8 1.8 0 0 1-1.8-1.98l.95-11.1a1 1 0 0 1 1-.92z"
+        fill="#fff"
+      />
+      <path
+        d="M12.4 19.3l2.5 2.5 4.8-5"
+        fill="none"
+        stroke="#e3162d"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function SiteHeader({
   current,
 }: {
@@ -35,30 +89,37 @@ export function SiteHeader({
   return (
     <header className="product-bar">
       <div className="product-bar-inner">
-        <Link href="/" className="brand" aria-label="Razorpay Agentic Commerce, overview">
-          <span className="brand-mark" aria-hidden="true" />
+        <Link
+          href="/"
+          className="brand"
+          aria-label="Razorpay Agentic Commerce, overview"
+          onClick={(event) => {
+            scrollToTopIfHere(event, "/");
+          }}
+        >
+          <BrandMark />
           <span className="brand-name">
             Razorpay <span>Agentic Commerce</span>
           </span>
         </Link>
         <nav aria-label="Main" className="site-nav">
-          {LINKS.map((link, index) => (
+          {LINKS.map((link) => (
             <Link
               key={link.section}
               href={link.href}
               className="nav-link"
+              onClick={(event) => {
+                scrollToTopIfHere(event, link.href);
+              }}
               {...(link.section === current ? { "aria-current": "page" as const } : {})}
             >
-              <span className="nav-index" aria-hidden="true">
-                {String(index + 1).padStart(2, "0")}
-              </span>
               {link.label}
             </Link>
           ))}
         </nav>
         <span className="badge test-mode">
           <span className="dot" aria-hidden="true" />
-          Test Mode · No real money
+          Test Mode, no real money
         </span>
       </div>
     </header>
@@ -70,7 +131,7 @@ export function SiteFooter(): React.JSX.Element {
   return (
     <footer className="site-footer">
       <span>Razorpay Agentic Commerce</span>
-      <span>Razorpay Test Mode — no real money moves.</span>
+      <span>Razorpay Test Mode. No real money moves.</span>
     </footer>
   );
 }

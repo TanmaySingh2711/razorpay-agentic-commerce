@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { describeState, formatDateTime, formatMoney } from "@/domain/journey";
 import { rate } from "@/domain/insights";
+import { createLogger } from "@/lib/logger";
 import { loadMerchantInsights } from "@/services/merchant-insights-service";
 import type { MerchantInsights } from "@/services/merchant-insights-service";
 
@@ -23,7 +24,7 @@ import type { MerchantInsights } from "@/services/merchant-insights-service";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Merchant insights — Razorpay Agentic Commerce",
+  title: "Merchant insights | Razorpay Agentic Commerce",
   description:
     "What shoppers asked the AI assistant for, what converted, and what the merchant could stock or price differently.",
 };
@@ -32,10 +33,10 @@ const inr = (amountMinor: bigint): string =>
   formatMoney({ amountMinor: amountMinor.toString(), currency: "INR" });
 
 const seconds = (ms: number | null): string =>
-  ms === null ? "–" : `${(ms / 1000).toFixed(1)}s`;
+  ms === null ? "n/a" : `${(ms / 1000).toFixed(1)}s`;
 
 const percent = (value: number | null): string =>
-  value === null ? "–" : `${String(value)}%`;
+  value === null ? "n/a" : `${String(value)}%`;
 
 /** "3 follow-up answers ...; 2 of them became purchases." with the grammar right. */
 function followUpSentence(followUps: number, converted: number): string {
@@ -119,12 +120,12 @@ function Funnel({ insights }: { readonly insights: MerchantInsights }) {
           display:
             stage.ofTotal === null
               ? String(stage.count)
-              : `${String(stage.count)} · ${String(stage.ofTotal)}%`,
+              : `${String(stage.count)} (${String(stage.ofTotal)}%)`,
         }))}
       />
       <p className="hint">
         Each stage as a share of everyone who asked. &ldquo;Got a verified price&rdquo;
-        means the server re-read the price and stock and froze a quote - the assistant
+        means the server re-read the price and stock and froze a quote. The assistant
         alone never gets a request this far.
       </p>
     </section>
@@ -148,7 +149,7 @@ function UnmetDemandCard({ insights }: { readonly insights: MerchantInsights }) 
       {insights.unmet.length === 0 ? (
         <p className="hint">
           No unmatched requests yet. When shoppers ask for something this catalog cannot
-          sell, it appears here - grouped by what they asked for, never by who.
+          sell, it appears here, grouped by what they asked for and never by who.
         </p>
       ) : (
         <ul className="insight-list">
@@ -225,7 +226,7 @@ function RecoveryCard({ insights }: { readonly insights: MerchantInsights }) {
       </div>
       <p className="hint">
         A declined payment is not a lost sale: the buyer may retry, up to three attempts,
-        against the same verified price - never automatically, never silently.
+        against the same verified price. Never automatically, never silently.
       </p>
     </section>
   );
@@ -241,7 +242,7 @@ function TopProducts({ insights }: { readonly insights: MerchantInsights }) {
         bars={insights.topProducts.map((product) => ({
           label: product.name,
           value: Number(product.revenueMinor),
-          display: `${inr(product.revenueMinor)} · ${String(product.orders)} ${
+          display: `${inr(product.revenueMinor)}, ${String(product.orders)} ${
             product.orders === 1 ? "order" : "orders"
           }`,
         }))}
@@ -272,7 +273,7 @@ function RecentOrders({ insights }: { readonly insights: MerchantInsights }) {
               <tr key={`${String(index)}-${order.createdAt}`}>
                 <td>{order.productName}</td>
                 <td className="numeric">
-                  {order.amountMinor === null ? "–" : inr(order.amountMinor)}
+                  {order.amountMinor === null ? "n/a" : inr(order.amountMinor)}
                 </td>
                 <td>
                   {order.refund === "PROCESSED"
@@ -297,15 +298,40 @@ function RecentOrders({ insights }: { readonly insights: MerchantInsights }) {
   );
 }
 
+const log = createLogger({ category: "http" });
+
+type Loaded =
+  | { readonly kind: "LOADED"; readonly insights: MerchantInsights | null }
+  | { readonly kind: "UNAVAILABLE" };
+
+/**
+ * The insights, or a plain statement that they could not be read.
+ *
+ * A database that is not answering (most often: it has not been started yet)
+ * must not take the whole page down with a stack trace. The cause goes to the
+ * operator log; the page says what happened and that nothing was lost.
+ */
+async function readInsights(): Promise<Loaded> {
+  try {
+    return { kind: "LOADED", insights: await loadMerchantInsights() };
+  } catch (error: unknown) {
+    log.error("merchant insights could not be loaded", {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return { kind: "UNAVAILABLE" };
+  }
+}
+
 export default async function MerchantPage() {
-  const insights = await loadMerchantInsights();
+  const loaded = await readInsights();
+  const insights = loaded.kind === "LOADED" ? loaded.insights : null;
 
   return (
     <>
       <SiteHeader current="merchant" />
       <main className="wide">
         <header className="page-head">
-          <p className="eyebrow">05 — Merchant</p>
+          <p className="eyebrow">Merchant</p>
           <h1>Merchant insights</h1>
           <p className="lead">
             What shoppers asked the AI assistant for, what turned into paid orders, and
@@ -313,7 +339,15 @@ export default async function MerchantPage() {
           </p>
         </header>
 
-        {insights === null ? (
+        {loaded.kind === "UNAVAILABLE" ? (
+          <div className="notice negative" role="alert">
+            <strong>The insights could not be loaded</strong>
+            <p>
+              The database did not answer. Nothing has been lost. Refresh this page in a
+              moment.
+            </p>
+          </div>
+        ) : insights === null ? (
           <div className="notice neutral" role="status">
             <strong>No merchant yet</strong>
             <p>The catalog has not been seeded. Run the setup and come back.</p>
@@ -321,7 +355,7 @@ export default async function MerchantPage() {
         ) : (
           <>
             <p className="hint">
-              {insights.merchantName} · last {insights.windowDays} days · updated{" "}
+              {insights.merchantName}, last {insights.windowDays} days, updated{" "}
               <time dateTime={insights.generatedAt}>
                 {formatDateTime(insights.generatedAt)}
               </time>
@@ -347,17 +381,17 @@ export default async function MerchantPage() {
                 }
               />
               <StatTile
-                label="Asked → paid"
+                label="Asked and paid"
                 value={percent(insights.funnel.at(-1)?.ofTotal ?? null)}
                 note={`${String(insights.agent.requests)} assistant requests`}
               />
               <StatTile
                 label="Time to a verified price"
                 value={seconds(insights.agent.medianMs)}
-                note={`median · p90 ${seconds(insights.agent.p90Ms)}${
+                note={`median, p90 ${seconds(insights.agent.p90Ms)}${
                   insights.agent.averageModelCalls === null
                     ? ""
-                    : ` · ${String(insights.agent.averageModelCalls)} model calls`
+                    : `, ${String(insights.agent.averageModelCalls)} model calls`
                 }`}
               />
             </div>
@@ -376,7 +410,7 @@ export default async function MerchantPage() {
               />
               <p className="hint">
                 {insights.agent.followUps === 0
-                  ? "When the assistant needs one more detail, the shopper answers in the same conversation - those follow-ups are counted here."
+                  ? "When the assistant needs one more detail, the shopper answers in the same conversation. Those follow-ups are counted here."
                   : followUpSentence(
                       insights.agent.followUps,
                       insights.agent.followUpsConverted,

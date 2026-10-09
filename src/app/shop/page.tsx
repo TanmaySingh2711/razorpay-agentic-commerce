@@ -3,7 +3,7 @@ import { BuyerConsole } from "@/components/buyer-console";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 
 /**
- * Page 02 - the shop: one input, and everything after it is the server's.
+ * The shop: one input, and everything after it is the server's.
  *
  * The page is a server component holding no state. The one interactive
  * element is the console, which sends a sentence to a server action and
@@ -25,7 +25,7 @@ import { SiteFooter, SiteHeader } from "@/components/site-header";
 export const maxDuration = 60;
 
 export const metadata = {
-  title: "Shop — Razorpay Agentic Commerce",
+  title: "Shop | Razorpay Agentic Commerce",
   description:
     "Describe what you want in plain words. The assistant proposes; the server prices, checks the rules and takes payment.",
 };
@@ -33,7 +33,7 @@ export const metadata = {
 const NEXT_STEPS = [
   { title: "The assistant suggests one product", who: "AI" },
   { title: "The server reads the real price and freezes it", who: "Server" },
-  { title: "Your spending rules run; above ₹3,000 you approve", who: "Server + you" },
+  { title: "Your spending rules run; above ₹3,000 you approve", who: "Server and you" },
   { title: "You hold the item and press Pay", who: "You" },
   { title: "Razorpay confirms the money", who: "Razorpay" },
 ] as const;
@@ -44,10 +44,10 @@ export default function ShopPage() {
       <SiteHeader current="shop" />
       <main className="full">
         <header className="page-intro">
-          <p className="eyebrow">02 — Shop</p>
+          <p className="eyebrow">Shop</p>
           <h1>Say what you want. The server does the rest.</h1>
           <p className="lead">
-            An AI assistant that can read a catalog and suggest a product — and a server
+            An AI assistant that can read a catalog and suggest a product, and a server
             that decides every single thing about the money.
           </p>
         </header>

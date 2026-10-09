@@ -7,6 +7,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./globals.css";
 import "./ui.css";
 import "./site.css";
+import { ScrollMemory } from "@/components/scroll-memory";
 
 export const metadata: Metadata = {
   title: "Razorpay Agentic Commerce",
@@ -30,7 +31,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <ScrollMemory />
+        {children}
+      </body>
     </html>
   );
 }

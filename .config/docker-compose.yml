@@ -48,11 +48,18 @@ services:
     healthcheck:
       # `npm run db:test:up` waits on this, so the very next command in a script
       # can connect without a sleep or a retry loop.
+      #
+      # After Docker was stopped uncleanly (a laptop shut down with it running),
+      # PostgreSQL first recovers: it syncs the whole data directory, which can
+      # take minutes. Failed checks inside `start_period` do not count, so a long
+      # recovery is waited out instead of being reported as "unhealthy" - and a
+      # normal start is still marked healthy on the first check that passes.
       test: ["CMD-SHELL", "pg_isready -U razorpay -d razorpay_agentic_test"]
       interval: 2s
       timeout: 3s
       retries: 30
-      start_period: 5s
+      start_period: 300s
+      start_interval: 2s
 
 volumes:
   razorpay-test-pgdata:

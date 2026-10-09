@@ -24,6 +24,7 @@ razorpay-agentic-commerce/
 ├── scripts/                    standalone CLI tooling, outside the app runtime
 │   ├── setup.ts                `npm run setup`: the one-click setup, no dependencies
 │   ├── run-dashboard.ps1       run_dashboard.bat's launcher: centres, waits, Esc stops
+│   ├── start-database.ts       `predev`: starts Docker + PostgreSQL, prepares the dev database
 │   ├── setup-dev-database.ts   local development DB, loopback only
 │   ├── setup-test-schema.ts    creates + migrates the isolated test schema
 │   ├── dev-demo-activity.ts    real-service shopper sessions for the local dev DB
@@ -48,11 +49,12 @@ razorpay-agentic-commerce/
 │   │   ├── api/webhooks/razorpay/  provider webhook intake and verification
 │   │   ├── checkout/[transactionId]/    the page that offers Pay
 │   │   ├── transaction/[transactionId]/ the authoritative purchase view
-│   │   ├── page.tsx            01 overview: what this is, the AI, the work behind it
-│   │   ├── shop/page.tsx       02 the shop: the one input
-│   │   ├── how-it-works/       03 four flowcharts (flows.ts) + the safety rules
-│   │   ├── history/page.tsx    04 purchases this browser opened
-│   │   ├── merchant/page.tsx   05 merchant insights: demand, conversion, recovery
+│   │   ├── page.tsx            overview: what this is, in one screen
+│   │   ├── shop/page.tsx       the shop: the one input
+│   │   ├── how-it-works/       four flowcharts (flows.ts), safety rules, the work behind it
+│   │   ├── history/page.tsx    purchases this browser opened
+│   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
+│   │   ├── error.tsx           what a page shows when the server cannot finish it
 │   │   ├── layout.tsx          root layout, self-hosted fonts
 │   │   ├── globals.css         design tokens (black and red) + element defaults
 │   │   ├── ui.css              component styles, loaded after globals.css
@@ -60,7 +62,9 @@ razorpay-agentic-commerce/
 │   │   ├── icon.tsx            generated tab icon (Next file convention)
 │   │   └── favicon.ico         for browsers that request /favicon.ico directly
 │   ├── components/
-│   │   ├── site-header.tsx     brand, numbered navigation, Test Mode badge, footer
+│   │   ├── site-header.tsx     logo, navigation, Test Mode badge, footer
+│   │   ├── scroll-memory.tsx   Back/Forward return to where each page was left
+│   │   ├── project-effort.tsx  "the work behind it", counted from the repository
 │   │   ├── flowchart.tsx       flowcharts drawn as ordered lists
 │   │   ├── count-up.tsx        figures that count up when scrolled into view
 │   │   ├── purchase-history.tsx the history list, filters and Clear history

@@ -74,7 +74,7 @@ export function AwaitingProvider(): React.JSX.Element {
         <div>
           <strong>Still waiting for the provider.</strong>
           <p>
-            This is unusual but not lost — the payment provider confirms settlement on its
+            This is unusual but not lost. The payment provider confirms settlement on its
             own schedule, and this purchase will update whenever that arrives. Nothing has
             been charged twice, and nothing needs to be paid again.
           </p>
@@ -99,11 +99,11 @@ export function AwaitingProvider(): React.JSX.Element {
     <div className="notice neutral awaiting" role="status" aria-live="polite">
       <span className="spinner" aria-hidden="true" />
       <div>
-        <strong>Waiting for the payment provider to confirm…</strong>
+        <strong>Waiting for the payment provider to confirm</strong>
         <p>
-          This updates by itself — no need to refresh. Razorpay confirms settlement out of
-          band, which is why a verified confirmation and a captured payment are two
-          separate facts here.
+          This updates by itself, so there is no need to refresh. Razorpay confirms
+          settlement out of band, which is why a verified confirmation and a captured
+          payment are two separate facts here.
         </p>
       </div>
       <span className="visually-hidden">

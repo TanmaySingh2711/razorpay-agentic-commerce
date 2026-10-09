@@ -78,7 +78,7 @@ export default async function CheckoutPage({
               {status.lastFailure === null
                 ? "Your payment was not completed and no money has been taken by us."
                 : describePaymentFailure(status.lastFailure)}{" "}
-              Nothing about this purchase has changed — the item, the price and the order
+              Nothing about this purchase has changed. The item, the price and the order
               are all still exactly as they were.
             </p>
             <p>
@@ -110,7 +110,7 @@ export default async function CheckoutPage({
           </>
         )}
 
-        <p className="tagline">Razorpay Test Mode — no real money moves.</p>
+        <p className="tagline">Razorpay Test Mode. No real money moves.</p>
       </main>
     </>
   );

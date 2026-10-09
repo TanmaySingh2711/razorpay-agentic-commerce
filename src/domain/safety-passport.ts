@@ -831,7 +831,7 @@ function buildRetry(facts: SafetyPassportFacts): SafetyPassportViewModel["retry"
       value:
         attempt.failureCategory === null
           ? label
-          : `${label} · ${attempt.failureCategory.replace(/_/g, " ").toLowerCase()}`,
+          : `${label}, ${attempt.failureCategory.replace(/_/g, " ").toLowerCase()}`,
       tone: STATUS_TONES[status],
     };
   });

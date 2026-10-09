@@ -109,20 +109,16 @@ describe("the overview", () => {
     }
   });
 
-  it("shows the work behind it as measured figures", async () => {
+  it("stays short: the deeper sections live on /how-it-works", async () => {
     const markup = await overview();
-    expect(markup).toContain("Lines of application code");
-    expect(markup).toContain("Test cases written");
-    expect(markup).toContain("Design documents");
-    // A measured figure is a number, never a placeholder or an unfilled value.
-    expect(markup).not.toMatch(/NaN|undefined|\{\{/);
-  });
-
-  it("links each design document to its real file", async () => {
-    const markup = await overview();
-    expect(markup).toMatch(
-      /href="https:\/\/github\.com\/TanmaySingh2711\/razorpay-agentic-commerce\/blob\/main\/docs\/01-overview\.md"/,
-    );
+    for (const moved of [
+      "Lines of application code",
+      "How the AI is built",
+      "Four more pages",
+      "Try it with a sentence",
+    ]) {
+      expect(markup).not.toContain(moved);
+    }
   });
 });
 

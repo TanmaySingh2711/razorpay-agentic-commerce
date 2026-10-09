@@ -148,7 +148,7 @@ export function PayButton({
         setPhase({
           kind: "PROBLEM",
           message:
-            "Your payment may well have gone through - we just could not confirm it from this page. Do not pay again. Open this purchase to see the confirmed outcome.",
+            "Your payment may well have gone through. We just could not confirm it from this page. Do not pay again. Open this purchase to see the confirmed outcome.",
         });
       }
     },
@@ -182,7 +182,7 @@ export function PayButton({
                       // prompt now appears on its own; this click cannot itself
                       // proceed.
                       "The price for this purchase changed and now needs your approval. The approval prompt is below."
-                    : "This purchase cannot be paid again - the current state is shown below.",
+                    : "This purchase cannot be paid again. The current state is shown below.",
             });
             rereadServerState();
             return;
@@ -329,7 +329,7 @@ export function PayButton({
         aria-busy={busy}
         className="primary"
       >
-        {busy ? "Please wait…" : label}
+        {busy ? "Please wait..." : label}
       </button>
       {status.kind === "HINT" ? (
         <p className="hint" role="status">
@@ -385,14 +385,14 @@ function describe(phase: Phase, mode: PayMode): StatusView {
         kind: "NOTICE",
         tone: "neutral",
         title: "Checking this purchase",
-        detail: "Seeing whether this purchase can be paid again…",
+        detail: "Seeing whether this purchase can be paid again...",
       };
     case "PREPARING":
       return {
         kind: "NOTICE",
         tone: "neutral",
         title: "Preparing your payment",
-        detail: "Setting up a secure payment with Razorpay…",
+        detail: "Setting up a secure payment with Razorpay...",
       };
     case "AWAITING_PAYMENT":
       return {
@@ -406,7 +406,7 @@ function describe(phase: Phase, mode: PayMode): StatusView {
         kind: "NOTICE",
         tone: "neutral",
         title: "Checking the confirmation",
-        detail: "Making sure the confirmation is genuine…",
+        detail: "Making sure the confirmation is genuine...",
       };
     case "VERIFIED":
       // Careful wording, and unchanged in meaning. A verified signature is not

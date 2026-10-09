@@ -113,6 +113,23 @@ describe("submitRequest: one sentence for every way a request can end", () => {
     expect(mocks.runBuyerAgent).not.toHaveBeenCalled();
   });
 
+  it("blames the database, not the assistant, when the limiter cannot read it", async () => {
+    // The limiter is the first database read. When it fails the model was never
+    // reached, so the message must not say the assistant is the problem.
+    mocks.limitAgentRequest.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+    const { submitRequest } = await actions();
+
+    const outcome = await submitRequest(IDLE, form({ message: "Find me a mouse" }));
+
+    expect(outcome).toEqual({
+      kind: "ERROR",
+      message:
+        "The shop could not reach its database just now. Nothing was charged. Please try again in a moment.",
+    });
+    expect(JSON.stringify(outcome)).not.toContain("ECONNREFUSED");
+    expect(mocks.runBuyerAgent).not.toHaveBeenCalled();
+  });
+
   it("says what the shop does sell when nothing matched", async () => {
     const outcome = await ask({
       kind: "NO_VALID_CANDIDATE",

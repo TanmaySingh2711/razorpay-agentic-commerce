@@ -74,9 +74,17 @@ describe("the /how-it-works page describes the system as it actually is", () => 
     expect(markup).not.toMatch(/Buildathon|hackathon/i);
   });
 
-  it("does not surface repo-oriented text like the docs/ path or the liveness endpoint", () => {
-    expect(markup).not.toMatch(/Liveness endpoint/i);
-    expect(markup).not.toMatch(/docs\//);
+  it("keeps repo-oriented text like the docs/ path and the liveness endpoint out of the safety section", () => {
+    // The design documents are deliberately linked further down, under "The
+    // work behind it". The safety section - what the old /about page was -
+    // stays free of repository detail.
+    const safety = markup.slice(
+      markup.indexOf('id="safety"'),
+      markup.indexOf('id="work"'),
+    );
+    expect(safety.length).toBeGreaterThan(500);
+    expect(safety).not.toMatch(/Liveness endpoint/i);
+    expect(safety).not.toMatch(/docs\//);
     expect(markup).not.toMatch(/api\/health/i);
   });
 
@@ -106,7 +114,7 @@ describe("the four flowcharts", () => {
         /data-actor="ai"><span class="flow-actor">[^<]*<\/span><strong class="flow-title">([^<]+)</g,
       ),
     ].map((match) => match[1]);
-    expect(aiTitles).toEqual(["Pass 1 — intent", "Pass 2 — selection", "Shop"]);
+    expect(aiTitles).toEqual(["First pass: intent", "Second pass: selection", "Shop"]);
     for (const title of aiTitles) {
       expect(title).not.toMatch(/pay|price|quote|approv|refund|hold|order/i);
     }
@@ -121,6 +129,30 @@ describe("the four flowcharts", () => {
   it("shows where a branch ends instead of leaving it hanging", () => {
     expect(markup).toMatch(/data-end="stop"/);
     expect(markup).toMatch(/data-end="loop"/);
+  });
+});
+
+describe("the work behind it", () => {
+  const markup = renderToStaticMarkup(HowItWorksPage());
+
+  it("shows the work as measured figures", () => {
+    expect(markup).toContain('id="work"');
+    expect(markup).toContain("Lines of application code");
+    expect(markup).toContain("Test cases written");
+    expect(markup).toContain("Design documents");
+    // A measured figure is a number, never a placeholder or an unfilled value.
+    expect(markup).not.toMatch(/NaN|undefined|\{\{/);
+  });
+
+  it("links each design document to its real file", () => {
+    expect(markup).toMatch(
+      /href="https:\/\/github\.com\/TanmaySingh2711\/razorpay-agentic-commerce\/blob\/main\/docs\/01-overview\.md"/,
+    );
+  });
+
+  it("is reachable from the jump links at the top", () => {
+    expect(markup).toContain('href="#work"');
+    expect(markup).toContain('href="#safety"');
   });
 });
 

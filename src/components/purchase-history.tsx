@@ -84,7 +84,7 @@ function Row({
         <span className="history-meta">Opened {formatDateTime(purchase.createdAt)}</span>
       </div>
       <span className="history-amount">
-        {purchase.total === null ? "—" : formatMoney(purchase.total)}
+        {purchase.total === null ? "Not priced" : formatMoney(purchase.total)}
       </span>
       <span className="history-status">
         <span className={`badge ${TONE_CLASS[narrative.tone]}`}>{narrative.label}</span>
