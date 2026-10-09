@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 // Self-hosted from npm: the font files are bundled with the app, so no build
 // or page load reaches a font CDN. Archivo is loaded with its width axis for
 // the condensed headings.
@@ -13,6 +13,23 @@ export const metadata: Metadata = {
   title: "Razorpay Agentic Commerce",
   description:
     "An AI assistant picks a product from a sentence; the server decides everything about the money. Razorpay Test Mode.",
+  other: {
+    /**
+     * Tells the Dark Reader extension this site is already dark, so it leaves
+     * the page alone. Without it, Dark Reader rewrote attributes and inline
+     * styles (the logo's SVG first) before React hydrated, and every visitor
+     * running it saw a hydration error that had nothing to do with this code.
+     * This is the opt-out Dark Reader documents for site owners. The content is
+     * not read - only the name is - but Next.js drops a meta tag with an empty one.
+     */
+    "darkreader-lock": "true",
+  },
+};
+
+/** The page is dark by design; browsers and extensions are told so up front. */
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#070707",
 };
 
 /**

@@ -132,6 +132,30 @@
   transition: transform 0.4s var(--ease-out);
 }
 
+/* The mark's colours live here rather than in SVG attributes - see BrandMark. */
+.brand-mark .mark-tile {
+  fill: var(--red);
+}
+
+.brand-mark .mark-handle {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.brand-mark .mark-bag {
+  fill: #fff;
+}
+
+.brand-mark .mark-tick {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .brand:hover .brand-mark {
   transform: rotate(-8deg) scale(1.06);
 }
