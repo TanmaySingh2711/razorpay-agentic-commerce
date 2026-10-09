@@ -1050,7 +1050,19 @@ describe.skipIf(!databaseConfigured)("webhook reconciliation", () => {
         }),
       ]);
 
-      expect(results.every((result) => result.kind === "RECONCILED")).toBe(true);
+      // Exactly one check applies the capture. The other, depending only on
+      // timing, either reads the purchase after it completed (NOT_WAITING) or
+      // loses the claim on the same provider event (DUPLICATE) - never a
+      // second reconciliation, and never an error.
+      const outcomes = results.map((result) =>
+        result.kind === "RECONCILED" ? result.outcome.kind : result.kind,
+      );
+      expect(outcomes.filter((kind) => kind === "RECONCILED")).toHaveLength(1);
+      expect(
+        outcomes
+          .filter((kind) => kind !== "RECONCILED")
+          .every((kind) => kind === "NOT_WAITING" || kind === "DUPLICATE"),
+      ).toBe(true);
       expect(await statusOf(transactionId)).toBe("COMPLETED");
       const captures = (await transitionsOf(transactionId)).filter(
         (row) => row.toStatus === "PAYMENT_CAPTURED",
