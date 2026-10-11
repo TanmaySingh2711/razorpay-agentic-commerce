@@ -149,7 +149,7 @@ razorpay-agentic-commerce/
 ├── .env.example                tracked, credential-free template
 ├── .gitattributes              line endings for the .sh and .bat entry points
 ├── .nvmrc                      Node.js 24 LTS selection
-├── LICENSE                     MIT
+├── LICENSE                     all rights reserved (proprietary)
 ├── eslint.config.mjs           lint rules incl. the process.env ban
 ├── next.config.ts              security headers
 ├── package.json                scripts, dependencies and the Prettier settings

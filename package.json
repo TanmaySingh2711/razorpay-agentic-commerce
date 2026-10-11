@@ -2,7 +2,7 @@
   "name": "razorpay-agentic-commerce",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "scripts": {
     "setup": "node scripts/setup.ts",
     "predev": "tsx scripts/start-database.ts",

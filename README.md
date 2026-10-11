@@ -173,7 +173,7 @@ razorpay-agentic-commerce/
 ├── setup.bat / setup.sh     One-click setup
 ├── run_dashboard.bat        Starts the app on Windows
 ├── .env.example             Template for your settings
-├── LICENSE                  MIT license
+├── LICENSE                  All rights reserved
 └── package.json             Scripts and dependencies
 ```
 
@@ -508,7 +508,9 @@ Contributions are welcome.
 
 ## License
 
-This project is released under the [MIT License](./LICENSE). You can use, change, and share the code, as long as you keep the copyright and license notice.
+Copyright (c) 2026 Tanmay Singh. All rights reserved.
+
+This is a proprietary project. No license is granted: you may not use, copy, modify, distribute or deploy this code without the written permission of the author. See [LICENSE](./LICENSE).
 
 ## Author
 
