@@ -2,6 +2,8 @@
 
 A shop where you type what you want in plain words, an AI assistant picks a product for you, and the server handles everything about the money.
 
+![The Overview page of Razorpay Agentic Commerce](docs/screenshots/overview.png)
+
 ## Live Demo
 
 **https://razorpay-agentic-commerce-xi.vercel.app**
@@ -10,6 +12,7 @@ The demo runs in **Razorpay Test Mode**. No real money can move. When the paymen
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Overview](#overview)
 - [Problem Statement](#problem-statement)
 - [Objectives](#objectives)
@@ -33,6 +36,40 @@ The demo runs in **Razorpay Test Mode**. No real money can move. When the paymen
 - [License](#license)
 - [Author](#author)
 - [Acknowledgements](#acknowledgements)
+
+## Screenshots
+
+Every page of the app, in the order the top bar lists them.
+
+### Overview
+
+What the app is, in one screen, and the five steps of a purchase.
+
+![Overview page](docs/screenshots/overview.png)
+
+### Shop
+
+The one input. Type what you want and press **Find**; the steps that follow are listed beside it.
+
+![Shop page](docs/screenshots/shop.png)
+
+### How it works
+
+Four flowcharts: how the AI is built, how a purchase moves, what each page does, and how to use it. Every box says who does the step.
+
+![How it works page](docs/screenshots/how-it-works.png)
+
+### History
+
+Every purchase opened in this browser, with its current status. It can be filtered, and cleared at any time.
+
+![History page](docs/screenshots/history.png)
+
+### Merchant
+
+The seller's view: revenue, how requests turned into paid orders, and what shoppers asked for that the shop does not sell.
+
+![Merchant insights page](docs/screenshots/merchant.png)
 
 ## Overview
 

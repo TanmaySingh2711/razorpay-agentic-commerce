@@ -17,6 +17,7 @@ razorpay-agentic-commerce/
 │   └── vitest.config.mts       the two test projects and coverage; passed with --config
 ├── .github/workflows/ci.yml    CI: lint, type check, tests + one-click setup on 3 OSes
 ├── docs/                       architecture record (this directory)
+│   └── screenshots/            the page images the README shows
 ├── prisma/
 │   ├── migrations/             reviewable, committed schema history
 │   ├── schema.prisma           the single schema definition
