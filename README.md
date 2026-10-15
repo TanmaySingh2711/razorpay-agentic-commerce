@@ -39,13 +39,7 @@ The demo runs in **Razorpay Test Mode**. No real money can move. When the paymen
 
 ## Screenshots
 
-Every page of the app, in the order the top bar lists them.
-
-### Overview
-
-What the app is, in one screen, and the five steps of a purchase.
-
-![Overview page](docs/screenshots/overview.png)
+The pages of the app, in the order the top bar lists them. The **Overview** page is the image at the top of this file.
 
 ### Shop
 
@@ -115,6 +109,7 @@ This project shows one way to do that. The AI is kept to a small, harmless job, 
 | Spending rules          | Purchases up to ₹3,000 are allowed automatically. Above that, you must approve first.                                |
 | Stock hold              | The item is reserved before payment, so it cannot be sold to someone else while you pay.                             |
 | Razorpay payment        | The server creates the order and verifies the payment signature and the webhook.                                     |
+| Payment confirmation    | While a purchase waits, the server also asks Razorpay directly, so it completes even where no webhook can arrive.    |
 | Payment retry           | If a payment fails, you can try again, up to 3 attempts. Retries are never automatic.                                |
 | Refunds                 | A completed purchase can be refunded in full, once, within 7 days.                                                   |
 | Safety Passport         | Each purchase page shows a plain summary of why the purchase was allowed.                                            |
@@ -159,7 +154,7 @@ flowchart TD
     P -->|above limit| AP[Human approval]
     AP -->|approved| H
     H --> O[Razorpay order and checkout]
-    O --> W[Signature check and webhook]
+    O --> W[Signature check, then capture confirmed<br/>by webhook or by asking Razorpay]
     W --> C[Purchase completed]
     C -.->|optional| R[Refund]
     V & Q & P & AP & H & O & W & R --> L[(Audit trail)]
@@ -179,7 +174,7 @@ Everything after the Buyer Agent is deterministic server code. The AI is not ask
 8. **Spending rules run.** The purchase is allowed, sent for your approval, or blocked.
 9. **Stock is held.** The item is reserved for you for a limited time.
 10. **You pay.** The server creates a Razorpay order for the quoted amount and opens Razorpay Checkout.
-11. **The payment is confirmed.** The server verifies the payment signature. The purchase is completed only when Razorpay's webhook confirms the money was captured.
+11. **The payment is confirmed.** The server verifies the payment signature. The purchase is completed only when Razorpay confirms the money was captured: through its webhook, or when the server asks Razorpay's API while the page is waiting. Either way, the amount must match the quote.
 12. **You can refund it.** The refund amount is copied from the captured payment. It can happen only once.
 
 A purchase moves through a fixed set of states, such as `QUOTE_CREATED`, `AUTHORIZED`, `PAYMENT_PENDING`, and `COMPLETED`. Only the transaction service can change the state, and only along allowed paths.
@@ -191,6 +186,7 @@ razorpay-agentic-commerce/
 ├── .config/                 Prisma, Vitest, and docker-compose configuration
 ├── .github/workflows/       CI workflow
 ├── docs/                    Design documents
+│   └── screenshots/         The images used in this README
 ├── prisma/
 │   ├── schema.prisma        Database schema
 │   ├── migrations/          Database migrations
@@ -225,6 +221,8 @@ razorpay-agentic-commerce/
 The app starts without the two sets of keys. You need them only to use the assistant and to pay.
 
 ## Installation
+
+The steps below are for the author and anyone the author has given written permission to run the project. See [License](#license).
 
 **1. Clone the repository**
 
@@ -346,11 +344,11 @@ Other useful commands:
 1. Open the app. You land on the **Overview**. Press **Open the shop**.
 2. Type what you want, for example `Find me the best mouse under ₹3000 and buy it`, and press **Find**.
 3. If the assistant asks a question, type your answer and press **Answer**.
-4. You are taken to the purchase page. It shows the verified price, how the assistant chose, and the Safety Passport.
+4. You are taken to the purchase page (`/shop/<id>`, still inside **Shop**). It shows the verified price, how the assistant chose, and the Safety Passport.
 5. If the amount is above ₹3,000, press **Approve this purchase**.
 6. Press **Hold it for me** to reserve the item.
 7. Press **Pay**. The Razorpay Test Mode window opens. Use the test details it shows.
-8. After payment, the page shows **Completed**.
+8. After payment, the page waits a few seconds for Razorpay to confirm the money, then shows **Completed**.
 9. To get the money back, press **Refund this purchase**.
 
 Other pages, from the top bar:
@@ -519,6 +517,8 @@ npm run db:test:health   # check that it is ready
 npm run db:test:down     # stop it
 ```
 
+You rarely need these by hand: `npm run dev` (and `npm run db:dev:start`) start Docker Desktop and the container for you when they are not running.
+
 The compose file is `.config/docker-compose.yml`. Its username and password are for local use only.
 
 ## Limitations
@@ -529,19 +529,20 @@ The compose file is `.config/docker-compose.yml`. Its username and password are 
 - **Indian Rupees only.** INR is the only supported currency.
 - **Full refunds only.** Partial refunds are not supported.
 - **Needs Gemini.** The assistant does not work without an API key and internet access. Its answers can vary between runs.
+- **History lives in one browser.** With no login, the list of your purchases is kept in the browser you used. Another browser or device starts empty.
 - **The merchant page is public.** It shows totals and product names only, with no buyer details.
 - **Rate limits use the visitor's IP address.** This relies on the hosting platform setting that address correctly.
 
 ## Contributing
 
-Contributions are welcome.
+This is a proprietary project, so code contributions are not accepted without the author's written permission.
 
-1. Fork the repository.
-2. Create a branch: `git checkout -b my-change`
-3. Make your changes.
-4. Run `npm run verify` and `npm run format:check`.
-5. Commit and push your branch.
-6. Open a pull request and describe what you changed.
+You are welcome to:
+
+- report a bug or suggest an idea by opening a GitHub issue;
+- ask the author for permission if you want to work on the code.
+
+If you have permission, run `npm run verify` and `npm run format:check` before sharing any change.
 
 ## License
 
