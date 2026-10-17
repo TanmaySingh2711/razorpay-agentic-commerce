@@ -87,8 +87,11 @@ function Start-Node([string[]]$arguments) {
 }
 
 # Pages compiled in the background once the browser is open, so the first
-# click on each is as quick as the second. None of them needs the database.
-$WarmPages = @("/shop", "/how-it-works", "/history")
+# click on each is as quick as the second. The two purchase addresses name a
+# purchase that does not exist: the answer is "not found", but the pages a real
+# purchase opens are compiled by then all the same.
+$NoSuchPurchase = "/shop/00000000-0000-4000-8000-000000000000"
+$WarmPages = @("/shop", "/how-it-works", "/history", "/merchant", $NoSuchPurchase, "$NoSuchPurchase/checkout")
 
 $Host.UI.RawUI.WindowTitle = "Razorpay Agentic Commerce - press Esc to stop"
 Move-ToCentre

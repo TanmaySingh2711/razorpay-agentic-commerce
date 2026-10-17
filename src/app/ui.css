@@ -1030,21 +1030,12 @@ button[aria-busy="true"]::after {
 }
 
 /* A text-weight action that still looks pressable: underline plus hover. */
-.link-button {
+/* A smaller `.primary`/`.secondary`, for actions inside a list row or a
+   conversation. Still a full touch target, and still plainly a button. */
+:where(button, a).row-button {
   justify-self: start;
-  font: inherit;
-  font-size: 0.85rem;
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0.2rem 0;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.link-button:hover {
-  color: var(--foreground);
+  padding: 0.5rem 1rem;
+  font-size: 0.74rem;
 }
 
 .chip-tag {

@@ -45,6 +45,13 @@ import { checkPaymentStatus } from "@/app/actions";
  */
 const INTERVAL_MS = 4000;
 
+/**
+ * The first check comes sooner: Razorpay usually captures within a second or
+ * two, so waiting a full interval would mostly be waiting on ourselves. Still
+ * no more than 16 checks in the first minute.
+ */
+const FIRST_CHECK_MS = 1000;
+
 /** Roughly two and a half minutes of waiting before handing back to the person. */
 const MAX_ATTEMPTS = 40;
 
@@ -63,7 +70,8 @@ export function AwaitingProvider({
   useEffect(() => {
     if (gaveUp) return undefined;
 
-    const timer = setInterval(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const round = (): void => {
       attemptsRef.current += 1;
       setAttempts(attemptsRef.current);
 
@@ -79,10 +87,12 @@ export function AwaitingProvider({
         .finally(() => {
           router.refresh();
         });
-    }, INTERVAL_MS);
+      timer = setTimeout(round, INTERVAL_MS);
+    };
+    timer = setTimeout(round, attemptsRef.current === 0 ? FIRST_CHECK_MS : INTERVAL_MS);
 
     return () => {
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [router, gaveUp, transactionId]);
 

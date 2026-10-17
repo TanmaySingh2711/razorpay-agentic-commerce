@@ -5,6 +5,7 @@ import { rate } from "@/domain/insights";
 import { createLogger } from "@/lib/logger";
 import { loadMerchantInsights } from "@/services/merchant-insights-service";
 import type { MerchantInsights } from "@/services/merchant-insights-service";
+import { MERCHANT_LEAD } from "./copy";
 
 /**
  * The merchant's side of agentic commerce.
@@ -333,10 +334,7 @@ export default async function MerchantPage() {
         <header className="page-head">
           <p className="eyebrow">Merchant</p>
           <h1>Merchant insights</h1>
-          <p className="lead">
-            What shoppers asked the AI assistant for, what turned into paid orders, and
-            what you could stock or price differently to sell more.
-          </p>
+          <p className="lead">{MERCHANT_LEAD}</p>
         </header>
 
         {loaded.kind === "UNAVAILABLE" ? (

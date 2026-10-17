@@ -155,6 +155,7 @@ razorpay-agentic-commerce/
 ├── next.config.ts              security headers
 ├── package.json                scripts, dependencies and the Prettier settings
 ├── tsconfig.json               strict settings
+├── vercel.json                 runs the server in Singapore, beside the database
 ├── setup.sh / setup.bat        one-click setup (macOS, Linux / Windows)
 └── run_dashboard.bat           starts the app, opens the browser when ready, Esc stops (Windows)
 ```
@@ -169,6 +170,7 @@ Only files a tool insists on finding there, or a person is meant to run:
 | `tsconfig.json`, `next.config.ts`                | Next.js loads both from the root, and writes `next-env.d.ts` there (not configurable).                                             |
 | `eslint.config.mjs`                              | ESLint, and every editor's ESLint integration, look for the flat config in the root only.                                          |
 | `.gitignore`, `.gitattributes`, `.nvmrc`         | Git and Node version managers read them from the root.                                                                             |
+| `vercel.json`                                    | Vercel reads it from the project root only.                                                                                        |
 | `.env.example`                                   | Sits beside the `.env.local` it is copied to, which Next.js loads from the root.                                                   |
 | `README.md`, `LICENSE`, `AGENTS.md`, `CLAUDE.md` | GitHub renders the first and detects the second; `next dev` rewrites `AGENTS.md` in place; assistants read the last two from here. |
 | `setup.sh`, `setup.bat`, `run_dashboard.bat`     | Entry points meant to be double-clicked or run first, so they are where a person looks.                                            |

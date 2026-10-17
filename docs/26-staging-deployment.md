@@ -26,11 +26,19 @@ signature over the raw request body before the payload is trusted.
 | Concern      | Choice                                                                       |
 | ------------ | ---------------------------------------------------------------------------- |
 | Platform     | Vercel, deploying automatically from `main`                                  |
+| Region       | `sin1` (Singapore), set in `vercel.json`, the same region as the database    |
 | Framework    | Next.js App Router                                                           |
 | Node runtime | Node.js 24                                                                   |
 | Database     | Neon PostgreSQL through Prisma ORM, over Neon's pooled endpoint              |
 | AI provider  | Google Gemini, `gemini-3.5-flash-lite`, through the provider-neutral adapter |
 | Payments     | Razorpay **Test Mode**, through the payment-provider adapter                 |
+
+The region is the single biggest factor in how fast the site feels. Neon runs
+in `ap-southeast-1` (Singapore). Left to Vercel's default, `iad1` (Washington,
+D.C.), every query crossed the Pacific and back, roughly a quarter of a second
+each, and a purchase makes dozens of them: the merchant page took over five
+seconds on a cold start. `vercel.json` pins functions to `sin1` instead. If the
+database ever moves, move this with it.
 
 Every API route declares `runtime = "nodejs"` and `dynamic = "force-dynamic"`.
 Both are load-bearing rather than habitual. The routes use Node built-ins that

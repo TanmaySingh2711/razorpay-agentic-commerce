@@ -253,7 +253,7 @@ export function BuyerConsole(): React.JSX.Element {
           ))}
           <button
             type="button"
-            className="link-button"
+            className="secondary row-button"
             onClick={() => {
               setAbandoned(outcome);
             }}

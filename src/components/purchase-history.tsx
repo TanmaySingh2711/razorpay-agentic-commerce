@@ -96,10 +96,10 @@ function Row({
         )}
       </span>
       <span className="history-actions">
-        <Link href={purchasePath(purchase.transactionId)} className="history-open">
+        <Link href={purchasePath(purchase.transactionId)} className="primary row-button">
           Open<span className="visually-hidden"> {name}</span>
         </Link>
-        <button type="button" className="link-button" onClick={onRemove}>
+        <button type="button" className="secondary row-button" onClick={onRemove}>
           Remove<span className="visually-hidden"> {name} from history</span>
         </button>
       </span>

@@ -114,7 +114,27 @@ function servesHttps(): boolean {
   }
 }
 
+/**
+ * Which deployment built this, so a tab opened before a redeploy reloads
+ * instead of breaking.
+ *
+ * Every deployment renames its JavaScript files. A tab still running the
+ * previous one asks for files that no longer exist, and the click fails with
+ * "This page could not be loaded". With an id, Next.js sees the server answer
+ * from a different deployment and loads the page afresh instead. Vercel sets
+ * `VERCEL_DEPLOYMENT_ID` during its build; locally there is none and nothing
+ * changes.
+ */
+function deploymentId(): string | undefined {
+  // eslint-disable-next-line no-restricted-syntax -- see servesHttps above.
+  const id = process.env["VERCEL_DEPLOYMENT_ID"];
+  return id === undefined || id.length === 0 ? undefined : id;
+}
+
+const DEPLOYMENT_ID = deploymentId();
+
 const nextConfig: NextConfig = {
+  ...(DEPLOYMENT_ID === undefined ? {} : { deploymentId: DEPLOYMENT_ID }),
   /**
    * `/about` ("Architecture & Safety") became the last section of
    * `/how-it-works`. Old links still land on that page.

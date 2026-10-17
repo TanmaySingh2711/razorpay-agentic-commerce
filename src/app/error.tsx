@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { claimStaleVersionReload, isStaleVersionError } from "@/lib/stale-version";
 
 /**
  * What any page shows when rendering it fails on the server.
@@ -10,6 +11,9 @@ import { useEffect } from "react";
  * and offers the two useful next steps - try again, or go back to the shop -
  * instead of a framework error screen. The error itself is logged where it
  * happened; production sends the browser only an opaque digest.
+ *
+ * One failure is not the reader's problem at all: a tab left open across a
+ * redeploy. That one reloads the page by itself, once.
  */
 export default function PageError({
   error,
@@ -20,6 +24,12 @@ export default function PageError({
 }): React.JSX.Element {
   useEffect(() => {
     console.error(error);
+    if (
+      isStaleVersionError(error) &&
+      claimStaleVersionReload(() => sessionStorage, Date.now())
+    ) {
+      window.location.reload();
+    }
   }, [error]);
 
   return (

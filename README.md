@@ -207,6 +207,7 @@ razorpay-agentic-commerce/
 ├── run_dashboard.bat        Starts the app on Windows
 ├── .env.example             Template for your settings
 ├── LICENSE                  All rights reserved
+├── vercel.json              Runs the hosted server next to the database
 └── package.json             Scripts and dependencies
 ```
 
