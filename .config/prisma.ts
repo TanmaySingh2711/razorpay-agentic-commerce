@@ -18,7 +18,7 @@ import { defineConfig } from "prisma/config";
  * `src/integrations/prisma-client.ts`, not here.
  *
  * Prisma 7 does not auto-load env files, and this project keeps real values in
- * `.env.local` (git-ignored, per Objective 1), so it is loaded explicitly.
+ * `.env.local` (git-ignored), so it is loaded explicitly.
  */
 loadEnv({ path: ".env.local", quiet: true });
 

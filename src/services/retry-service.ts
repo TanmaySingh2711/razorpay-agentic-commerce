@@ -795,7 +795,7 @@ async function authorizeAndCreateOrder(
   //
   // Reused rather than reimplemented. Everything that makes order creation safe
   // - the durable claim, the receipt idempotency, the three-outcome provider
-  // contract, the unresolved-outcome parking - is Objective 10's, and a second
+  // contract, the unresolved-outcome parking - belongs to the payment order service, and a second
   // implementation for retries would be a second chance to get it wrong.
   const order: PaymentOrderResult = await createPaymentOrder(
     { transactionId, retry: { attemptNumber: params.nextAttemptNumber } },

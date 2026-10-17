@@ -19,7 +19,7 @@ import {
 } from "./harness";
 
 /**
- * The Buyer Agent against the real Objective 4 catalog on PostgreSQL.
+ * The Buyer Agent against the real catalog on PostgreSQL.
  *
  * The pure suites prove the rules; this proves the wiring. The agent reads
  * through the same catalog service the HTTP API uses, against real rows, with
@@ -196,7 +196,7 @@ describe.skipIf(!databaseConfigured)("buyer agent over the real catalog", () => 
   });
 
   it("cannot see, let alone select, a discontinued product", async () => {
-    // Objective 4 never publishes it, so it is never observed, so provenance
+    // The catalog never publishes it, so it is never observed, so provenance
     // rejects it. Two independent layers, both holding.
     await expect(
       runBuyerAgent(
@@ -298,7 +298,7 @@ describe.skipIf(!databaseConfigured)("buyer agent over the real catalog", () => 
 
   describe("the agent writes nothing", () => {
     it("leaves every financial table untouched", async () => {
-      // Objective 5 is a proposal layer. After a selection, a refusal, an HTTP
+      // The Buyer Agent is a proposal layer. After a selection, a refusal, an HTTP
       // call and a hostile catalog, the lifecycle is exactly as it started.
       const db = testDb();
       expect(await db.transaction.count()).toBe(0);

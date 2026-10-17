@@ -75,8 +75,8 @@ const globalForPrisma = globalThis as typeof globalThis & {
 /**
  * Returns the process-wide client, creating it on first use.
  *
- * Lazy rather than eagerly constructed at import time: the Objective 1
- * foundation must still boot, build and run its tests with no database
+ * Lazy rather than eagerly constructed at import time: the app must still
+ * boot, build and run its tests with no database
  * configured, and `getDatabaseConfig()` throws when `DATABASE_URL` is absent.
  * Importing this module is therefore always safe; only calling it requires a
  * database.

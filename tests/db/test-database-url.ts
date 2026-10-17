@@ -72,7 +72,7 @@ export interface TestDatabaseEnvironment {
  *  - **A string.** `TEST_DIRECT_URL` is set and does not point at the
  *    application's database. Tests run.
  *  - **`undefined`.** Nothing is configured — no test URL and no application
- *    URL either. This is a fresh clone, and the Objective 1 promise that the
+ *    URL either. This is a fresh clone, and the promise that the
  *    suite boots and passes with no credentials is preserved: the database
  *    suites skip themselves.
  *  - **A throw.** The project *is* configured but the test connection is

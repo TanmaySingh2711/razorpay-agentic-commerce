@@ -150,7 +150,7 @@ export function validateSelection(
 
   const reasonCodes: DecisionReasonCode[] = [];
 
-  // 2. Purchasability. Objective 4 already refuses to publish a discontinued
+  // 2. Purchasability. The catalog already refuses to publish a discontinued
   //    product, and reports an out-of-stock one honestly. This re-checks both
   //    rather than assuming: a defence that only exists one layer up is a
   //    defence that disappears when that layer is refactored.

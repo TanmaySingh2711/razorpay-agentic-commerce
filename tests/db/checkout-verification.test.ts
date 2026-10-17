@@ -116,7 +116,7 @@ interface Arranged {
  * Drives a transaction through every real boundary to PAYMENT_ORDER_CREATED.
  *
  * Nothing is hand-inserted: creation, transitions, quoting, policy, reservation
- * and Objective 10's order creation all run, so each test starts from a state
+ * and payment order creation all run, so each test starts from a state
  * the system can genuinely reach.
  */
 async function arrange(): Promise<Arranged> {
@@ -213,7 +213,7 @@ async function auditOf(transactionId: string) {
  * A longer bound than the 30s default, for this file only, from measurement.
  *
  * Every test here calls `arrangeStarted()`, which drives a transaction through
- * creation, transitions, quoting, policy, reservation, Objective 10's order
+ * creation, transitions, quoting, policy, reservation, payment order
  * creation and `startCheckout` before the assertion under test runs. That is
  * several dozen sequential round trips to a hosted PostgreSQL instance, and it
  * is the arrangement rather than the assertion that costs the time: measured at

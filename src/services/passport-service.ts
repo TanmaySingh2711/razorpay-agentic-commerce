@@ -32,7 +32,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * ## No new table
  *
  * Deliberately zero schema change. The passport is a *view* of records that
- * Objectives 1–19 already made authoritative; a new table would be a second
+ * the rest of the system already keeps authoritatively; a new table would be a second
  * place the truth lives, and the first time the two disagreed the passport
  * would be worse than useless — it would be confidently wrong.
  */

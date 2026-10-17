@@ -56,7 +56,7 @@ import type { AuditEventResult, PrismaClient } from "@/generated/prisma/client";
  * say AUTHORIZED without carrying the policy evaluation that authorized it, and
  * a failure anywhere leaves the transaction exactly where it was.
  *
- * No Gemini call happens in this file, and none ever should. Objective 7 does
+ * No Gemini call happens in this file, and none ever should. Policy does
  * not need a model, and a model that could influence this answer would be the
  * one thing the whole architecture exists to prevent.
  */
@@ -151,7 +151,7 @@ export type PolicyEvaluationResult =
  *
  * The order of operations is the design:
  *
- *  1. Validate the quote through Objective 6's boundary. An expired,
+ *  1. Validate the quote through the quote service's boundary. An expired,
  *     invalidated or re-priced quote stops here - no evaluation, no transition,
  *     no audit event.
  *  2. Open one database transaction.

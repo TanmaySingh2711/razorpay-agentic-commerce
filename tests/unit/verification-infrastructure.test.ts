@@ -60,7 +60,7 @@ describe("which database the destructive suite may use", () => {
   });
 
   it("skips, rather than fails, when nothing at all is configured", () => {
-    // The Objective 1 promise: a fresh clone with no credentials still runs a
+    // The promise: a fresh clone with no credentials still runs a
     // green suite. `undefined` is what makes the db suites skip themselves.
     expect(resolveTestDatabaseUrl({})).toBeUndefined();
     expect(resolveTestDatabaseUrl({ TEST_DIRECT_URL: "" })).toBeUndefined();

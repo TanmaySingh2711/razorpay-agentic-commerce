@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { connect } from "node:net";
 import { delimiter, dirname, join } from "node:path";
 import { config as loadEnv } from "dotenv";
@@ -13,7 +13,8 @@ import { resolvePackageBin } from "./run-package-bin";
 /**
  * Makes sure the local development database is up before `npm run dev`.
  *
- * Runs as `predev`, so both `npm run dev` and run_dashboard.bat get it. The
+ * Runs as `predev` for `npm run dev`; run_dashboard.bat runs it alongside the
+ * dev server instead, so the browser does not wait for it. The
  * app reads PostgreSQL on almost every page, and the usual reason it is not
  * there is simply that Docker Desktop is not running yet - after a restart,
  * say. Without this, that showed up as a crashed merchant page and an
@@ -238,6 +239,34 @@ async function inspectDatabase(rawUrl: string): Promise<DatabaseState> {
   }
 }
 
+/**
+ * Migration folders the database has not finished applying.
+ *
+ * `prisma migrate deploy` answers the same question, but it starts the Prisma
+ * CLI to do it - about five seconds on every launch, even when there is nothing
+ * to apply. Asking the migrations table directly takes milliseconds, so the CLI
+ * only runs when a migration is actually waiting.
+ */
+async function pendingMigrations(rawUrl: string): Promise<string[]> {
+  const folders = readdirSync(join("prisma", "migrations"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  const client = new Client({ connectionString: rawUrl });
+  await client.connect();
+  try {
+    const applied = await client.query<{ migration_name: string }>(
+      "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL",
+    );
+    const done = new Set(applied.rows.map((row) => row.migration_name));
+    return folders.filter((name) => !done.has(name));
+  } catch {
+    // No migrations table at all: everything is pending.
+    return folders;
+  } finally {
+    await client.end();
+  }
+}
+
 async function main(): Promise<void> {
   const directUrl = process.env["DIRECT_URL"];
   if (directUrl === undefined || directUrl.length === 0) {
@@ -256,13 +285,17 @@ async function main(): Promise<void> {
 
   const state = await inspectDatabase(directUrl);
   if (state === "ready") {
-    // Cheap when there is nothing to do, and it means a migration added since
-    // the last run can never leave the app reading a table that is not there.
-    const childEnv = { ...process.env, DIRECT_URL: directUrl, DATABASE_URL: directUrl };
-    execFileSync(process.execPath, [resolvePackageBin("prisma"), "migrate", "deploy"], {
-      env: childEnv,
-      stdio: "pipe",
-    });
+    // A migration added since the last run must never leave the app reading a
+    // table that is not there - but the CLI only starts when one is waiting.
+    const pending = await pendingMigrations(directUrl);
+    if (pending.length > 0) {
+      log(`Applying ${String(pending.length)} new migration(s)...`);
+      const childEnv = { ...process.env, DIRECT_URL: directUrl, DATABASE_URL: directUrl };
+      execFileSync(process.execPath, [resolvePackageBin("prisma"), "migrate", "deploy"], {
+        env: childEnv,
+        stdio: "pipe",
+      });
+    }
     log("Development database is up to date.");
     return;
   }

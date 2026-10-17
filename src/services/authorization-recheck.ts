@@ -13,7 +13,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 /**
  * The pre-payment authorization recheck.
  *
- * This is the handoff Objective 10 will call, and the reason it exists is a
+ * Payment order creation and retry call this, and the reason it exists is a
  * gap in time. Policy is evaluated when a quote is created; a payment order is
  * created later. In between, a price can move, a quote can lapse, and - most
  * importantly - a person can change their spending policy. An authorization
@@ -98,7 +98,7 @@ export interface AuthorizationRecheckDeps {
  * authority the policy alone will not.
  *
  * Both default to the original, narrowest behaviour, so a caller that passes
- * nothing gets exactly the fail-closed gate Objective 7 shipped. Widening is
+ * nothing gets exactly the fail-closed policy gate. Widening is
  * always an explicit act at a call site, visible in review.
  */
 export interface AuthorizationRecheckOptions {
@@ -149,8 +149,8 @@ export function defaultRecheckDeps(): AuthorizationRecheckDeps {
  * AUTHORIZED through the approval gate, and re-running the engine against a
  * policy that always demanded approval will keep saying so - correctly. Making
  * that a refusal rather than a pass is the fail-closed choice, and it is the
- * seam Objective 8 fills: the approval gate will supply the missing authority,
- * as a stored decision this function can then consult. Until that exists, a
+ * seam the approval gate fills: a caller may let a granted, stored approval
+ * supply the missing authority (see the options above). Without one, a
  * purchase above the ceiling cannot be paid, which is the right way round.
  */
 export async function recheckPolicyAuthorization(

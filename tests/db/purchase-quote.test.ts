@@ -594,7 +594,7 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
         where: { id: fixture.inBudgetId },
         select: { inventory: true },
       });
-      // A quote records a price. Holding stock is Objective 8's job.
+      // A quote records a price. Holding stock is the reservation service's job.
       expect(after.inventory).toBe(before.inventory);
       expect(await testDb().inventoryReservation.count()).toBe(0);
     });

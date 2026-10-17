@@ -546,7 +546,7 @@ describe.skipIf(!databaseConfigured)("catalog API", () => {
     });
 
     it("does not sanitise legitimate merchant text away", async () => {
-      // Preserved, not scrubbed: Objective 5 needs to see exactly what the
+      // Preserved, not scrubbed: the Buyer Agent needs to see exactly what the
       // merchant wrote in order to defend against it.
       const { data } = await readData<CatalogProductDto>(
         await handleProductByIdRequest(fixture.hostileId, deps),
@@ -625,7 +625,7 @@ describe.skipIf(!databaseConfigured)("catalog API", () => {
 
   describe("version and freshness", () => {
     it("exposes a changed updatedAt and version after the product changes", async () => {
-      // Objective 6 will compare these against a quote. Objective 4 only has to
+      // The quote service compares these against a quote. The catalog only has to
       // make the change observable.
       const before = await readData<CatalogProductDto>(
         await handleProductByIdRequest(fixture.freshnessId, deps),
@@ -725,7 +725,7 @@ describe.skipIf(!databaseConfigured)("catalog API", () => {
     });
   });
 
-  describe("the Objective 3 boundary is untouched", () => {
+  describe("the transaction boundary is untouched", () => {
     it("creates no transaction and no transition history", async () => {
       // Reading a catalog is not part of a transaction's lifecycle. After every
       // test above, the lifecycle tables are still empty.

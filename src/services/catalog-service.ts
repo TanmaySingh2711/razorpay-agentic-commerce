@@ -23,7 +23,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 /**
  * The catalog application service.
  *
- * This is the layer a future consumer talks to - the Objective 5 Buyer Agent,
+ * This is the layer every consumer talks to - the Buyer Agent,
  * the UI, a test, an external client. It speaks in domain terms: a validated
  * query in, a public contract out. It knows nothing about HTTP and nothing
  * about columns.

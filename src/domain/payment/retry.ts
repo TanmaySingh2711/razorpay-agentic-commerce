@@ -69,7 +69,7 @@ export const RETRY_DENIALS = [
    * The strictest denial in the list. An unresolved attempt may correspond to a
    * real order at the provider that this database never finished recording, and
    * the one thing that must never happen to it is another order - it is
-   * resolved by looking its receipt up, which is Objective 10's rule and
+   * resolved by looking its receipt up, which is the payment order service's rule and
    * outranks any retry policy.
    */
   "OUTCOME_UNRESOLVED",
@@ -275,7 +275,7 @@ export type PaymentRetryResult =
        * Not a denial: the purchase is not over, and held stock is left exactly
        * where it was. It is also not `RETRY_STARTED`: no PaymentAttempt exists
        * yet, and none will until a fresh, exactly-scoped approval is granted -
-       * the same rule Objective 8 applies to a first purchase, applied here to
+       * the same rule the approval gate applies to a first purchase, applied here to
        * a retry that discovered the price had moved.
        */
       readonly kind: "APPROVAL_REQUIRED";

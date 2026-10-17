@@ -115,7 +115,7 @@ async function createProduct(unitAmount: bigint, inventory: number): Promise<str
  * Walks a transaction through the real boundaries as far as its policy decision.
  *
  * Nothing here is assembled by raw insert: the creation service, the transition
- * service, the trusted-quote service and Objective 7's policy engine all run,
+ * service, the trusted-quote service and the policy engine all run,
  * so every test below starts from a state the system can genuinely reach.
  */
 async function arrange(options: {
@@ -289,7 +289,7 @@ describe.skipIf(!databaseConfigured)("approval gate and inventory reservation", 
     });
 
     it("creates none for a purchase policy already allowed", async () => {
-      // Below the ceiling, so Objective 7 authorized it outright. There is no
+      // Below the ceiling, so the policy engine authorized it outright. There is no
       // question for a human to answer.
       const { transactionId } = await arrange({ unitAmount: IN_BUDGET });
       const transaction = await testDb().transaction.findUniqueOrThrow({

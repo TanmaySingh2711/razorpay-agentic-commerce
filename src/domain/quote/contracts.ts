@@ -63,7 +63,7 @@ export type PurchaseDecisionResult =
       readonly reasons: readonly QuoteInvalidationReason[];
     };
 
-/** What `validateQuoteForUse` answers. Objectives 7-10 branch on this. */
+/** What `validateQuoteForUse` answers. Policy, approval, reservation and payment branch on this. */
 export type QuoteValidationResult =
   | { readonly kind: "VALID"; readonly quote: QuoteDto }
   | { readonly kind: "EXPIRED"; readonly quote: QuoteDto }

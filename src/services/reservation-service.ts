@@ -58,7 +58,7 @@ const INVENTORY_ACTOR = "inventory_service" as const;
  * The only transaction states that prove money actually moved.
  *
  * Committing a reservation permanently decrements real stock, so it is gated on
- * evidence rather than on a caller's assertion. Nothing in Objectives 1-8 can
+ * evidence rather than on a caller's assertion. Nothing before payment can
  * put a transaction into either state, which is the point: the operation exists
  * for the payment workflow to call later and is unusable until that workflow
  * can honestly prove capture.

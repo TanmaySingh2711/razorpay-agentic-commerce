@@ -9,7 +9,7 @@ import { SUPPORTED_CURRENCIES } from "@/domain/money";
  * claim about the user's wishes, and none of it is a claim about the world. The
  * model may say "they wanted a mechanical keyboard under ₹3,000"; it may never
  * say what a keyboard costs. Authoritative product facts come from PostgreSQL
- * through the Objective 4 catalog and nowhere else.
+ * through the catalog service and nowhere else.
  *
  * The schema is enforced twice, on purpose. Gemini is given it as a native
  * structured-output schema so the provider constrains generation, and the
@@ -23,7 +23,7 @@ import { SUPPORTED_CURRENCIES } from "@/domain/money";
  * What the human is trying to do.
  *
  * Classified explicitly rather than inferred downstream, so an informational
- * request cannot drift into purchase-shaped behaviour. Objective 5 performs no
+ * request cannot drift into purchase-shaped behaviour. The Buyer Agent performs no
  * payment action for any of these values — the distinction exists so later
  * objectives inherit an honest signal.
  */

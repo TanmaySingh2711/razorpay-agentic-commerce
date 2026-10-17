@@ -174,8 +174,8 @@ interface Arranged {
  * Walks a transaction through every real boundary as far as INVENTORY_RESERVED.
  *
  * Nothing is assembled by raw insert. The creation service, the transition
- * service, the trusted-quote service, Objective 7's policy engine, Objective
- * 8's approval gate and reservation service all run, so every test starts from
+ * service, the trusted-quote service, the policy engine, the approval gate
+ * and the reservation service all run, so every test starts from
  * a state the system can genuinely reach - and a regression in any of them
  * shows up here rather than being papered over by a hand-built row.
  */

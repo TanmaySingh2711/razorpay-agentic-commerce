@@ -4,7 +4,7 @@ import { checkRequestOrigin } from "@/lib/same-origin";
 import { handleCreatePaymentOrder, handleRetryPayment } from "@/app/api/payments/handler";
 
 /**
- * The two browser-facing protections added by Objective 15.
+ * The two browser-facing protections: security headers and the same-origin check.
  *
  * Both are the kind that fail silently when they regress. A header that stops
  * being sent breaks nothing visible; an origin check that starts accepting

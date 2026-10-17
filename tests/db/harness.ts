@@ -16,7 +16,7 @@ loadEnv({ path: ".env.local", quiet: true });
  * catalog and any real transaction history cannot be disturbed.
  *
  * Tests are skipped rather than failed when no database is configured, so the
- * Objective 1 foundation suite still passes on a machine with no credentials.
+ * foundation suite still passes on a machine with no credentials.
  */
 export { TEST_SCHEMA };
 

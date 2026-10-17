@@ -14,7 +14,7 @@ import type { CatalogQuery } from "@/domain/catalog/query";
  *
  * A narrow read port with exactly the three operations the agent's tools need.
  * It is not a second catalog: `createServiceCatalogReader` delegates straight to
- * the Objective 4 application service, in-process, so there is one set of
+ * the catalog application service, in-process, so there is one set of
  * visibility rules, one price authority and one place filtering happens. A
  * modular monolith calling its own HTTP API would only add a network hop and a
  * second copy of the query rules to keep in sync.
@@ -34,7 +34,7 @@ export interface CatalogReader {
   getMerchant(): Promise<CatalogMerchantDto>;
 }
 
-/** The production reader: the Objective 4 catalog service, unchanged. */
+/** The production reader: the catalog service, unchanged. */
 export function createServiceCatalogReader(
   deps: CatalogServiceDeps = defaultCatalogDeps(),
 ): CatalogReader {

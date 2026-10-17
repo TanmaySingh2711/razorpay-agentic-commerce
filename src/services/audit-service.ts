@@ -176,7 +176,7 @@ function defaultDeps(): AuditServiceDeps {
  *
  * **Composed, not duplicated.** `TransactionStateTransition` remains the
  * authoritative record of lifecycle state — it has the actor checks, the
- * conditional update and the unique sequence behind it, and Objective 3 exists
+ * conditional update and the unique sequence behind it, and the transition service exists
  * to make it the only way state changes. Mirroring every transition into the
  * audit table as well would create two histories that can disagree, and the
  * moment they disagree neither is trustworthy. So this reads both and merges

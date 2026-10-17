@@ -258,7 +258,7 @@ describe("discarded transition outcomes (ESLint)", () => {
     }
   });
 
-  it("leaves the existing Objective 3 source passing", async () => {
+  it("leaves the real application source passing", async () => {
     // Not a fixture: the real application tree, linted with the real config.
     // A rule the existing code cannot satisfy is a rule someone will disable.
     const results = await eslint.lintFiles(["src"]);

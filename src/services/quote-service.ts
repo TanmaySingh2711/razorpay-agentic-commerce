@@ -29,8 +29,8 @@ import type { PrismaClient } from "@/generated/prisma/client";
  *    same database transaction that writes the quote and moves the lifecycle,
  *    so what is persisted is one coherent snapshot rather than three reads
  *    stitched together.
- *  - `validateQuoteForUse` asks whether that promise still holds. Objectives
- *    7-10 call it before relying on a quote, and it re-reads the product rather
+ *  - `validateQuoteForUse` asks whether that promise still holds. Policy,
+ *    approval, reservation and payment call it before relying on a quote, and it re-reads the product rather
  *    than trusting the stored status column.
  */
 assertServerOnly("src/services/quote-service.ts");
@@ -323,7 +323,7 @@ function toSnapshot(row: PersistedQuote): QuoteSnapshot {
 /**
  * Whether a quote may still be relied upon, right now.
  *
- * The entry point Objectives 7-10 call before acting on a quote. It re-reads
+ * The entry point policy, approval, reservation and payment call before acting on a quote. It re-reads
  * the product every time: a status column says only what was true when
  * something last wrote it, and there is no background job here keeping those
  * columns honest - deliberately, because a payment path must not depend on a
@@ -332,7 +332,7 @@ function toSnapshot(row: PersistedQuote): QuoteSnapshot {
  * Read-only with one exception: an expired or invalidated quote is marked as
  * such, so history records when it stopped being usable. It never mutates the
  * quote's financial fields, and it never touches inventory - reserving stock is
- * Objective 8's job, not a side effect of looking at a quote.
+ * the reservation service's job, not a side effect of looking at a quote.
  */
 export async function validateQuoteForUse(
   quoteId: string,

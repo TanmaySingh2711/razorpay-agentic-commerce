@@ -24,7 +24,7 @@ import type { AiToolDeclaration } from "@/integrations/ai-provider";
  * may well try; the dispatcher will refuse, because `pay` is not in the
  * registry, and nothing will have happened.
  *
- * Tools reuse the Objective 4 catalog service directly, in-process. This is a
+ * Tools reuse the catalog service directly, in-process. This is a
  * modular monolith: an HTTP call from the server back into its own API would
  * add a network hop, a second authentication surface, and a second copy of the
  * query rules to keep in sync — for nothing.
@@ -232,7 +232,7 @@ async function executeSearch(
   const { category, maxAmountMinor, currency, attributes, limit } = parsed.data;
 
   // A budget without a currency is refused rather than defaulted, matching the
-  // Objective 4 contract: an amount with no currency is not a budget.
+  // catalog contract: an amount with no currency is not a budget.
   if (maxAmountMinor !== undefined && currency === undefined) {
     throw new InvalidToolArgumentsError(
       "search_catalog",

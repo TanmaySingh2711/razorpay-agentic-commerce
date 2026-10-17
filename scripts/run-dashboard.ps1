@@ -46,23 +46,22 @@ function Move-ToCentre {
     }
 }
 
+function Test-PortInUse {
+    # Reads the listening ports instead of trying to connect: on Windows a
+    # connection to a closed port takes two seconds to fail (four through
+    # localhost, which tries IPv6 first), and this takes a few milliseconds.
+    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+    return [bool]($listeners | Where-Object { $_.Port -eq $Port })
+}
+
 function Test-Serving {
     # True once the app answers with a real page. The request also makes the
-    # dev server compile the page, so the browser does not wait on it.
+    # dev server compile the page, so the browser does not wait on it. Nothing
+    # is requested before the port is open, for the reason given above.
+    if (-not (Test-PortInUse)) { return $false }
     try {
         $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 90
         return $response.StatusCode -eq 200
-    } catch {
-        return $false
-    }
-}
-
-function Test-PortInUse {
-    try {
-        $client = New-Object System.Net.Sockets.TcpClient
-        $client.Connect("127.0.0.1", $Port)
-        $client.Close()
-        return $true
     } catch {
         return $false
     }
@@ -77,11 +76,19 @@ function Test-EscapePressed {
 
 function Stop-Server($process) {
     if ($null -ne $process -and -not $process.HasExited) {
-        # npm starts node, which starts Next.js workers: stop the whole tree,
-        # or the port stays taken by an orphan the next run would trip over.
+        # Next.js starts worker processes of its own: stop the whole tree, or
+        # the port stays taken by an orphan the next run would trip over.
         & taskkill.exe /PID $process.Id /T /F *> $null
     }
 }
+
+function Start-Node([string[]]$arguments) {
+    return Start-Process -FilePath "node.exe" -ArgumentList $arguments -NoNewWindow -PassThru
+}
+
+# Pages compiled in the background once the browser is open, so the first
+# click on each is as quick as the second. None of them needs the database.
+$WarmPages = @("/shop", "/how-it-works", "/history")
 
 $Host.UI.RawUI.WindowTitle = "Razorpay Agentic Commerce - press Esc to stop"
 Move-ToCentre
@@ -98,12 +105,18 @@ if (Test-PortInUse) {
 
 Write-Host ""
 Write-Host "  Razorpay Agentic Commerce" -ForegroundColor Red
-Write-Host "  Starting the database, then the app at $Url."
-Write-Host "  The browser opens by itself when the app is ready."
+Write-Host "  Starting the app at $Url and checking the database alongside it."
+Write-Host "  The browser opens by itself as soon as the first page is ready."
 Write-Host "  Press Esc to stop the app and close this window."
 Write-Host ""
 
-$server = Start-Process -FilePath "npm.cmd" -ArgumentList "run", "dev" -NoNewWindow -PassThru
+# Started side by side rather than one after the other (which is what
+# `npm run dev` does through `predev`). The overview needs no database, so the
+# browser can open while the database check - or Docker starting, after a
+# reboot - is still running. Both are called through node directly: going
+# through npm costs about a second for nothing.
+$database = Start-Node @("node_modules/tsx/dist/cli.mjs", "scripts/start-database.ts")
+$server = Start-Node @("node_modules/next/dist/bin/next", "dev")
 $opened = $false
 $stopped = $false
 $started = Get-Date
@@ -119,13 +132,18 @@ try {
                 Write-Host ""
                 Write-Host "  Opened $Url  (Esc stops the app)" -ForegroundColor Green
                 Write-Host ""
+                foreach ($page in $WarmPages) {
+                    if (Test-EscapePressed) { $stopped = $true; break }
+                    try { [void](Invoke-WebRequest -Uri "$Url$page" -UseBasicParsing -TimeoutSec 60) } catch { }
+                }
+                if ($stopped) { break }
             } elseif (((Get-Date) - $started).TotalSeconds -gt 600) {
                 # Generous on purpose: the first step starts Docker and lets
                 # PostgreSQL recover if it was shut down uncleanly.
                 Write-Host "  The app has not answered after 10 minutes. Check the messages above." -ForegroundColor Yellow
                 $opened = $true
             } else {
-                Start-Sleep -Milliseconds 500
+                Start-Sleep -Milliseconds 100
             }
         } else {
             Start-Sleep -Milliseconds 150
@@ -133,6 +151,7 @@ try {
     }
 } finally {
     Stop-Server $server
+    Stop-Server $database
 }
 
 if ($stopped) { exit 0 }

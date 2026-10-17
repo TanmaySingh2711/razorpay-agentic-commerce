@@ -196,8 +196,8 @@ enum AgentRequestOutcome {
 // Identity and catalog
 // ---------------------------------------------------------------------------
 
-/// The human on whose behalf the agent acts. Demo identity only - Objective 2
-/// deliberately ships no authentication, so there is no credential material,
+/// The human on whose behalf the agent acts. Demo identity only - the app
+/// deliberately has no authentication, so there is no credential material,
 /// no OAuth linkage and no session state here.
 model BuyerProfile {
   id          String   @id @default(uuid(7))
@@ -530,7 +530,7 @@ model TransactionStateTransition {
   details        Json               @default("{}")
   /// Identity of the logical operation that produced this transition.
   ///
-  /// Added in Objective 3. A retried command carrying the same key resolves to
+  /// A retried command carrying the same key resolves to
   /// "already applied" instead of writing a second transition, which is what
   /// makes an at-least-once caller - a webhook, a retried API call - safe.
   /// Nullable, because an internal transition need not always claim an

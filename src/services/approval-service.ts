@@ -30,7 +30,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 /**
  * The human approval gate.
  *
- * Objective 7 can say "a person must decide this". This is where a person
+ * The policy engine can say "a person must decide this". This is where a person
  * actually does, and the whole file exists to keep three claims true.
  *
  * **A human approves one purchase, not a policy.** The approval is bound to one
@@ -78,7 +78,7 @@ export interface RequestApprovalCommand {
 /**
  * Opens an approval question for a transaction already waiting on one.
  *
- * The gate is the transaction's own state. Objective 7 puts a transaction into
+ * The gate is the transaction's own state. The policy engine puts a transaction into
  * `APPROVAL_REQUIRED` and nothing else does, so requiring that state here is
  * exactly the rule "an approval may be created only when the policy decision
  * was APPROVAL_REQUIRED" - expressed as persisted server truth rather than as a
@@ -127,7 +127,7 @@ export async function requestApproval(
       }
 
       // Why a person was asked, and under which rule. Read from the audit
-      // record Objective 7 wrote, so the approval carries the same policy
+      // record the policy engine wrote, so the approval carries the same policy
       // version the decision was made under.
       const recorded = await readRecordedEvaluation(tx, command.transactionId);
       if (recorded.kind !== "FOUND") {

@@ -33,12 +33,12 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * The boundary between "the AI picked something" and "the server will put a
  * price behind it".
  *
- * Objective 5 ends with a proposal. This service decides whether that proposal
+ * The Buyer Agent ends with a proposal. This service decides whether that proposal
  * survives contact with the database, and the order it does that in is the
  * whole design:
  *
  *   1. purchase intent only        - browsing buys nothing
- *   2. open the transaction        - through the Objective 3 boundary, idempotently
+ *   2. open the transaction        - through the transaction boundary, idempotently
  *   3. retrieve candidates OURSELVES - from the catalog, not from the model
  *   4. filter deterministically    - arithmetic the model cannot argue with
  *   5. check the proposed id belongs to that set
@@ -51,7 +51,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * server cannot vouch for. Step 5 then means something: membership of *our*
  * candidates, not of a list the model handed us.
  *
- * No Gemini call happens here. Objective 5's validated output is consumed as
+ * No Gemini call happens here. The Buyer Agent's validated output is consumed as
  * data; asking a model to re-do work the database can settle would spend quota
  * to make a decision less trustworthy.
  */
@@ -258,7 +258,7 @@ export async function decidePurchase(
     hasBudget: authority.maxAmountMinor !== null,
   });
 
-  // --- 2. Open the transaction through the Objective 3 boundary. ---
+  // --- 2. Open the transaction through the transaction boundary. ---
   const transactionId = await openTransaction(decision, deps);
 
   // The agent is the *actor* here, never the authority: this records what was

@@ -13,12 +13,12 @@ import type { CurrencyCode, MoneyDto } from "@/domain/money";
  *
  *  - **Not an authorization.** A valid quote says the server confirms these
  *    facts. It says nothing about whether this shopper is permitted to spend
- *    that much; that is Objective 7's policy decision. A quote well above any
+ *    that much; that is the policy engine's decision. A quote well above any
  *    future spending limit is still a perfectly valid quote.
  *  - **Not an inventory reservation.** Quoting reads stock; it does not hold
  *    it. Between quoting and paying, someone else may buy the last unit. That
  *    is why `validateQuoteForUse` re-checks inventory rather than trusting the
- *    snapshot, and why Objective 8 exists.
+ *    snapshot, and why stock is held separately by the reservation service.
  */
 
 /** Why a quote can no longer be used. Closed, structured, safe to return. */

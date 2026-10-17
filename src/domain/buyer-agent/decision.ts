@@ -16,7 +16,7 @@ import type {
  * against, and a shape a bug could produce.
  *
  * The agent *proposes*. Nothing here authorizes, pays, reserves, or moves a
- * transaction. Objective 6 takes this proposal, re-reads the product from
+ * transaction. The product decision service takes this proposal, re-reads the product from
  * PostgreSQL, and decides whether a trusted quote can be created from it.
  */
 
@@ -68,7 +68,7 @@ export type ClarificationField = (typeof CLARIFICATION_FIELDS)[number];
 /**
  * The user's authority, as the server resolved it.
  *
- * Attached to every outcome so a caller — and Objective 6 — can see exactly
+ * Attached to every outcome so a caller, the product decision service included, can see exactly
  * which constraints were treated as binding, without re-deriving them from the
  * original message.
  */
@@ -104,7 +104,7 @@ export interface NormalizedUserConstraints {
  *
  * Included so a caller can render a result without a second round trip, and
  * labelled `observed` rather than `authoritative` on purpose: it is a snapshot
- * from a read that has already happened. Objective 6 re-reads before it trusts
+ * from a read that has already happened. The product decision service re-reads before it trusts
  * any of it. Nothing here came from the model.
  */
 export interface ObservedProduct {

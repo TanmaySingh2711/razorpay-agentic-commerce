@@ -254,7 +254,7 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
     /**
      * A capture for an *earlier* attempt, arriving after a retry has begun.
      *
-     * Added in Objective 14, and it exists because of one concrete sequence:
+     * It exists because of one concrete sequence:
      * attempt #1 is reported failed, a person requests a retry, the retry
      * creates attempt #2 and puts the transaction back at PAYMENT_ORDER_CREATED
      * - and only then does the provider deliver a genuine `payment.captured`
@@ -343,8 +343,8 @@ export const TRANSACTION_TRANSITIONS: TransitionMatrix = {
    *    have moved after a failure was recorded. Restricted to `payment_webhook`
    *    so only verified provider evidence can take it.
    *
-   * Objective 3 makes these transitions *possible*. The conditions under which
-   * a service may request them belong to the payment objective.
+   * This table makes these transitions *possible*. The conditions under which
+   * a service may request them live in the payment and retry services.
    */
   PAYMENT_FAILED: {
     PAYMENT_RETRY_REQUESTED: {

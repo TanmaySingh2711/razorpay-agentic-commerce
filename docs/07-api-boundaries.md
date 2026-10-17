@@ -52,6 +52,15 @@ A different UI calling these actions in a different order cannot reach a state
 the server would not otherwise allow, because the gate in every service is the
 transaction's own persisted state.
 
+| Action                                 | Called from                   | Takes                       | Does                                                                        |
+| -------------------------------------- | ----------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| `submitRequest`                        | Shop                          | a sentence (+ the exchange) | Runs the Buyer Agent; opens a purchase or asks a question.                  |
+| `approvePurchase` / `rejectPurchase`   | Purchase page                 | a transaction id            | Records the human decision on an approval request.                          |
+| `reserveStock`                         | Purchase page                 | a transaction id            | Holds the item for the quoted purchase.                                     |
+| `refundPurchase` / `checkRefundStatus` | Purchase page                 | a transaction id            | Starts the one refund; asks the provider where it stands.                   |
+| `checkPaymentStatus`                   | Purchase page, while it waits | a transaction id            | Asks Razorpay about a capture. See [25](./25-checkout-and-verification.md). |
+| `loadPurchaseHistory`                  | History                       | up to 50 transaction ids    | Reads where each remembered purchase stands. Read-only.                     |
+
 ## What is deliberately absent
 
 - **No endpoint accepts an amount, a price, a stock level or a state from the

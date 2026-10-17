@@ -279,28 +279,18 @@ RAZORPAY_KEY_SECRET=your-razorpay-key-secret
 
 A live Razorpay key (`rzp_live_...`) is rejected on purpose. The key id must start with `rzp_test_`.
 
-| Variable                          | Needed            | What it is for                                                   |
-| --------------------------------- | ----------------- | ---------------------------------------------------------------- |
-| `GEMINI_API_KEY`                  | For the assistant | Lets the server call Gemini.                                     |
-| `GEMINI_MODEL`                    | Optional          | Model to use. Default: `gemini-3.5-flash-lite`.                  |
-| `GEMINI_THINKING_LEVEL`           | Optional          | How much the model reasons before answering. Default: `minimal`. |
-| `RAZORPAY_KEY_ID`                 | For payments      | Razorpay Test Mode key id.                                       |
-| `RAZORPAY_KEY_SECRET`             | For payments      | Razorpay Test Mode key secret. Server only.                      |
-| `RAZORPAY_WEBHOOK_SECRET`         | For webhooks      | Used to verify webhooks sent by Razorpay.                        |
-| `DATABASE_URL`                    | Yes               | Database connection the app uses.                                |
-| `DIRECT_URL`                      | Optional          | Direct connection used for migrations.                           |
-| `TEST_DIRECT_URL`                 | For tests         | The local test database. Already filled in.                      |
-| `APP_URL`                         | Optional          | Address of the app. Default: `http://localhost:3000`.            |
-| `LOG_LEVEL`                       | Optional          | `debug`, `info`, `warn`, or `error`. Default: `info`.            |
-| `CATALOG_MERCHANT_SLUG`           | Optional          | Which merchant's catalog is served. Default: `keebworks-india`.  |
-| `QUOTE_TTL_SECONDS`               | Optional          | How long a quoted price stays valid. Default: 300.               |
-| `APPROVAL_TTL_SECONDS`            | Optional          | How long you have to approve a purchase. Default: 900.           |
-| `RESERVATION_TTL_SECONDS`         | Optional          | How long stock is held. Default: 600.                            |
-| `REFUND_WINDOW_DAYS`              | Optional          | Days after a purchase in which it can be refunded. Default: 7.   |
-| `RATE_LIMIT_AGENT_PER_MINUTE`     | Optional          | Assistant requests per visitor per minute. Default: 5.           |
-| `RATE_LIMIT_AGENT_PER_DAY`        | Optional          | Assistant requests per visitor per day. Default: 60.             |
-| `RATE_LIMIT_AGENT_GLOBAL_PER_DAY` | Optional          | Assistant requests for the whole app per day. Default: 1500.     |
-| `RATE_LIMIT_PAYMENT_PER_MINUTE`   | Optional          | Payment requests per visitor per minute. Default: 20.            |
+| Variable                  | Needed            | What it is for                                        |
+| ------------------------- | ----------------- | ----------------------------------------------------- |
+| `GEMINI_API_KEY`          | For the assistant | Lets the server call Gemini.                          |
+| `RAZORPAY_KEY_ID`         | For payments      | Razorpay Test Mode key id.                            |
+| `RAZORPAY_KEY_SECRET`     | For payments      | Razorpay Test Mode key secret. Server only.           |
+| `RAZORPAY_WEBHOOK_SECRET` | For webhooks      | Used to verify webhooks sent by Razorpay.             |
+| `DATABASE_URL`            | Yes               | Database connection the app uses.                     |
+| `DIRECT_URL`              | Optional          | Direct connection used for migrations.                |
+| `TEST_DIRECT_URL`         | For tests         | The local test database. Already filled in.           |
+| `APP_URL`                 | Optional          | Address of the app. Default: `http://localhost:3000`. |
+
+Everything else is optional tuning with a sensible default: the Gemini model (`gemini-3.5-flash-lite`), how long a quote, an approval and a stock hold last (5, 15 and 10 minutes), the refund window (7 days), and the rate limits. Each one is listed with its default in `.env.example` and explained in [docs/09](./docs/09-configuration.md).
 
 For local development, the setup also writes `.env.development.local`. It points `npm run dev` at the local development database, so you do not edit `.env.local` to switch databases.
 
@@ -314,7 +304,7 @@ npm run dev
 
 Before the app starts, `npm run dev` checks the local database. If PostgreSQL is not running, it starts Docker Desktop (when it is installed) and the PostgreSQL container, creates the development database if it is missing, and applies any new migration. You do not need to start Docker yourself. If the database still cannot be reached, the app starts anyway and the pages that need it say so.
 
-On Windows you can double-click `run_dashboard.bat` instead. Its window opens in the middle of the screen, starts the app, and opens your browser once the app is ready. Press `Esc` in that window to stop the app and close the window.
+On Windows you can double-click `run_dashboard.bat` instead. Its window opens in the middle of the screen, starts the app and the database check side by side, and opens your browser as soon as the first page is ready, usually within a few seconds once Docker is running. Press `Esc` in that window to stop the app and close the window.
 
 Then open **http://localhost:3000**.
 
@@ -374,45 +364,21 @@ The demo catalog has 26 products from one merchant: mechanical keyboards, mice, 
 
 ## API Documentation
 
-Most of the app runs through pages and server actions. It also has a small HTTP API.
+Most of the app runs through pages and server actions. It also has a small HTTP API. Successful responses are `{ "data": ..., "meta": ... }`; errors are `{ "error": { "code", "category", "message" } }`.
 
-Successful responses look like this:
-
-```json
-{ "data": {}, "meta": {} }
-```
-
-Errors look like this:
-
-```json
-{
-  "error": {
-    "code": "RATE_LIMITED",
-    "category": "rate_limited",
-    "message": "Too many requests. Please wait a moment and try again."
-  }
-}
-```
-
-### Catalog (read-only)
-
-| Method | Path                                | What it returns                |
-| ------ | ----------------------------------- | ------------------------------ |
-| `GET`  | `/api/catalog/merchant`             | The merchant's public details. |
-| `GET`  | `/api/catalog/products`             | A list of products.            |
-| `GET`  | `/api/catalog/products/{productId}` | One product.                   |
-
-Query parameters for `/api/catalog/products`:
-
-| Parameter          | Meaning                                                                   |
-| ------------------ | ------------------------------------------------------------------------- |
-| `category`         | `mechanical-keyboard`, `mouse`, or `headphones`.                          |
-| `maxAmountMinor`   | Highest price, in paise. Needs `currency`. ₹3000 is `300000`.             |
-| `currency`         | `INR`.                                                                    |
-| `attribute.<name>` | Match a product attribute, for example `attribute.connectivity=wireless`. |
-| `sort`             | `updated_desc` (default), `amount_asc`, `amount_desc`, or `name_asc`.     |
-| `limit`            | 1 to 100. Default 50.                                                     |
-| `offset`           | Where to start. Default 0.                                                |
+| Method | Path                                | What it does                                                                      |
+| ------ | ----------------------------------- | --------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`                       | Checks that the app is running.                                                   |
+| `GET`  | `/api/catalog/merchant`             | The merchant's public details.                                                    |
+| `GET`  | `/api/catalog/products`             | A list of products, with filters (category, budget, attributes, sort, paging).    |
+| `GET`  | `/api/catalog/products/{productId}` | One product.                                                                      |
+| `POST` | `/api/buyer-agent`                  | Runs the assistant. Body: `{ "message": "..." }`. Suggests only; creates nothing. |
+| `POST` | `/api/payments/order`               | Creates the Razorpay order. Body: `{ "transactionId": "..." }`.                   |
+| `POST` | `/api/payments/checkout`            | Starts checkout for an order.                                                     |
+| `POST` | `/api/payments/callback`            | Verifies the payment signature sent back by Razorpay Checkout.                    |
+| `POST` | `/api/payments/retry`               | Starts a new attempt after a failed payment.                                      |
+| `POST` | `/api/payments/dismissed`           | Records that the payment window was closed.                                       |
+| `POST` | `/api/webhooks/razorpay`            | Receives Razorpay webhooks. The signature is checked first.                       |
 
 Example: the cheapest keyboard under ₹3000.
 
@@ -420,63 +386,29 @@ Example: the cheapest keyboard under ₹3000.
 curl "http://localhost:3000/api/catalog/products?category=mechanical-keyboard&maxAmountMinor=300000&currency=INR&sort=amount_asc&limit=1"
 ```
 
-Response (the ids and totals depend on your database):
-
 ```json
 {
   "data": [
     {
-      "id": "01a06420-a3fb-7527-b4a3-34f29f7ba7f7",
-      "merchantId": "01a06420-a327-73fc-9228-77d6660dde13",
-      "sku": "KB-VOLT-60",
       "name": "Volt Compact 60 Mechanical Keyboard",
-      "description": "Budget 60% mechanical keyboard with clicky blue switches and ABS keycaps. Wired, no software required.",
       "category": "mechanical-keyboard",
       "amount": { "amountMinor": "199900", "currency": "INR" },
-      "availability": { "status": "AVAILABLE", "quantity": 40, "purchasable": true },
-      "attributes": {
-        "colour": "black",
-        "layout": "compact-60",
-        "backlight": "none",
-        "switchType": "clicky-blue",
-        "ratingScore": 3.9,
-        "connectivity": "wired",
-        "hotSwappable": false,
-        "keycapMaterial": "abs"
-      },
-      "version": 1,
-      "updatedAt": "2026-09-03T11:32:04.850Z"
+      "availability": { "status": "AVAILABLE", "quantity": 40, "purchasable": true }
     }
   ],
-  "meta": {
-    "catalogVersion": "1",
-    "count": 1,
-    "total": 4,
-    "limit": 1,
-    "offset": 0,
-    "sort": "amount_asc"
-  }
+  "meta": { "count": 1, "total": 4, "limit": 1, "offset": 0, "sort": "amount_asc" }
 }
 ```
 
-`amountMinor` is the price in paise, so `"199900"` means ₹1,999.00.
+The response is shortened here; each product also has its id, SKU, description, attributes and version. Prices are whole numbers in paise, sent as strings: `"199900"` is ₹1,999.00.
 
-Prices are whole numbers in paise. They are sent as strings, never as decimals.
+A few rules hold for every endpoint:
 
-### Other endpoints
+- The assistant and payment endpoints accept requests only from the app's own pages.
+- The payment endpoints take a transaction id and nothing else. Amounts are never accepted from the caller.
+- The webhook accepts only requests correctly signed by Razorpay.
 
-| Method | Path                      | Purpose                                                                                          |
-| ------ | ------------------------- | ------------------------------------------------------------------------------------------------ |
-| `GET`  | `/api/health`             | Checks that the app is running.                                                                  |
-| `POST` | `/api/buyer-agent`        | Runs the assistant. Body: `{ "message": "..." }`. Returns a suggestion only; it creates nothing. |
-| `POST` | `/api/payments/order`     | Creates a Razorpay order. Body: `{ "transactionId": "..." }`.                                    |
-| `POST` | `/api/payments/checkout`  | Starts checkout for an order.                                                                    |
-| `POST` | `/api/payments/callback`  | Verifies the payment signature sent back by Razorpay Checkout.                                   |
-| `POST` | `/api/payments/retry`     | Starts a new attempt after a failed payment.                                                     |
-| `POST` | `/api/payments/dismissed` | Records that the payment window was closed.                                                      |
-| `POST` | `/api/webhooks/razorpay`  | Receives Razorpay webhooks. The signature is verified first.                                     |
-
-The assistant and payment endpoints only accept requests from the app's own pages. The webhook endpoint is called by Razorpay and accepts only correctly signed requests. The payment endpoints take a transaction id and nothing else. Amounts are never accepted from the caller.
+Every parameter and rule is in [docs/07](./docs/07-api-boundaries.md) and, for the catalog, [docs/18](./docs/18-agent-readable-catalog.md).
 
 ## AI Model Details
 

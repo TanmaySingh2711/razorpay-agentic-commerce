@@ -15,9 +15,9 @@ import {
 /**
  * Lifecycle updates.
  *
- * Objective 2 proves only that these state changes *persist*. Who is allowed to
+ * This suite proves only that these state changes *persist*. Who is allowed to
  * make each one, and in what order, is the transaction state machine's job -
- * Objective 3 wires it up. Nothing here should be read as endorsing a caller.
+ * the transition service enforces it. Nothing here should be read as endorsing a caller.
  */
 describe.skipIf(!databaseConfigured)("persistence updates", () => {
   let fixture: BaseFixture;

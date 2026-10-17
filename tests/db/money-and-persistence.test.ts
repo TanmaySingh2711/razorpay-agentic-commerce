@@ -200,7 +200,7 @@ describe.skipIf(!databaseConfigured)("persistence across a reconnect", () => {
 });
 
 /**
- * Foundation for the concurrency Objective 8 will build on.
+ * Foundation for the concurrency the stock hold builds on.
  *
  * The reservation algorithm is NOT implemented here. What is proven is that the
  * persistence architecture can support it: a conditional decrement is atomic,

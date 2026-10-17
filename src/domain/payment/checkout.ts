@@ -65,7 +65,7 @@ export const CHECKOUT_START_REFUSALS = [
   "TRANSACTION_NOT_FOUND",
   /** Not at PAYMENT_ORDER_CREATED, so there is nothing legitimate to pay for. */
   "TRANSACTION_STATE_INVALID",
-  /** No payment attempt carries a provider order. Objective 10 has not run. */
+  /** No payment attempt carries a provider order: none has been created yet. */
   "NO_PAYMENT_ORDER",
   /** The stock hold lapsed. Sending a person to pay for it would oversell. */
   "RESERVATION_NOT_HELD",

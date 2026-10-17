@@ -1,4 +1,4 @@
-/* Objective 16 — the buyer experience.
+/* The buyer experience: component styles.
 
    Plain CSS, no framework, no runtime. The whole surface is a handful of cards
    and one input, so a utility framework would ship more bytes than page. Every
@@ -677,7 +677,7 @@ button[aria-busy="true"]::after {
   margin: 1.25rem 0 0;
 }
 
-/* --- Objective 20: the Agentic Purchase Safety Passport -------------------
+/* --- The Agentic Purchase Safety Passport -----------------------------------
    A summary panel, not a badge. It sits between the status cards and the
    audit timeline: close enough for a reviewer to find in a few seconds, far
    enough below the action card that it never competes with Pay.

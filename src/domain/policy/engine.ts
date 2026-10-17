@@ -11,7 +11,7 @@ import {
 /**
  * The deterministic policy engine.
  *
- * This function is the whole of Objective 7's authority. It is a pure function
+ * This function is the policy engine's whole authority. It is a pure function
  * of two values, and that purity is the security property, not a style
  * preference:
  *
@@ -93,7 +93,7 @@ export function evaluatePolicy(
   //
   // This is a refusal of *automatic* authority, not of the purchase, so it
   // escalates to a person rather than blocking. That is not a softening: the
-  // server still authorizes nothing, and Objective 8's approval gate is the
+  // server still authorizes nothing, and the human approval gate is the
   // only thing that can supply the missing authority.
   if (!policy.autoPurchaseAllowed) {
     return refuse("APPROVAL_REQUIRED", "AUTO_PURCHASE_DISABLED", quote, policy);

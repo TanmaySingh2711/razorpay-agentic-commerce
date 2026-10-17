@@ -419,7 +419,7 @@ describe.skipIf(!databaseConfigured)(
         const [attempt] = await attemptsOf(arranged.transactionId);
         expect(attempt?.status).toBe("FAILED");
         expect(attempt?.failureCode).toBe("BANK_DECLINED");
-        // The structured classification Objective 14 requires: what happened,
+        // The structured classification a retry requires: what happened,
         // where it came from, how far it got, and when - each from a closed
         // application-owned set rather than the provider's vocabulary.
         expect(attempt?.failureCategory).not.toBeNull();

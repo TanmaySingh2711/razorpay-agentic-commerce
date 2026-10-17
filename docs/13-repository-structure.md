@@ -25,7 +25,7 @@ razorpay-agentic-commerce/
 ├── scripts/                    standalone CLI tooling, outside the app runtime
 │   ├── setup.ts                `npm run setup`: the one-click setup, no dependencies
 │   ├── run-dashboard.ps1       run_dashboard.bat's launcher: centres, waits, Esc stops
-│   ├── start-database.ts       `predev`: starts Docker + PostgreSQL, prepares the dev database
+│   ├── start-database.ts       `predev` (and run_dashboard.bat): starts Docker + PostgreSQL, prepares the dev database
 │   ├── setup-dev-database.ts   local development DB, loopback only
 │   ├── setup-test-schema.ts    creates + migrates the isolated test schema
 │   ├── dev-demo-activity.ts    real-service shopper sessions for the local dev DB

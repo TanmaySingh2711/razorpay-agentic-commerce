@@ -28,7 +28,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
  *     and SQL in its message, so it is wrapped before it can travel.
  *
  * Read-only by construction: this module calls `findMany`, `findFirst` and
- * `count`. It writes nothing, and Objective 4 has no reason to.
+ * `count`. It writes nothing, and the catalog has no reason to.
  */
 assertServerOnly("src/services/catalog-repository.ts");
 

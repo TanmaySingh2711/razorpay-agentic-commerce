@@ -125,7 +125,7 @@ const razorpayWebhookSchema = z.object({
 });
 
 /**
- * PostgreSQL, accessed through Prisma from Objective 2 onward.
+ * PostgreSQL, accessed through Prisma.
  *
  * Two URLs, because a hosted/pooled Postgres needs them: `DATABASE_URL` is the
  * pooled runtime connection the application uses per request, and `DIRECT_URL`

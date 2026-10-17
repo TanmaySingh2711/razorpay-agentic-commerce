@@ -300,14 +300,14 @@ export async function applyTransactionEvent(
 /**
  * Applies a domain event **inside a transaction the caller already opened**.
  *
- * This exists for exactly one reason: Objective 6 must commit a PurchaseQuote
+ * This exists for exactly one reason: the quote service must commit a PurchaseQuote
  * and the `QUOTE_ISSUED` transition together or not at all. A database that
  * ends up in `QUOTE_CREATED` with no quote row - or holding a quote whose
  * transaction never reached that state - is a financial record that contradicts
  * itself, and no amount of cleanup afterwards makes it trustworthy.
  *
  * The alternative would have been for the quote service to write the status
- * itself, which is precisely what Objective 3 exists to prevent. So the state
+ * itself, which is precisely what this service exists to prevent. So the state
  * machine is *lent* to the caller's transaction rather than bypassed: the same
  * matrix, the same actor check, the same conditional update, the same history
  * row. Nothing is duplicated and nothing is skipped.

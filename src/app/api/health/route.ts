@@ -3,7 +3,7 @@ import { getRuntimeConfig } from "@/lib/env";
 /**
  * Liveness endpoint.
  *
- * The only route Objective 1 ships. It is not a placeholder for a future
+ * A liveness check. It is not a placeholder for a future
  * domain endpoint: it answers "is the process up and is its configuration
  * valid", which is exactly what a demo and a deployment need.
  *

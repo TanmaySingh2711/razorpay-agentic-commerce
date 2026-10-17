@@ -15,10 +15,10 @@ loadEnv({ path: ".env.local", quiet: true });
  * provider references and the audit trail, and changes nothing.
  *
  * **The expected state is an argument, and that is the point.** This was
- * written for Objective 11, where the only successful ending was
- * PAYMENT_VERIFIED, so it reported every other state - including the entirely
- * correct PAYMENT_CAPTURED and PAYMENT_FAILED that Objectives 13 and 14
- * produce - as a failure. Naming the expected outcome fixes that without
+ * written when the only successful ending was PAYMENT_VERIFIED, so it
+ * reported every other state - including the entirely correct
+ * PAYMENT_CAPTURED and PAYMENT_FAILED that webhooks and retries produce - as a
+ * failure. Naming the expected outcome fixes that without
  * weakening anything: it is still an assertion with a non-zero exit, it simply
  * no longer assumes one right answer for every objective. Omitting the argument
  * keeps the original PAYMENT_VERIFIED expectation.
