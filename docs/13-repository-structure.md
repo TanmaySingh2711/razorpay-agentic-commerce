@@ -50,12 +50,12 @@ razorpay-agentic-commerce/
 │   │   ├── api/webhooks/razorpay/  provider webhook intake and verification
 │   │   ├── page.tsx            overview: what this is, in one screen
 │   │   ├── shop/page.tsx       the shop: the one input
-│   │   ├── shop/[transactionId]/          the authoritative purchase view, inside the shop
-│   │   ├── shop/[transactionId]/checkout/ the page that offers paying again
+│   │   ├── shop/[transactionId]/          the purchase: pay, retry and refund happen here
 │   │   ├── how-it-works/       four flowcharts (flows.ts) and the safety rules
 │   │   ├── history/page.tsx    purchases this browser opened
-│   │   ├── merchant/page.tsx   merchant insights: demand, conversion, recovery
+│   │   ├── merchant/           merchant insights: demand, conversion, recovery
 │   │   ├── error.tsx           what a page shows when the server cannot finish it
+│   │   ├── */loading.tsx       shown at once while a database page loads
 │   │   ├── not-found.tsx       an unknown address or purchase, in the site's own frame
 │   │   ├── layout.tsx          root layout, self-hosted fonts
 │   │   ├── globals.css         design tokens (black and red) + element defaults
@@ -73,6 +73,7 @@ razorpay-agentic-commerce/
 │   │   ├── pay-button.tsx      the one place a person spends money
 │   │   ├── decision-form.tsx   approve / reject / hold / refund buttons
 │   │   ├── awaiting-provider.tsx polls while the webhook is outstanding
+│   │   ├── page-loading.tsx    the loading state those loading.tsx files share
 │   │   └── safety-passport.tsx the deterministic safety summary
 │   ├── domain/                 pure, framework-free core
 │   │   ├── approval/           token minting, hashing, binding contracts
@@ -113,7 +114,8 @@ razorpay-agentic-commerce/
 │   │   ├── purchase-history.ts the browser-side history list and its rules
 │   │   ├── routes.ts           where a purchase lives (/shop/:id), in one place
 │   │   ├── redact.ts           secret and reasoning scrubbing
-│   │   └── server-only.ts      module-scope browser-bundle guard
+│   │   ├── server-only.ts      module-scope browser-bundle guard
+│   │   └── stale-version.ts    reload once when a redeploy renamed the scripts
 │   └── services/               one flat folder: each file is one application service
 │       ├── buyer-agent-service.ts        agent orchestration
 │       ├── buyer-agent-instructions.ts   developer instructions for the model

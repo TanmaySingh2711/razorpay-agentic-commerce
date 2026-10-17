@@ -120,6 +120,37 @@ export function endsWorkflow(denial: RetryDenial): boolean {
 }
 
 /**
+ * What a person is told when paying again is not available.
+ *
+ * Deliberately plain, and deliberately free of internals. Nobody outside this
+ * codebase needs to know that a policy version changed or which control
+ * refused; they need to know whether to wait or start again. The precise
+ * reason is in the audit trail, where it belongs.
+ */
+export function describeRetryDenial(denial: RetryDenial): string {
+  switch (denial) {
+    case "RETRY_LIMIT_REACHED":
+      return `You have used all ${String(MAX_PAYMENT_ATTEMPTS)} payment attempts for this purchase. Nothing has been charged. Start a new purchase to try again.`;
+    case "PAYMENT_ALREADY_CAPTURED":
+      return "A payment for this purchase has already gone through, so there is nothing to retry.";
+    case "ATTEMPT_IN_PROGRESS":
+      return "A payment for this purchase is already in progress.";
+    case "OUTCOME_UNRESOLVED":
+      return "We are still confirming what happened to an earlier payment. Please check back shortly rather than paying again.";
+    case "FINANCIAL_FACTS_CHANGED":
+    case "NO_ACTIVE_QUOTE":
+      return "The price or availability of this item has changed since you were quoted, so the old amount will not be charged. Start a new purchase to try again.";
+    case "NOT_AUTHORIZED":
+      return "This purchase is no longer allowed under your current spending settings. Start a new purchase to try again.";
+    case "RESERVATION_NOT_HELD":
+      return "This item is no longer being held for you. Start a new purchase to try again.";
+    case "TRANSACTION_STATE_INVALID":
+    case "TRANSACTION_NOT_FOUND":
+      return "There is no failed payment to retry for this purchase.";
+  }
+}
+
+/**
  * How many attempts remain, given how many rows exist.
  *
  * Clamped at zero rather than allowed to go negative: a transaction that

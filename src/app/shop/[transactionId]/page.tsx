@@ -15,6 +15,7 @@ import { DecisionForm } from "@/components/decision-form";
 import { PayButton } from "@/components/pay-button";
 import { SafetyPassport } from "@/components/safety-passport";
 import { describePaymentFailure } from "@/domain/payment/failure";
+import { describeRetryDenial } from "@/domain/payment/retry";
 import {
   awaitsProvider,
   buildJourney,
@@ -40,6 +41,12 @@ import type { TransactionOverview } from "@/services/transaction-overview-servic
  * right now.
  */
 export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "Your purchase | Razorpay Agentic Commerce",
+  description:
+    "One purchase: the verified price, the rules it passed, payment, and the full record.",
+};
 
 function Badge({
   tone,
@@ -511,9 +518,11 @@ function ActionCard({ overview }: { readonly overview: TransactionOverview }) {
           />
         ) : (
           <p role="status" className="field-error">
-            {retry.remaining === 0
-              ? "You have used every payment attempt for this purchase. Start a new purchase to try again."
-              : "This purchase cannot be paid again right now."}
+            {retry.denial !== null
+              ? describeRetryDenial(retry.denial)
+              : retry.remaining === 0
+                ? "You have used every payment attempt for this purchase. Start a new purchase to try again."
+                : "This purchase cannot be paid again right now."}
           </p>
         )}
       </section>

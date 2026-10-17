@@ -150,9 +150,16 @@ const nextConfig: NextConfig = {
         destination: "/shop/:transactionId",
         permanent: true,
       },
+      // Paying again after a failure used to have a page of its own. The
+      // purchase page offers it in place now, with the same explanations.
       {
         source: "/checkout/:transactionId",
-        destination: "/shop/:transactionId/checkout",
+        destination: "/shop/:transactionId",
+        permanent: true,
+      },
+      {
+        source: "/shop/:transactionId/checkout",
+        destination: "/shop/:transactionId",
         permanent: true,
       },
     ]);

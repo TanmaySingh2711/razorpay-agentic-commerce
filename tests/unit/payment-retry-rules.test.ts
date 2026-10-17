@@ -3,6 +3,7 @@ import {
   MAX_PAYMENT_ATTEMPTS,
   RETRY_DENIALS,
   RETRY_REUSES_PROVIDER_ORDER,
+  describeRetryDenial,
   endsWorkflow,
   remainingAttempts,
   withinAttemptLimit,
@@ -315,5 +316,21 @@ describe("the retry request boundary", () => {
     );
     expect(reached).toBe(true);
     expect(status).toBe(500);
+  });
+});
+
+describe("explaining a refused retry to the buyer", () => {
+  it("has a plain sentence for every denial, with no internal code in it", () => {
+    for (const denial of RETRY_DENIALS) {
+      const sentence = describeRetryDenial(denial);
+      expect(sentence.length).toBeGreaterThan(20);
+      expect(sentence).not.toMatch(/[A-Z]{2,}_[A-Z]/);
+    }
+  });
+
+  it("tells the buyer how many attempts there were", () => {
+    expect(describeRetryDenial("RETRY_LIMIT_REACHED")).toContain(
+      `all ${String(MAX_PAYMENT_ATTEMPTS)} payment attempts`,
+    );
   });
 });

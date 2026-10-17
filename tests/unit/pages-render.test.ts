@@ -343,13 +343,34 @@ describe("the purchase page offers exactly the action its state allows", () => {
           maxAttempts: 3,
           remaining: 0,
           available: false,
-          denial: "ATTEMPT_LIMIT_REACHED",
+          denial: "RETRY_LIMIT_REACHED",
           lastFailure: null,
-        } as unknown as TransactionOverview["retry"],
+        },
       }),
     );
     expect(markup).toContain("Payment attempt 3 of 3 used.");
-    expect(markup).toContain("You have used every payment attempt");
+    expect(markup).toContain("You have used all 3 payment attempts");
+    expect(markup).not.toContain("Retry payment");
+  });
+
+  it("says why paying again is refused, in the buyer's terms", async () => {
+    const markup = await transactionMarkup(
+      overview({
+        state: "PAYMENT_FAILED",
+        retry: {
+          transactionId: TRANSACTION_ID,
+          transactionState: "PAYMENT_FAILED",
+          attemptsUsed: 1,
+          maxAttempts: 3,
+          remaining: 2,
+          available: false,
+          denial: "FINANCIAL_FACTS_CHANGED",
+          lastFailure: null,
+        },
+      }),
+    );
+    expect(markup).toContain("the old amount will not be charged");
+    expect(markup).not.toContain("FINANCIAL_FACTS_CHANGED");
   });
 
   it("answers an unknown purchase with not-found", async () => {

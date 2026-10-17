@@ -175,8 +175,7 @@ export const DASHBOARD_MAP: readonly FlowItem[] = [
   node(
     "razorpay",
     "Checkout",
-    "The Razorpay payment window, opened only after the purchase is authorized and held.",
-    "/shop/[id]/checkout",
+    "The Razorpay payment window, opened over the purchase page only after the purchase is authorized and held. Paying again after a failure happens there too.",
   ),
   split(
     {

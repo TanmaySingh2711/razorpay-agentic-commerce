@@ -23,7 +23,7 @@ Nothing else may start a payment attempt. In particular:
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The buyer agent (Gemini)         | It has no tool that reaches the retry service, and the transition matrix restricts `PAYMENT_RETRY_REQUESTED` to `transaction_service`.                         |
 | A `payment.failed` webhook       | Reconciliation records the failure and stops. There is no call from the webhook service into the retry service.                                                |
-| A page load, refresh or prefetch | The endpoint is POST-only and the checkout page performs only reads.                                                                                           |
+| A page load, refresh or prefetch | The endpoint is POST-only and the purchase page performs only reads.                                                                                           |
 | A browser payload                | The request schema is `z.strictObject({ transactionId, operationId? })`. Every other key — `retryCount`, `amount`, `providerOrderId`, `approved` — is a `400`. |
 | A duplicate HTTP request         | Two requests converge on one attempt through a unique claim in `payment_attempt`.                                                                              |
 
@@ -101,7 +101,7 @@ this exact product and quantity. See "Re-quoting a stale quote" below - this is
 what `requestPaymentRetry` acts on to replace the quote before continuing,
 rather than refusing outright.
 
-The gate is **read-only**: it writes nothing, so the checkout page can consult
+The gate is **read-only**: it writes nothing, so the purchase page can consult
 it on every render to decide whether to offer a Retry button, and the request
 itself can consult it again a moment later.
 

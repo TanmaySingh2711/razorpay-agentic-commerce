@@ -9,8 +9,8 @@ import {
 } from "@/domain/approval/token";
 
 /**
- * The pure pieces of the approval gate and stock hold: the approval credential, and what a refused
- * stock hold tells the buyer.
+ * The pure pieces of the approval gate and stock hold: the approval
+ * credential, and what a refused stock hold tells the buyer.
  *
  * Neither needs a database. The stock arithmetic itself is enforced by atomic
  * SQL in the reservation service and is proved against PostgreSQL in

@@ -49,6 +49,12 @@ function hostOf(url: string | undefined): string | null {
   }
 }
 
+/** `CI` as CI services set it: "true" or "1". "false", "0" and empty are not CI. */
+function runsInCi(env: TestDatabaseEnvironment): boolean {
+  const value = env["CI"]?.trim().toLowerCase();
+  return value !== undefined && value !== "" && value !== "false" && value !== "0";
+}
+
 /**
  * The three variables this decision is made from, plus the opt-in.
  *
@@ -79,6 +85,11 @@ export interface TestDatabaseEnvironment {
  *    missing or points at the application's own database. Skipping there would
  *    silently drop seventeen files' worth of PostgreSQL coverage from a run
  *    that looked green, so it fails loudly instead.
+ *
+ * Continuous integration (`CI`, which GitHub Actions and every common CI
+ * service set) never gets the second outcome. A CI run exists to run the
+ * whole suite, so a missing test URL there is a broken workflow, and skipping
+ * would report every database test as passed without running one.
  */
 export function resolveTestDatabaseUrl(
   env: TestDatabaseEnvironment = process.env,
@@ -90,6 +101,13 @@ export function resolveTestDatabaseUrl(
     value !== undefined && value.length > 0;
 
   if (!configured(testUrl)) {
+    if (runsInCi(env)) {
+      throw new TestDatabaseUrlError(
+        "TEST_DIRECT_URL is not set in a CI run. CI must run the database tests " +
+          "rather than skip them: start PostgreSQL 17 in the workflow and set " +
+          "TEST_DIRECT_URL to it (see .github/workflows/ci.yml).",
+      );
+    }
     if (!configured(appDirect) && !configured(appPooled)) return undefined;
     throw new TestDatabaseUrlError(
       "TEST_DIRECT_URL is not set, but this project has an application database " +

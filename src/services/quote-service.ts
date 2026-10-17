@@ -30,8 +30,9 @@ import type { PrismaClient } from "@/generated/prisma/client";
  *    so what is persisted is one coherent snapshot rather than three reads
  *    stitched together.
  *  - `validateQuoteForUse` asks whether that promise still holds. Policy,
- *    approval, reservation and payment call it before relying on a quote, and it re-reads the product rather
- *    than trusting the stored status column.
+ *    approval, reservation and payment call it before relying on a quote,
+ *    and it re-reads the product rather than trusting the stored status
+ *    column.
  */
 assertServerOnly("src/services/quote-service.ts");
 
@@ -323,8 +324,9 @@ function toSnapshot(row: PersistedQuote): QuoteSnapshot {
 /**
  * Whether a quote may still be relied upon, right now.
  *
- * The entry point policy, approval, reservation and payment call before acting on a quote. It re-reads
- * the product every time: a status column says only what was true when
+ * The entry point policy, approval, reservation and payment call before
+ * acting on a quote. It re-reads the product every time: a status column
+ * says only what was true when
  * something last wrote it, and there is no background job here keeping those
  * columns honest - deliberately, because a payment path must not depend on a
  * scheduler having run.

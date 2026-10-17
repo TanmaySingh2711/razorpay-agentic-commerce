@@ -27,8 +27,9 @@ import { checkPaymentStatus } from "@/app/actions";
  * advance a transaction: it sends the purchase id and nothing else, the server
  * asks Razorpay about an order it created itself, and only a capture matching
  * the stored amount moves anything. `router.refresh()` then re-runs the server
- * render, which reads the same authoritative row it always did. Polling faster would not make a payment settle sooner, and stopping
- * early does not roll anything back.
+ * render, which reads the same authoritative row it always did. Polling
+ * faster would not make a payment settle sooner, and stopping early does not
+ * roll anything back.
  *
  * ## Why it stops
  *
@@ -111,14 +112,11 @@ export function AwaitingProvider({
           type="button"
           className="secondary"
           onClick={() => {
+            // Starting over is enough: the waiting loop above makes its first
+            // check a second later, so one click asks the provider once.
             attemptsRef.current = 0;
             setAttempts(0);
             setGaveUp(false);
-            void checkPaymentStatus(transactionId)
-              .catch(() => undefined)
-              .finally(() => {
-                router.refresh();
-              });
           }}
         >
           Check again

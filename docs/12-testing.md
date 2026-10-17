@@ -81,7 +81,9 @@ against the demo data, and never against SQLite - the constraints being tested
 are ones SQLite would silently accept. Prepare it with `npm run db:test:setup`.
 The suites skip themselves when no database is configured **at all**, so the
 foundation tests still pass on a fresh clone with zero credentials. See
-[16](./16-database.md).
+[16](./16-database.md). In CI (`CI` set) they never skip: a missing
+`TEST_DIRECT_URL` there fails the run, because a skipped database suite would
+report green without running one test.
 
 The schema lives in the local Docker PostgreSQL described by
 `.config/docker-compose.yml`, addressed by `TEST_DIRECT_URL`. That is not a preference,
@@ -218,12 +220,18 @@ First-time setup:
 `.github/workflows/ci.yml` (workflow name **CI**) runs eight checks on every
 push and pull request, each on a machine that has never seen this repository:
 
-| Check                                        | What it proves                                                                                            |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `Lint (eslint)`                              | ESLint (style and architecture rules), Prettier, and a production-dependency audit                        |
-| `Type check (tsc)`                           | `npm run typecheck` - route types, then strict `tsc`                                                      |
-| `Tests (ubuntu / macos / windows)`           | The whole suite, unit and PostgreSQL, on all three operating systems                                      |
-| `One-click setup (ubuntu / macos / windows)` | `npm run setup` takes a cold clone to a migrated, seeded app, which then builds and answers `/api/health` |
+| Check                                        | What it proves                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Lint (eslint)`                              | ESLint with zero warnings allowed, Prettier, and a production-dependency audit                        |
+| `Type check (tsc)`                           | `npm run typecheck` - route types, then strict `tsc`                                                  |
+| `Tests (ubuntu / macos / windows)`           | The whole suite, unit and PostgreSQL, on all three operating systems                                  |
+| `One-click setup (ubuntu / macos / windows)` | `npm run setup` takes a cold clone to a migrated, seeded app, which builds, starts and reads its data |
+
+**No check passes without running.** The database suites fail rather than
+skip in CI, the audit fails when the advisory registry cannot be reached
+(re-run the job), lint fails on any warning, and the setup check requires the
+merchant page to show seeded data: `/api/health` alone would also answer with
+the database down.
 
 That is deliberately not a CI-specific pipeline. Every step is a command a
 developer runs locally. A green local run proves the suite passes with one

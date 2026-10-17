@@ -10,7 +10,13 @@
 #                                  PostgreSQL test - pass on all three systems?
 #   One-click setup (x3)           does `npm run setup` take a fresh clone to a
 #                                  working, migrated, seeded app, and does that
-#                                  app build and answer on every system?
+#                                  app build, start and read its database on
+#                                  every system?
+#
+# A check that did not really run never shows as passed: the database tests
+# fail rather than skip when CI has no test database, the audit fails when the
+# registry cannot be reached, lint fails on a warning, and the started app must
+# show data from the seeded database, not merely answer.
 #
 # WHAT THIS WORKFLOW IS NOT ALLOWED TO REACH. No Neon, no Gemini, no Razorpay,
 # no Vercel. The database in every job is a disposable PostgreSQL 17 that
@@ -124,10 +130,11 @@ jobs:
             sleep $((attempt * 10))
           done
 
-          # Three attempts, no report. That is an outage, not a finding, and
-          # saying so is more honest than either failing or claiming a pass.
-          echo "::warning::npm audit could not reach the advisory registry after 3 attempts; dependencies were not audited in this run."
-          exit 0
+          # Three attempts, no report. That is an outage, not a finding - but a
+          # check that did not run must not show as passed. It fails, says why,
+          # and a re-run once the registry is back gives the real answer.
+          echo "::error::npm audit could not reach the advisory registry after 3 attempts, so dependencies were not audited. Re-run this job."
+          exit 1
 
   typecheck:
     name: Type check (tsc)
@@ -244,19 +251,45 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: The built app starts and answers
+      - name: The built app starts and reads the seeded database
         shell: bash
         run: |
           set -uo pipefail
+          # `next start` reads .env.local, which holds only the template's
+          # placeholders here. The database setup just created and seeded is
+          # named in .env.development.local, so it is passed in from there.
+          set -a
+          . ./.env.development.local
+          set +a
           npx next start --port 3000 > server.log 2>&1 &
+
+          answered=false
           for attempt in $(seq 1 60); do
-            if curl --silent --fail http://localhost:3000/api/health; then
-              echo
+            if curl --silent --fail http://localhost:3000/api/health > /dev/null; then
               echo "Health check passed on attempt $attempt."
-              exit 0
+              answered=true
+              break
             fi
             sleep 1
           done
-          echo "::error::The production server did not answer /api/health within 60 seconds."
-          cat server.log
-          exit 1
+          if [ "$answered" != true ]; then
+            echo "::error::The production server did not answer /api/health within 60 seconds."
+            cat server.log
+            exit 1
+          fi
+
+          # /api/health only proves the server is up. The merchant page reads
+          # the database, and answers 200 with an apology when it cannot - so
+          # its content is checked, not just its status.
+          if ! page="$(curl --silent --fail --max-time 60 http://localhost:3000/merchant)"; then
+            echo "::error::The merchant page did not answer."
+            cat server.log
+            exit 1
+          fi
+          if ! grep -q "Net revenue" <<< "$page"; then
+            echo "::error::The merchant page did not read the seeded database."
+            grep -o "could not be loaded\|No merchant yet" <<< "$page" || true
+            cat server.log
+            exit 1
+          fi
+          echo "The merchant page read the seeded database."

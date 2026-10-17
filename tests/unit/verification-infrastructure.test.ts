@@ -64,6 +64,21 @@ describe("which database the destructive suite may use", () => {
     // green suite. `undefined` is what makes the db suites skip themselves.
     expect(resolveTestDatabaseUrl({})).toBeUndefined();
     expect(resolveTestDatabaseUrl({ TEST_DIRECT_URL: "" })).toBeUndefined();
+    expect(resolveTestDatabaseUrl({ CI: "false" })).toBeUndefined();
+  });
+
+  it("fails, never skips, in CI: a green run there must have run the database tests", () => {
+    // Skipping in CI would report every PostgreSQL test as passed without
+    // running one. GitHub Actions sets CI=true; other services use "1".
+    for (const ci of ["true", "1", "TRUE"]) {
+      expect(() => resolveTestDatabaseUrl({ CI: ci })).toThrow(
+        /CI must run the database tests/,
+      );
+      expect(() => resolveTestDatabaseUrl({ CI: ci, TEST_DIRECT_URL: "" })).toThrow(
+        TestDatabaseUrlError,
+      );
+    }
+    expect(resolveTestDatabaseUrl({ CI: "true", TEST_DIRECT_URL: LOCAL })).toBe(LOCAL);
   });
 
   it("refuses to fall back to the application's connection", () => {

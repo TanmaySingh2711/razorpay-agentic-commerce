@@ -88,18 +88,13 @@ describe("pages that read the database show their frame at once", () => {
     expect(html.match(/skeleton-tile/g)).toHaveLength(4);
   });
 
-  it("a purchase and its checkout: a heading-shaped placeholder until the state is known", async () => {
+  it("a purchase: a heading-shaped placeholder until its state is known", async () => {
     const { default: PurchaseLoading } =
       await import("@/app/shop/[transactionId]/loading");
-    const { default: CheckoutLoading } =
-      await import("@/app/shop/[transactionId]/checkout/loading");
-    for (const html of [
-      renderToStaticMarkup(PurchaseLoading()),
-      renderToStaticMarkup(CheckoutLoading()),
-    ]) {
-      expect(html).toContain("skeleton-title");
-      expect(html).toContain('role="status"');
-      expect(html).not.toContain("<h1");
-    }
+    const html = renderToStaticMarkup(PurchaseLoading());
+    expect(html).toContain("Your purchase");
+    expect(html).toContain("skeleton-title");
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain("<h1");
   });
 });

@@ -87,11 +87,11 @@ function Start-Node([string[]]$arguments) {
 }
 
 # Pages compiled in the background once the browser is open, so the first
-# click on each is as quick as the second. The two purchase addresses name a
-# purchase that does not exist: the answer is "not found", but the pages a real
-# purchase opens are compiled by then all the same.
+# click on each is as quick as the second. The purchase address names a
+# purchase that does not exist: the answer is "not found", but the page a real
+# purchase opens is compiled by then all the same.
 $NoSuchPurchase = "/shop/00000000-0000-4000-8000-000000000000"
-$WarmPages = @("/shop", "/how-it-works", "/history", "/merchant", $NoSuchPurchase, "$NoSuchPurchase/checkout")
+$WarmPages = @("/shop", "/how-it-works", "/history", "/merchant", $NoSuchPurchase)
 
 $Host.UI.RawUI.WindowTitle = "Razorpay Agentic Commerce - press Esc to stop"
 Move-ToCentre
