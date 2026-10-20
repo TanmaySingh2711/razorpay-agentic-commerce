@@ -109,6 +109,7 @@ razorpay-agentic-commerce/
 │   │   ├── same-origin.ts      refuses cross-site state-changing requests
 │   │   ├── checkout-script.ts  provider script loading, browser side
 │   │   ├── clock.ts            injectable time, so expiry is testable
+│   │   ├── demo-buyer.ts       the buyer every shop request is made as
 │   │   ├── json.ts             JSON value model
 │   │   ├── logger.ts           structured operational logging
 │   │   ├── purchase-history.ts the browser-side history list and its rules

@@ -13,6 +13,8 @@ import { createServiceCatalogReader } from "@/services/catalog-reader";
 import { getTransactionHistory } from "@/services/transition-service";
 import { fixedClock, type MutableClock } from "@/lib/clock";
 import type { BuyerAgentDecision } from "@/domain/buyer-agent/decision";
+import { DEMO_BUYER_ID } from "@/lib/demo-buyer";
+import { evaluateQuotePolicy } from "@/services/policy-service";
 import {
   databaseConfigured,
   disconnectTestDb,
@@ -985,6 +987,71 @@ describe.skipIf(!databaseConfigured)("trusted purchase quote", () => {
           where: { transactionId: first.transactionId },
         }),
       ).toBe(2);
+    });
+  });
+
+  describe("who the purchase is made for", () => {
+    // The checkout smoke test creates buyers of its own, with a ₹1,000 limit,
+    // in the same database as the demo buyer. The shop once took whichever
+    // buyer row PostgreSQL returned first, so a ₹2,799 keyboard could ask for
+    // approval under someone else's limit.
+    async function policyFor(buyerProfileId: string, limit: bigint): Promise<void> {
+      await testDb().authorizationPolicy.create({
+        data: {
+          buyerProfileId,
+          maxAutoApproveAmount: limit,
+          currency: "INR",
+          autoPurchaseAllowed: true,
+          status: "ACTIVE",
+          version: 1,
+        },
+      });
+    }
+
+    it("is always the demo buyer, even when another buyer is older", async () => {
+      // The fixture's buyer was created first: the row an unordered query
+      // would most likely return. It gets the smoke test's ₹1,000 limit.
+      await policyFor(fixture.buyerId, 100_000n);
+      await testDb().buyerProfile.create({
+        data: { id: DEMO_BUYER_ID, displayName: "Demo Buyer" },
+      });
+      await policyFor(DEMO_BUYER_ID, 300_000n);
+
+      const result = await decidePurchase(decision(), deps);
+      expect(result.kind).toBe("QUOTE_CREATED");
+      if (result.kind !== "QUOTE_CREATED") return;
+
+      const transaction = await testDb().transaction.findUniqueOrThrow({
+        where: { id: result.transactionId },
+        select: { buyerProfileId: true },
+      });
+      expect(transaction.buyerProfileId).toBe(DEMO_BUYER_ID);
+
+      // And so the demo buyer's ₹3,000 limit decides: ₹2,799 needs no approval.
+      const evaluation = await evaluateQuotePolicy(
+        { quoteId: result.quote.id, operationId: uid("op") },
+        { prisma: testDb(), clock, quote: quoteDeps },
+      );
+      expect(evaluation.kind).toBe("EVALUATED");
+      if (evaluation.kind !== "EVALUATED") return;
+      expect(evaluation.decision.decision).toBe("ALLOWED");
+      expect(evaluation.decision.autoApproveLimit).toEqual({
+        amountMinor: "300000",
+        currency: "INR",
+      });
+    });
+
+    it("falls back to the oldest buyer where there is no demo buyer", async () => {
+      // Both rows take the database's own clock, so this one is the newer.
+      await testDb().buyerProfile.create({ data: { displayName: "Newer Buyer" } });
+      const result = await decidePurchase(decision(), deps);
+      expect(result.kind).toBe("QUOTE_CREATED");
+      if (result.kind !== "QUOTE_CREATED") return;
+      const transaction = await testDb().transaction.findUniqueOrThrow({
+        where: { id: result.transactionId },
+        select: { buyerProfileId: true },
+      });
+      expect(transaction.buyerProfileId).toBe(fixture.buyerId);
     });
   });
 });

@@ -1,5 +1,6 @@
 import { assertServerOnly } from "@/lib/server-only";
 import { createLogger } from "@/lib/logger";
+import { DEMO_BUYER_ID } from "@/lib/demo-buyer";
 import { systemClock, type Clock } from "@/lib/clock";
 import { getPrismaClient } from "@/integrations/prisma-client";
 import { createTransaction } from "@/services/transaction-creation-service";
@@ -125,7 +126,7 @@ async function openTransaction(
   });
   if (existing !== null) return existing.id;
 
-  const buyer = await deps.prisma.buyerProfile.findFirst({ select: { id: true } });
+  const buyer = await findShopper(deps);
   const merchantId = await resolveMerchantId(decision, deps);
   if (buyer === null || merchantId === null) {
     throw new Error("a buyer profile and merchant are required to open a transaction");
@@ -150,6 +151,29 @@ async function openTransaction(
     if (raced !== null) return raced.id;
     throw error;
   }
+}
+
+/**
+ * The buyer a shop request is made as: the seeded demo buyer.
+ *
+ * This used to be "the first buyer row", with no order at all - and other
+ * buyers do exist: the checkout smoke test creates its own, with a ₹1,000
+ * limit. Whenever PostgreSQL returned one of those first, the shop ran under
+ * that limit, and a ₹2,899 keyboard asked for approval below the ₹3,000 the
+ * pages promise. Asked for by id now. A database without the demo buyer (a test
+ * schema) falls back to the oldest buyer, in a fixed order, never a random
+ * one.
+ */
+async function findShopper(deps: ProductDecisionDeps): Promise<{ id: string } | null> {
+  const demo = await deps.prisma.buyerProfile.findUnique({
+    where: { id: DEMO_BUYER_ID },
+    select: { id: true },
+  });
+  if (demo !== null) return demo;
+  return deps.prisma.buyerProfile.findFirst({
+    select: { id: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
 }
 
 async function resolveMerchantId(

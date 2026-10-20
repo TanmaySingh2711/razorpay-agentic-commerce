@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { config as loadEnv } from "dotenv";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { DEMO_BUYER_ID } from "../src/lib/demo-buyer";
 
 loadEnv({ path: ".env.local", quiet: true });
 
@@ -12,8 +13,9 @@ loadEnv({ path: ".env.local", quiet: true });
  *
  * Two singleton entities - the demo buyer and their policy - have no natural
  * unique key, because a demo BuyerProfile deliberately carries no email,
- * handle or credential. They therefore use fixed UUIDs declared here. That is
- * the whole reason these constants exist; nothing else should reference them.
+ * handle or credential. They therefore use fixed UUIDs. The buyer's lives in
+ * `src/lib/demo-buyer.ts`, because the shop asks for that buyer by id; the
+ * policy's is used here only.
  *
  * What is deliberately NOT seeded: transactions, quotes, payment attempts,
  * approvals or audit events. Fabricating completed purchases would make the
@@ -23,7 +25,6 @@ loadEnv({ path: ".env.local", quiet: true });
  * Seeding is bulk administrative work, so it uses the DIRECT connection, the
  * same endpoint migrations use.
  */
-const DEMO_BUYER_ID = "01930000-0000-7000-8000-00000000b001";
 const DEMO_POLICY_ID = "01930000-0000-7000-8000-00000000a001";
 const MERCHANT_SLUG = "keebworks-india";
 
