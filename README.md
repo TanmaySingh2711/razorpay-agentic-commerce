@@ -204,7 +204,7 @@ razorpay-agentic-commerce/
 │   ├── db/                  Tests that run against PostgreSQL
 │   └── support/             Fake AI and payment providers for tests
 ├── setup.bat / setup.sh     One-click setup
-├── run_dashboard.bat        Starts the app on Windows
+├── run_dashboard.bat / .sh  Starts the app and opens the browser (Windows / macOS, Linux)
 ├── .env.example             Template for your settings
 ├── LICENSE                  All rights reserved
 ├── vercel.json              Runs the hosted server next to the database
@@ -305,7 +305,9 @@ npm run dev
 
 Before the app starts, `npm run dev` checks the local database. If PostgreSQL is not running, it starts Docker Desktop (when it is installed) and the PostgreSQL container, creates the development database if it is missing, and applies any new migration. You do not need to start Docker yourself. If the database still cannot be reached, the app starts anyway and the pages that need it say so.
 
-On Windows you can double-click `run_dashboard.bat` instead. Its window opens in the middle of the screen, starts the app and the database check side by side, and opens your browser as soon as the first page is ready, usually within a few seconds once Docker is running. Press `Esc` in that window to stop the app and close the window.
+On Windows you can double-click `run_dashboard.bat` instead. Its window opens in the middle of the screen, starts the app and the database check side by side, and opens your browser on the finished first page, usually about three seconds after the double-click. Press `Esc` in that window to stop the app and close the window.
+
+On macOS and Linux, `./run_dashboard.sh` does the same in your terminal: it starts the app and the database check together, opens your browser when the first page is ready, and stops the app with one press of `Esc`. In both launchers `Esc` is the only way to stop: `Ctrl + C` does nothing there, so it cannot leave the app half-stopped. If another app already uses port 3000, run `PORT=3001 ./run_dashboard.sh` (on Windows: `set PORT=3001` before `run_dashboard.bat`).
 
 Then open **http://localhost:3000**.
 

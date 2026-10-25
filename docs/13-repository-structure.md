@@ -25,7 +25,7 @@ razorpay-agentic-commerce/
 ├── scripts/                    standalone CLI tooling, outside the app runtime
 │   ├── setup.ts                `npm run setup`: the one-click setup, no dependencies
 │   ├── run-dashboard.ps1       run_dashboard.bat's launcher: centres, waits, Esc stops
-│   ├── start-database.ts       `predev` (and run_dashboard.bat): starts Docker + PostgreSQL, prepares the dev database
+│   ├── start-database.ts       `predev` (and both run_dashboard launchers): starts Docker + PostgreSQL, prepares the dev database
 │   ├── setup-dev-database.ts   local development DB, loopback only
 │   ├── setup-test-schema.ts    creates + migrates the isolated test schema
 │   ├── dev-demo-activity.ts    real-service shopper sessions for the local dev DB
@@ -160,7 +160,8 @@ razorpay-agentic-commerce/
 ├── tsconfig.json               strict settings
 ├── vercel.json                 runs the server in Singapore, beside the database
 ├── setup.sh / setup.bat        one-click setup (macOS, Linux / Windows)
-└── run_dashboard.bat           starts the app, opens the browser when ready, Esc stops (Windows)
+├── run_dashboard.bat           starts the app, opens the browser when ready, Esc stops (Windows)
+└── run_dashboard.sh            the same for macOS and Linux, in the terminal
 ```
 
 ## What is left in the root, and why
@@ -176,7 +177,7 @@ Only files a tool insists on finding there, or a person is meant to run:
 | `vercel.json`                                    | Vercel reads it from the project root only.                                                                                        |
 | `.env.example`                                   | Sits beside the `.env.local` it is copied to, which Next.js loads from the root.                                                   |
 | `README.md`, `LICENSE`, `AGENTS.md`, `CLAUDE.md` | GitHub renders the first and detects the second; `next dev` rewrites `AGENTS.md` in place; assistants read the last two from here. |
-| `setup.sh`, `setup.bat`, `run_dashboard.bat`     | Entry points meant to be double-clicked or run first, so they are where a person looks.                                            |
+| `setup.*`, `run_dashboard.*`                     | Entry points meant to be double-clicked or run first, so they are where a person looks.                                            |
 
 The Prisma and Vitest configs and the compose file live in `.config/`, and the
 Prettier settings in `package.json`.

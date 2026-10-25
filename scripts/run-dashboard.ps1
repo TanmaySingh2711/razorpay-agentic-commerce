@@ -7,8 +7,10 @@
 # Windows PowerShell 5.1 reads a file without a BOM in the local code page.
 
 $ErrorActionPreference = "Stop"
-$Url = "http://localhost:3000"
+# 3000 unless PORT names another, as for `next dev` itself and run_dashboard.sh.
 $Port = 3000
+if ($env:PORT -match '^\d+$') { $Port = [int]$env:PORT }
+$Url = "http://localhost:$Port"
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type @"
@@ -58,6 +60,11 @@ function Test-Serving {
     # True once the app answers with a real page. The request also makes the
     # dev server compile the page, so the browser does not wait on it. Nothing
     # is requested before the port is open, for the reason given above.
+    #
+    # Measured: opening the browser as soon as the port opened, to overlap its
+    # start with this compile, made the page appear later, not sooner - the
+    # browser's own requests competed with the compile. So the page is ready
+    # first, and the browser opens onto it.
     if (-not (Test-PortInUse)) { return $false }
     try {
         $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 90
@@ -68,10 +75,24 @@ function Test-Serving {
 }
 
 function Test-EscapePressed {
+    # One press of Esc stops everything. Ctrl+C arrives here as an ordinary
+    # key (see Disable-CtrlC) and only gets a reminder.
     while ([Console]::KeyAvailable) {
-        if ([Console]::ReadKey($true).Key -eq [ConsoleKey]::Escape) { return $true }
+        $key = [Console]::ReadKey($true)
+        if ($key.Key -eq [ConsoleKey]::Escape) { return $true }
+        if ($key.Key -eq [ConsoleKey]::C -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
+            Write-Host "  Press Esc to stop the app." -ForegroundColor Yellow
+        }
     }
     return $false
+}
+
+function Disable-CtrlC {
+    # Esc is the one way to stop. Left alone, Ctrl+C kills the app half-way and
+    # then cmd asks "Terminate batch job (Y/N)?" - two steps, and a server that
+    # may be left running. Read as input instead, it stops nothing, here or in
+    # the node processes sharing this window.
+    try { [Console]::TreatControlCAsInput = $true } catch { }
 }
 
 function Stop-Server($process) {
@@ -95,11 +116,13 @@ $WarmPages = @("/shop", "/how-it-works", "/history", "/merchant", $NoSuchPurchas
 
 $Host.UI.RawUI.WindowTitle = "Razorpay Agentic Commerce - press Esc to stop"
 Move-ToCentre
+Disable-CtrlC
 
 if (Test-PortInUse) {
     Write-Host ""
     Write-Host "Something is already running on port $Port." -ForegroundColor Yellow
-    Write-Host "If it is this app from an earlier run, close that window first."
+    Write-Host "If it is this app from an earlier run, close that window first. If it is"
+    Write-Host "another app, start this one on a free port: set PORT=3001 then run_dashboard.bat"
     Write-Host "Opening $Url anyway. Press Esc to close this window."
     Start-Process $Url
     while (-not (Test-EscapePressed)) { Start-Sleep -Milliseconds 150 }
@@ -119,7 +142,7 @@ Write-Host ""
 # reboot - is still running. Both are called through node directly: going
 # through npm costs about a second for nothing.
 $database = Start-Node @("node_modules/tsx/dist/cli.mjs", "scripts/start-database.ts")
-$server = Start-Node @("node_modules/next/dist/bin/next", "dev")
+$server = Start-Node @("node_modules/next/dist/bin/next", "dev", "--port", "$Port")
 $opened = $false
 $stopped = $false
 $started = Get-Date
@@ -137,13 +160,13 @@ try {
                 Write-Host ""
                 foreach ($page in $WarmPages) {
                     if (Test-EscapePressed) { $stopped = $true; break }
-                    try { [void](Invoke-WebRequest -Uri "$Url$page" -UseBasicParsing -TimeoutSec 60) } catch { }
+                    try { [void](Invoke-WebRequest -Uri "$Url$page" -UseBasicParsing -TimeoutSec 90) } catch { }
                 }
                 if ($stopped) { break }
             } elseif (((Get-Date) - $started).TotalSeconds -gt 600) {
                 # Generous on purpose: the first step starts Docker and lets
                 # PostgreSQL recover if it was shut down uncleanly.
-                Write-Host "  The app has not answered after 10 minutes. Check the messages above." -ForegroundColor Yellow
+                Write-Host "  The app has not started after 10 minutes. Check the messages above." -ForegroundColor Yellow
                 $opened = $true
             } else {
                 Start-Sleep -Milliseconds 100
